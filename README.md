@@ -8,18 +8,18 @@
 
 ## Documentación
 
-| Documento | Contenido |
-|-----------|-----------|
-| [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md) | Elevator pitch, usuarios objetivo, propuesta de valor (ES/EN) |
+| Documento                                      | Contenido                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md)   | Elevator pitch, usuarios objetivo, propuesta de valor (ES/EN)                  |
 | [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Alcance MVP/V2/V3, fuera de alcance, trust & safety, ciclo de vida de mensajes |
-| [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md) | Diagrama entidad-relación (Mermaid) + diccionario de datos |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Diagramas de arquitectura y secuencia, multi-tenancy, estructura de carpetas |
-| [`docs/STACK.md`](docs/STACK.md) | Stack técnico validado, qué está instalado de verdad y qué falta |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Fases, Web-only en el MVP, Mobile/Desktop condicionales |
-| [`docs/SETUP.md`](docs/SETUP.md) | Cómo levantar el entorno de desarrollo local |
-| [`docs/TESTING.md`](docs/TESTING.md) | Estrategia de testing, TDD, cómo testear WebSockets |
-| [`docs/QA.md`](docs/QA.md) | Checklist manual de QA por fase |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Log de decisiones técnicas (ADR) |
+| [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md)     | Diagrama entidad-relación (Mermaid) + diccionario de datos                     |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Diagramas de arquitectura y secuencia, multi-tenancy, estructura de carpetas   |
+| [`docs/STACK.md`](docs/STACK.md)               | Stack técnico validado, qué está instalado de verdad y qué falta               |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md)           | Fases, Web-only en el MVP, Mobile/Desktop condicionales                        |
+| [`docs/SETUP.md`](docs/SETUP.md)               | Cómo levantar el entorno de desarrollo local                                   |
+| [`docs/TESTING.md`](docs/TESTING.md)           | Estrategia de testing, TDD, cómo testear WebSockets                            |
+| [`docs/QA.md`](docs/QA.md)                     | Checklist manual de QA por fase                                                |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md)       | Log de decisiones técnicas (ADR)                                               |
 
 ## Stack (resumen — ver `docs/STACK.md` para el detalle completo)
 

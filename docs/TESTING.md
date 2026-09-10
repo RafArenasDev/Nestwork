@@ -16,12 +16,12 @@
 
 ## Tipos de test y herramientas
 
-| Capa | Herramienta | Qué cubre |
-|------|-------------|-----------|
-| Backend unit/feature | Pest | Modelos, policies, controllers, jobs |
-| Backend análisis estático | Larastan | Errores de tipos/null antes de que lleguen a un test |
-| Frontend unit/componentes | Vitest + React Testing Library (🔲) | Componentes con lógica real, no presentacionales puros |
-| End-to-end | Playwright (🔲) | Flujos críticos de tiempo real: login → crear workspace → crear canal → enviar/recibir mensaje entre dos sesiones |
+| Capa                      | Herramienta                         | Qué cubre                                                                                                         |
+| ------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Backend unit/feature      | Pest                                | Modelos, policies, controllers, jobs                                                                              |
+| Backend análisis estático | Larastan                            | Errores de tipos/null antes de que lleguen a un test                                                              |
+| Frontend unit/componentes | Vitest + React Testing Library (🔲) | Componentes con lógica real, no presentacionales puros                                                            |
+| End-to-end                | Playwright (🔲)                     | Flujos críticos de tiempo real: login → crear workspace → crear canal → enviar/recibir mensaje entre dos sesiones |
 
 ## Cómo testear WebSockets (cuando exista Reverb)
 

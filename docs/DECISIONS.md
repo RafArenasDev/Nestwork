@@ -1,6 +1,6 @@
 # Decisiones técnicas (ADR ligero)
 
-> Nota: estas entradas se generaron *antes* de la ronda formal de planificación (`docs/DESCRIPTION.md`, `REQUIREMENTS.md`, etc. definida en `CLAUDE.md`) porque se saltó el gate para avanzar rápido con el setup inicial. Cuando se retome la documentación completa, revisar que estas decisiones sigan siendo válidas y trasladarlas a `ARCHITECTURE.md`/`STACK.md` donde corresponda.
+> Nota: estas entradas se generaron _antes_ de la ronda formal de planificación (`docs/DESCRIPTION.md`, `REQUIREMENTS.md`, etc. definida en `CLAUDE.md`) porque se saltó el gate para avanzar rápido con el setup inicial. Cuando se retome la documentación completa, revisar que estas decisiones sigan siendo válidas y trasladarlas a `ARCHITECTURE.md`/`STACK.md` donde corresponda.
 
 ## 2026-09-10 — Base de datos PostgreSQL local
 
@@ -38,6 +38,14 @@
 - **Decisión:** el producto se llama **Nestwork** (repo de GitHub: `nestwork`). Reemplaza al candidato anterior "Recinto".
 - **Por qué:** el usuario pidió explícitamente un nombre en inglés o español/inglés por ser "más comercial" — las rondas anteriores de research (Ágora, Recinto, Trenza, Corrillo, Cardumen, Claustro, Tertulia) terminaron siendo mayormente en español, lo cual no cumplía ese pedido. Se rehizo la búsqueda con candidatos en inglés (Nestwork, Firmchat, Domainly, Staffchat), verificados sin colisión de producto real. El usuario eligió Nestwork sobre la recomendación de Claude Code (Firmchat).
 - **Verificación de colisión:** búsqueda web sin resultados de un producto de chat/mensajería activo llamado "Nestwork".
+
+## 2026-09-10 — Fix CI: PHP 8.3 en el workflow no alcanza para las dependencias reales
+
+- **Problema:** el primer push a GitHub falló el workflow `tests` (`composer setup` → `composer install`) con "Your lock file does not contain a compatible set of packages" — los paquetes ya resueltos en `composer.lock` (Symfony 8.x, `laravel/framework` 13.31, `sebastian/*` de Pest) requieren PHP ≥8.4.1, pero `.github/workflows/tests.yml` tenía `php-version: '8.3'`.
+- **Causa raíz:** `composer.json` declaraba `"php": "^8.3"`, un mínimo desactualizado — cuando se instaló el proyecto localmente (PHP 8.5), Composer resolvió las versiones más nuevas de las dependencias, que en la práctica ya exigen 8.4+. El CI, en cambio, quedó fijado al mínimo declarado (8.3), no al mínimo real.
+- **Mismo patrón ya visto en Inventory-Manager** (ese proyecto corrigió su CI a `php-version: 8.4` en algún momento, aunque `composer.json` ahí sigue en `^8.2` — igual de válido porque `^8.2` es compatible con 8.4, a diferencia del `^8.3` de acá que colisionaba con paquetes que ya pedían 8.4+).
+- **Fix:** `.github/workflows/tests.yml` → `php-version: '8.4'`; `composer.json` → `"php": "^8.4"` (refleja la realidad en vez de mentir sobre el mínimo soportado); `composer update --lock` para sincronizar el content-hash sin tocar versiones de paquetes.
+- **Regla para evitar que se repita:** cuando se actualicen dependencias mayores de Laravel/Symfony (o cuando falle CI con este mismo mensaje), verificar el PHP mínimo real corriendo `composer why-not php <version-vieja>` o simplemente mirando el mensaje de error de Composer — **no asumir que el `"php"` declarado en `composer.json` sigue siendo el mínimo real**, porque Composer no lo actualiza solo cuando resuelve versiones nuevas de paquetes. Aplica a todos los proyectos Laravel del usuario, no solo a este.
 
 ## Pendiente / no cubierto en esta sesión
 
