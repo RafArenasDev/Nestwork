@@ -4,24 +4,24 @@
 
 ## Backend & tiempo real
 
-| Pieza | Estado | Nota |
-|-------|--------|------|
-| Laravel 13 (PHP) | 🟢 | |
-| Laravel Fortify | 🟢 | Auth: login, registro, 2FA, passkeys |
-| Laravel Reverb | 🔲 | WebSocket server — a instalar cuando arranque el módulo de Mensajería |
-| Laravel Socialite | 🔲 | Para Google OAuth (MVP) |
-| Laravel Echo | 🔲 | Se instala junto con Reverb |
+| Pieza             | Estado | Nota                                                                  |
+| ----------------- | ------ | --------------------------------------------------------------------- |
+| Laravel 13 (PHP)  | 🟢     |                                                                       |
+| Laravel Fortify   | 🟢     | Auth: login, registro, 2FA, passkeys                                  |
+| Laravel Reverb    | 🔲     | WebSocket server — a instalar cuando arranque el módulo de Mensajería |
+| Laravel Socialite | 🔲     | Para Google OAuth (MVP)                                               |
+| Laravel Echo      | 🔲     | Se instala junto con Reverb                                           |
 
 ## Base de datos
 
 **PostgreSQL** — decisión validada y ya en uso (`chat_app`, local, ver `SETUP.md`).
 
-| Motivo | Detalle |
-|--------|---------|
-| Full-text search nativo | Evita depender de Elasticsearch para búsqueda de mensajes en el MVP |
-| JSONB | Útil para metadata de mensajes, payloads de notificaciones |
-| Concurrencia | Mejor comportamiento bajo escrituras concurrentes que MySQL, relevante para un chat |
-| Costo de adopción | El usuario ya la tenía instalada localmente — cero curva nueva |
+| Motivo                  | Detalle                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| Full-text search nativo | Evita depender de Elasticsearch para búsqueda de mensajes en el MVP                 |
+| JSONB                   | Útil para metadata de mensajes, payloads de notificaciones                          |
+| Concurrencia            | Mejor comportamiento bajo escrituras concurrentes que MySQL, relevante para un chat |
+| Costo de adopción       | El usuario ya la tenía instalada localmente — cero curva nueva                      |
 
 MySQL queda descartado como alternativa (ya no es punto de discusión, decisión tomada).
 
@@ -39,13 +39,13 @@ Postgres full-text para el MVP. Meilisearch/Typesense si el volumen de mensajes 
 
 ## Frontend Web
 
-| Pieza | Estado |
-|-------|--------|
-| React 19 + Inertia 3 | 🟢 |
-| Tailwind CSS 4 + shadcn/ui (Radix primitives) | 🟢 |
-| Laravel Wayfinder (rutas tipadas) | 🟢 — reemplaza el patrón `route()` clásico (Ziggy) de proyectos anteriores del usuario |
-| Sonner (toasts) | 🟢 |
-| i18n ES/EN (diccionario propio + hook `useLocale`) | 🟢 — ver `docs/DECISIONS.md` para por qué no se usó una librería como react-i18next |
+| Pieza                                              | Estado                                                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| React 19 + Inertia 3                               | 🟢                                                                                     |
+| Tailwind CSS 4 + shadcn/ui (Radix primitives)      | 🟢                                                                                     |
+| Laravel Wayfinder (rutas tipadas)                  | 🟢 — reemplaza el patrón `route()` clásico (Ziggy) de proyectos anteriores del usuario |
+| Sonner (toasts)                                    | 🟢                                                                                     |
+| i18n ES/EN (diccionario propio + hook `useLocale`) | 🟢 — ver `docs/DECISIONS.md` para por qué no se usó una librería como react-i18next    |
 
 ## Desktop y Mobile
 
@@ -54,6 +54,7 @@ Postgres full-text para el MVP. Meilisearch/Typesense si el volumen de mensajes 
 ## Autenticación social
 
 **Google OAuth vía Laravel Socialite** — 🔲 por construir, MVP. Gratis de configurar (Google Cloud Console, sin costo para login estándar). Requiere:
+
 1. Instalar `laravel/socialite`.
 2. Crear proyecto + credenciales OAuth en Google Cloud Console (esto lo hace el usuario, no Claude Code — son credenciales de su cuenta).
 3. Nueva tabla `social_accounts` (ver `ER_DIAGRAM.md`) — **pendiente de aprobación antes de migrar**.
@@ -70,13 +71,13 @@ Microsoft OAuth: mismo mecanismo, diferido a V2.
 
 ## Testing
 
-| Pieza | Estado |
-|-------|--------|
-| Pest | 🟢 — 91 tests pasando |
-| PHPStan / Larastan (nivel configurado por el starter kit) | 🟢 |
-| Vitest + React Testing Library | 🔲 no instalado todavía |
-| Playwright (E2E) | 🔲 no instalado todavía |
-| GitHub Actions (CI) | 🔲 no configurado todavía |
+| Pieza                                                     | Estado                    |
+| --------------------------------------------------------- | ------------------------- |
+| Pest                                                      | 🟢 — 91 tests pasando     |
+| PHPStan / Larastan (nivel configurado por el starter kit) | 🟢                        |
+| Vitest + React Testing Library                            | 🔲 no instalado todavía   |
+| Playwright (E2E)                                          | 🔲 no instalado todavía   |
+| GitHub Actions (CI)                                       | 🔲 no configurado todavía |
 
 ## DevOps / Local Dev
 

@@ -2,18 +2,18 @@
 
 ## Estado actual (real, verificado)
 
-| Servicio | Cómo corre hoy |
-|----------|----------------|
-| PHP / Laravel | **Herd** (`http://chat-app.test`) — no hay servidor Vite/PHP manual que levantar |
-| PostgreSQL | **Nativo**, instalado localmente (Postgres 18, `C:\Program Files\PostgreSQL\18`), base `chat_app` |
-| Redis | 🔲 No instalado todavía |
-| Reverb (WebSockets) | 🔲 No instalado todavía |
-| Mail | Driver `log` (no hay Mailpit/Mailhog corriendo, los emails van al log de Laravel) |
-| Storage de archivos | Driver `local`, sin MinIO todavía |
+| Servicio            | Cómo corre hoy                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| PHP / Laravel       | **Herd** (`http://chat-app.test`) — no hay servidor Vite/PHP manual que levantar                  |
+| PostgreSQL          | **Nativo**, instalado localmente (Postgres 18, `C:\Program Files\PostgreSQL\18`), base `chat_app` |
+| Redis               | 🔲 No instalado todavía                                                                           |
+| Reverb (WebSockets) | 🔲 No instalado todavía                                                                           |
+| Mail                | Driver `log` (no hay Mailpit/Mailhog corriendo, los emails van al log de Laravel)                 |
+| Storage de archivos | Driver `local`, sin MinIO todavía                                                                 |
 
 ## Por qué nativo y no Docker Compose (por ahora)
 
-El usuario ya tenía PostgreSQL nativo instalado en su máquina (igual que en sus otros proyectos Laravel con Herd). Mientras el proyecto no necesite Redis + Reverb + MinIO simultáneamente, forzar Docker Compose agrega una capa de complejidad sin beneficio real. **Esto se reevalúa cuando arranque Fase 1** (Reverb + Redis se vuelven necesarios para mensajería en tiempo real) — en ese punto, Docker Compose para *esos* servicios específicos (no para Postgres, que se queda nativo) es la recomendación por defecto, para no tener que instalar Redis/Reverb como servicios de Windows a mano.
+El usuario ya tenía PostgreSQL nativo instalado en su máquina (igual que en sus otros proyectos Laravel con Herd). Mientras el proyecto no necesite Redis + Reverb + MinIO simultáneamente, forzar Docker Compose agrega una capa de complejidad sin beneficio real. **Esto se reevalúa cuando arranque Fase 1** (Reverb + Redis se vuelven necesarios para mensajería en tiempo real) — en ese punto, Docker Compose para _esos_ servicios específicos (no para Postgres, que se queda nativo) es la recomendación por defecto, para no tener que instalar Redis/Reverb como servicios de Windows a mano.
 
 ## Variables de entorno
 

@@ -5,24 +5,24 @@
 Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace y chatear en tiempo real de punta a punta.
 
 - **Autenticación:**
-  - Registro con email + password (cualquier proveedor de correo, sin distinción).
-  - Login social con **Google OAuth** (gratis de configurar, cubre Gmail personal y Google Workspace).
-  - Verificación de email obligatoria antes de acceso completo (ya scaffolded vía Fortify).
-  - 2FA disponible como opción, no bloqueante (ya scaffolded vía Fortify — passkeys y TOTP).
+    - Registro con email + password (cualquier proveedor de correo, sin distinción).
+    - Login social con **Google OAuth** (gratis de configurar, cubre Gmail personal y Google Workspace).
+    - Verificación de email obligatoria antes de acceso completo (ya scaffolded vía Fortify).
+    - 2FA disponible como opción, no bloqueante (ya scaffolded vía Fortify — passkeys y TOTP).
 - **Workspaces (Teams en el código):**
-  - Cada usuario nuevo obtiene un workspace personal automáticamente al registrarse (ya scaffolded).
-  - **Auto-join liviano por dominio:** si el dominio del email del usuario coincide con el de un workspace ya existente, se le ofrece "pedir unirse a [Empresa]" en vez de crear uno nuevo — sujeto a aprobación de un admin de ese workspace. *(Sin verificación DNS de propiedad del dominio — eso es V2, ver abajo.)*
-  - Invitación manual de miembros por email (ya scaffolded vía Teams).
-  - Roles: owner, admin, member (guest se evalúa en V2 junto con contactos externos).
+    - Cada usuario nuevo obtiene un workspace personal automáticamente al registrarse (ya scaffolded).
+    - **Auto-join liviano por dominio:** si el dominio del email del usuario coincide con el de un workspace ya existente, se le ofrece "pedir unirse a [Empresa]" en vez de crear uno nuevo — sujeto a aprobación de un admin de ese workspace. _(Sin verificación DNS de propiedad del dominio — eso es V2, ver abajo.)_
+    - Invitación manual de miembros por email (ya scaffolded vía Teams).
+    - Roles: owner, admin, member (guest se evalúa en V2 junto con contactos externos).
 - **Canales:** públicos y privados dentro de un workspace.
 - **Mensajería:**
-  - DMs 1:1 y grupales.
-  - Entrega en tiempo real vía WebSockets (typing indicators, presencia/online, entrega en vivo).
-  - Búsqueda básica de mensajes (Postgres full-text).
+    - DMs 1:1 y grupales.
+    - Entrega en tiempo real vía WebSockets (typing indicators, presencia/online, entrega en vivo).
+    - Búsqueda básica de mensajes (Postgres full-text).
 - **No funcional:**
-  - Escala esperada: cientos a bajos miles de usuarios concurrentes, no escala Slack.
-  - Seguridad: auth, cifrado en tránsito (TLS), rate limiting en envío de mensajes.
-  - Mantenible por un desarrollador solo.
+    - Escala esperada: cientos a bajos miles de usuarios concurrentes, no escala Slack.
+    - Seguridad: auth, cifrado en tránsito (TLS), rate limiting en envío de mensajes.
+    - Mantenible por un desarrollador solo.
 
 ## V2 (Fase 2 y 3)
 
@@ -63,12 +63,12 @@ Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace 
 
 ## Modelo de autenticación — detalle de la decisión tomada
 
-| Vía | Estado | Costo | Notas |
-|-----|--------|-------|-------|
-| Email + password | ✅ Ya funciona (Fortify) | Gratis | Cualquier proveedor de correo (Gmail, Outlook, Proton, Yahoo, dominio propio) |
-| Google OAuth | 🔲 Por construir, MVP | Gratis (credenciales OAuth en Google Cloud Console sin costo) | Vía Laravel Socialite |
-| Microsoft OAuth | 🔲 V2 | Gratis (Azure App registration sin costo) | Diferido para no duplicar esfuerzo antes del chat funcionando |
-| Registro | ✅ Autoservicio, abierto | — | Cerrarlo a "solo invitación" mataría la adquisición orgánica |
-| Auto-join por dominio | 🔲 Versión liviana en MVP, verificación DNS en V2 | — | Ver arriba |
+| Vía                   | Estado                                            | Costo                                                         | Notas                                                                         |
+| --------------------- | ------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Email + password      | ✅ Ya funciona (Fortify)                          | Gratis                                                        | Cualquier proveedor de correo (Gmail, Outlook, Proton, Yahoo, dominio propio) |
+| Google OAuth          | 🔲 Por construir, MVP                             | Gratis (credenciales OAuth en Google Cloud Console sin costo) | Vía Laravel Socialite                                                         |
+| Microsoft OAuth       | 🔲 V2                                             | Gratis (Azure App registration sin costo)                     | Diferido para no duplicar esfuerzo antes del chat funcionando                 |
+| Registro              | ✅ Autoservicio, abierto                          | —                                                             | Cerrarlo a "solo invitación" mataría la adquisición orgánica                  |
+| Auto-join por dominio | 🔲 Versión liviana en MVP, verificación DNS en V2 | —                                                             | Ver arriba                                                                    |
 
 **Nueva tabla propuesta (pendiente de aprobación antes de construir):** vincular cuentas de Google a un `User` requiere una tabla `social_accounts` (o columnas `provider`/`provider_id` en `users`, a decidir en `ARCHITECTURE.md`/`ER_DIAGRAM.md`) — no se construye hasta que se revise el diseño.
