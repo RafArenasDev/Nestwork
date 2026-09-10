@@ -54,6 +54,11 @@ const es: Dictionary = {
         mismatch: 'Las contraseñas no coinciden.',
         savePassword: 'Guardar contraseña',
     },
+    terms: {
+        title: 'Términos y Condiciones de Uso',
+        description: 'Nestwork — condiciones de uso del servicio',
+        linkLabel: 'Términos y Condiciones',
+    },
 };
 
 export default es;

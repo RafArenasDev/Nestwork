@@ -8,15 +8,17 @@ Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace 
     - Registro con email + password (cualquier proveedor de correo, sin distinción).
     - Login social con **Google OAuth** (gratis de configurar, cubre Gmail personal y Google Workspace).
     - Verificación de email obligatoria antes de acceso completo (ya scaffolded vía Fortify).
-    - 2FA disponible como opción, no bloqueante (ya scaffolded vía Fortify — passkeys y TOTP).
+    - 2FA disponible como opción, no bloqueante (ya scaffolded vía Fortify — TOTP).
+    - Passkeys (WebAuthn) disponibles como opción secundaria, no bloqueante (ya scaffolded vía Fortify) — es un método passwordless, no debe confundirse con 2FA; queda como conveniencia opcional, no se invierte más esfuerzo en pulirlo para el MVP.
 - **Workspaces (Teams en el código):**
     - Cada usuario nuevo obtiene un workspace personal automáticamente al registrarse (ya scaffolded).
     - **Auto-join liviano por dominio:** si el dominio del email del usuario coincide con el de un workspace ya existente, se le ofrece "pedir unirse a [Empresa]" en vez de crear uno nuevo — sujeto a aprobación de un admin de ese workspace. _(Sin verificación DNS de propiedad del dominio — eso es V2, ver abajo.)_
     - Invitación manual de miembros por email (ya scaffolded vía Teams).
     - Roles: owner, admin, member (guest se evalúa en V2 junto con contactos externos).
-- **Canales:** públicos y privados dentro de un workspace.
+- **Canales:** públicos y privados dentro de un workspace. Persistentes, tema/propósito estable, descubribles por los miembros del workspace.
 - **Mensajería:**
-    - DMs 1:1 y grupales.
+    - DM 1:1, que puede crecer agregando más participantes (se vuelve "Grupo" — misma entidad de datos, `direct_conversations` soporta N participantes desde el diseño original, no es una tabla nueva).
+    - **Canales vs. Grupos:** un Canal es persistente y descubrible dentro del workspace (como en Slack/Teams); un Grupo es una conversación privada ad-hoc entre varias personas (como un grupo de WhatsApp/Telegram) — no aparece en el listado público de canales. La sidebar refleja esta distinción (ver mockups).
     - Entrega en tiempo real vía WebSockets (typing indicators, presencia/online, entrega en vivo).
     - Búsqueda básica de mensajes (Postgres full-text).
 - **No funcional:**
@@ -26,12 +28,13 @@ Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace 
 
 ## V2 (Fase 2 y 3)
 
-- Threads/respuestas, reacciones, adjuntos de archivo/imagen.
+- Threads/respuestas, reacciones, adjuntos de archivo/imagen, mensajes de voz (audio).
 - Microsoft OAuth (si el público objetivo resulta ser mayormente shops de Microsoft 365).
 - **Auto-join por dominio con verificación real de propiedad** (registro DNS TXT), reemplazando la versión liviana del MVP.
 - Cliente Mobile (React Native/Expo) sobre la misma API.
 - Notificaciones más ricas (push web + push mobile).
 - Guests / contactos externos al workspace (tipo Slack Connect).
+- Archivado formal de canales/grupos (ver sección "Archivado vs. borrado" abajo — la lógica de datos entra en V2 junto con la UI para gestionarlo).
 
 ## V3 / Futuro (condicional a que V2 esté estable)
 
@@ -40,6 +43,7 @@ Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace 
 - Integraciones/bots de terceros.
 - Búsqueda avanzada (Meilisearch/Typesense).
 - Federación con otros servidores de chat.
+- GitHub OAuth (si el público objetivo termina siendo mayormente equipos técnicos) y Apple ID (solo se vuelve relevante si se publica una app nativa de iOS con otros logins sociales — no aplica hasta la Fase 3/Mobile).
 
 ## Explícitamente fuera de alcance (por ahora)
 
@@ -55,10 +59,19 @@ Alcance mínimo para que alguien pueda registrarse, crear/unirse a un workspace 
 - Tamaño máximo y tipos de archivo permitidos para adjuntos — se define cuando se construya esa feature (V2).
 - 2FA como opción, no bloqueante (ya disponible).
 
-## Ciclo de vida de mensajes
+## Archivado vs. borrado (canales, grupos, conversaciones)
+
+Decisión explícita del usuario: en un entorno de negocio, el historial de conversación debe prevalecer — no se borra información de trabajo a la ligera. Regla general para toda la plataforma:
+
+- **Canales y Grupos con miembros/historial no se pueden eliminar** — la única acción destructiva disponible es **archivar**, nunca un borrado real de la conversación completa (distinto del borrado de un mensaje individual, ver abajo).
+- **Archivado manual:** cualquier admin del canal/grupo puede archivar la conversación en cualquier momento — deja de aparecer en la sidebar activa, pero el historial sigue accesible (de solo lectura) para quienes ya eran miembros.
+- **Archivado automático por desactivación de usuario:** si un usuario se desactiva (deja la empresa, cuenta deshabilitada), sus DMs 1:1 con otras personas se archivan automáticamente del lado de la otra persona (seguir "chateando" con alguien desactivado no tiene sentido) — los Canales/Grupos con más miembros NO se archivan solo porque uno de los participantes se desactivó, simplemente se le remueve la membresía y el resto sigue con normalidad.
+- **Eliminar el workspace completo** sigue siendo una acción de owner disponible (ya scaffolded vía Teams), pero eso es distinto a borrar una conversación puntual — no cambia con esta regla.
+
+## Ciclo de vida de mensajes y conversaciones
 
 - **Ediciones:** se guarda `edited_at`, no se sobreescribe en silencio.
-- **Borrado:** soft delete (placeholder "mensaje eliminado"), preserva integridad de hilos/respuestas.
+- **Borrado de un mensaje individual:** soft delete (placeholder "mensaje eliminado"), preserva integridad de hilos/respuestas — esto sí es un borrado real de ESE mensaje puntual, no de la conversación entera (ver regla de archivado arriba).
 - **Adjuntos borrados:** ventana de retención antes de purga definitiva del storage (valor exacto a definir al construir adjuntos, V2).
 
 ## Modelo de autenticación — detalle de la decisión tomada
