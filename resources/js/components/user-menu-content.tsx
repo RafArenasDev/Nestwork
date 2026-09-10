@@ -1,9 +1,6 @@
 import { Link, router } from '@inertiajs/react';
 import { KeyRound, LogOut, SunMoon, UserRound } from 'lucide-react';
-import { useState } from 'react';
 import { LanguageToggle } from '@/components/language-toggle';
-import { PasswordModal } from '@/components/password-modal';
-import { ProfileModal } from '@/components/profile-modal';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
     DropdownMenuGroup,
@@ -19,13 +16,25 @@ import type { User } from '@/types';
 
 type Props = {
     user: User;
+    onOpenProfile: () => void;
+    onOpenPassword: () => void;
 };
 
-export function UserMenuContent({ user }: Props) {
+/**
+ * Los modales de Perfil/Contraseña NO viven acá: Radix desmonta
+ * DropdownMenuContent (y todo lo que hay dentro) al cerrarse, así que si el
+ * estado "open" viviera dentro de este componente, el modal se cerraría de
+ * inmediato junto con el menú que lo abrió. Por eso reciben callbacks y el
+ * estado real vive un nivel arriba (nav-user.tsx / app-header.tsx), mismo
+ * patrón que Inventory-Manager.
+ */
+export function UserMenuContent({
+    user,
+    onOpenProfile,
+    onOpenPassword,
+}: Props) {
     const cleanup = useMobileNavigation();
     const { t } = useLocale();
-    const [showProfile, setShowProfile] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
 
     const handleLogout = () => {
         cleanup();
@@ -41,11 +50,11 @@ export function UserMenuContent({ user }: Props) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setShowProfile(true)}>
+                <DropdownMenuItem onClick={onOpenProfile}>
                     <UserRound className="mr-2" />
                     {t.userMenu.profile}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowPassword(true)}>
+                <DropdownMenuItem onClick={onOpenPassword}>
                     <KeyRound className="mr-2" />
                     {t.userMenu.password}
                 </DropdownMenuItem>
@@ -85,9 +94,6 @@ export function UserMenuContent({ user }: Props) {
                     {t.common.logOut}
                 </Link>
             </DropdownMenuItem>
-
-            <ProfileModal open={showProfile} onOpenChange={setShowProfile} />
-            <PasswordModal open={showPassword} onOpenChange={setShowPassword} />
         </>
     );
 }

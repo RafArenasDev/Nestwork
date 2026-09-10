@@ -3,8 +3,10 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "prebuild": "node scripts/generate-changelog.mjs",
         "build": "vp build",
         "build:ssr": "vp build && vp build --ssr",
+        "predev": "node scripts/generate-changelog.mjs",
         "dev": "vp dev",
         "check": "vp check",
         "check:fix": "vp check --fix",
