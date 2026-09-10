@@ -1,7 +1,9 @@
 import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TeamInvitationAlert from '@/components/team-invitation-alert';
+import TermsAndConditionsModal from '@/components/terms-and-conditions-modal';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,6 +29,7 @@ export default function Login({
     teamInvitation,
 }: Props) {
     const { t } = useLocale();
+    const [showTerms, setShowTerms] = useState(false);
 
     return (
         <>
@@ -136,6 +139,22 @@ export default function Login({
                     {status}
                 </div>
             )}
+
+            <p className="text-muted-foreground mt-8 text-center text-xs">
+                © 2026–{new Date().getFullYear()} Nestwork ·{' '}
+                <button
+                    type="button"
+                    onClick={() => setShowTerms(true)}
+                    className="hover:text-foreground underline underline-offset-2"
+                >
+                    {t.terms.linkLabel}
+                </button>
+            </p>
+
+            <TermsAndConditionsModal
+                open={showTerms}
+                onOpenChange={setShowTerms}
+            />
         </>
     );
 }

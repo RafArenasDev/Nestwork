@@ -50,6 +50,11 @@ export interface Dictionary {
         mismatch: string;
         savePassword: string;
     };
+    terms: {
+        title: string;
+        description: string;
+        linkLabel: string;
+    };
 }
 
 const en: Dictionary = {
@@ -103,6 +108,11 @@ const en: Dictionary = {
         generate: 'Generate password',
         mismatch: 'Passwords do not match.',
         savePassword: 'Save password',
+    },
+    terms: {
+        title: 'Terms and Conditions of Use',
+        description: 'Nestwork — terms of use for the service',
+        linkLabel: 'Terms and Conditions',
     },
 };
 

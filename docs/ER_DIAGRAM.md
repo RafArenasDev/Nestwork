@@ -85,6 +85,7 @@ erDiagram
         string name
         string type "public|private"
         bigint created_by FK
+        timestamp archived_at "nullable — archivar, nunca borrar un canal con historial"
     }
 
     CHANNEL_MEMBER {
@@ -124,6 +125,7 @@ erDiagram
         bigint id PK "🔲 propuesto — MVP"
         bigint team_id FK
         timestamp created_at
+        timestamp archived_at "nullable — manual, o automático si el otro participante se desactiva (solo aplica a DMs 1:1, no a grupos con 3+ participantes)"
     }
 
     NOTIFICATION {
@@ -150,3 +152,5 @@ erDiagram
 - **`social_account`** (🔲 propuesto): vincula un `User` a su identidad de Google (u otro proveedor OAuth en el futuro). Un usuario puede tener cuenta local (password) y cuenta social vinculada simultáneamente.
 - **`message.parent_message_id`**: auto-referencia para threads/replies — campo reservado desde el MVP en el diseño, aunque la feature de threads es V2, para no requerir una migración destructiva después.
 - **Multi-tenancy:** todas las tablas tenant-scoped (`channel`, `message`, `direct_conversation`, etc.) llevan `team_id` (= `workspace_id` conceptual) de forma directa o a través de su canal/conversación padre — schema compartido, no schema-per-tenant (decisión bloqueada, ver `CLAUDE.md` 2.1).
+- **`channel` vs. `direct_conversation` con 3+ participantes ("Grupo"):** son entidades distintas a propósito, no la misma tabla con un flag. Un Canal es persistente, descubrible dentro del workspace, típicamente ligado a un tema. Un `direct_conversation` es siempre privado y ad-hoc — empieza como DM 1:1 y puede crecer agregando participantes (se vuelve "Grupo" en la UI) sin cambiar de tabla ni de modelo, porque `direct_conversation_participants` ya soporta N filas desde el diseño original.
+- **`archived_at` en `channel` y `direct_conversation`:** reemplaza cualquier necesidad de borrado real de la conversación — ver `REQUIREMENTS.md` § "Archivado vs. borrado". El borrado de un `message` individual (soft delete existente) es una operación distinta y no se ve afectada por esto.
