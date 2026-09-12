@@ -334,32 +334,20 @@ main[data-slot='sidebar-inset'],
 }
 
 /* Volumen de la card negra/blanca de login-registro, concentrado
-   JUNTO A LA CURVA (no toda la card) — mismo espíritu que
-   .btn-elevated: un resplandor blanco (se nota en la card NEGRA, casi
-   no se ve en la blanca) + una sombra oscura (al revés: se nota en la
-   card BLANCA, casi no se ve en la negra) + una línea brillante justo
-   en el borde curvo. Entre las tres, el volumen se nota en los dos
-   temas sin exagerar el resto de la card, que se queda plana/pura.
+   JUNTO A LA CURVA (no toda la card) — dos sombras INSET difuminadas
+   (spread negativo, sin ningún stop/borde duro): un resplandor blanco
+   suave (se nota en la card NEGRA, casi no se ve en la blanca) + una
+   sombra oscura (al revés: se nota en la card BLANCA, casi no se ve en
+   la negra). Nada de línea recta ni de degradé con stops marcados —
+   sólo blur, para que se lea como volumen y no como una división.
    Variante -left/-right según de qué lado está la curva. */
 .form-pane-elevated-left {
-    background-image: linear-gradient(
-        to left,
-        rgba(255, 255, 255, 0.35) 0%,
-        rgba(255, 255, 255, 0.08) 15%,
-        transparent 35%
-    );
     box-shadow:
-        inset 1.5px 0 0 rgba(255, 255, 255, 0.55),
+        inset 28px 0 36px -26px rgba(255, 255, 255, 0.16),
         inset 40px 0 50px -35px rgba(0, 0, 0, 0.45);
 }
 .form-pane-elevated-right {
-    background-image: linear-gradient(
-        to right,
-        rgba(255, 255, 255, 0.35) 0%,
-        rgba(255, 255, 255, 0.08) 15%,
-        transparent 35%
-    );
     box-shadow:
-        inset -1.5px 0 0 rgba(255, 255, 255, 0.55),
+        inset -28px 0 36px -26px rgba(255, 255, 255, 0.16),
         inset -40px 0 50px -35px rgba(0, 0, 0, 0.45);
 }
