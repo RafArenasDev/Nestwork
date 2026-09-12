@@ -258,19 +258,28 @@ main[data-slot='sidebar-inset'],
    cada hoja de estilo y en la práctica no se veía nada). */
 .btn-elevated {
     position: relative;
+    /* Nunca un borde recto/plano — o no hay borde, o se sugiere el
+       volumen con el anillo suave de box-shadow de más abajo. */
+    border-color: transparent !important;
     background-image: linear-gradient(
         180deg,
-        rgba(255, 255, 255, 0.32) 0%,
-        rgba(255, 255, 255, 0.08) 45%,
-        rgba(255, 255, 255, 0) 60%,
-        rgba(0, 0, 0, 0.1) 100%
+        rgba(255, 255, 255, 0.55) 0%,
+        rgba(255, 255, 255, 0.18) 40%,
+        rgba(255, 255, 255, 0.02) 60%,
+        rgba(0, 0, 0, 0.08) 100%
     ) !important;
+    /* El aro (0 0 0 1px) y el highlight superior reemplazan al borde;
+       el resto son 3 capas de sombra de CONTACTO (offset chico, blur
+       chico — así no “sangra” hacia arriba del botón) que crecen en
+       offset/blur juntas, para que la sombra se lea completamente
+       ABAJO, nunca alrededor. */
     box-shadow:
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.65),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.18),
-        0 1px 2px rgba(0, 0, 0, 0.3),
-        0 8px 16px rgba(0, 0, 0, 0.28),
-        0 20px 40px rgba(0, 0, 0, 0.22) !important;
+        0 0 0 1px rgba(255, 255, 255, 0.16),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.9),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.2),
+        0 2px 3px rgba(0, 0, 0, 0.32),
+        0 8px 12px rgba(0, 0, 0, 0.3),
+        0 16px 24px rgba(0, 0, 0, 0.24) !important;
     transition:
         transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
         box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -278,27 +287,29 @@ main[data-slot='sidebar-inset'],
 .btn-elevated:hover {
     transform: translateY(-3px);
     box-shadow:
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.75),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.2),
-        0 2px 3px rgba(0, 0, 0, 0.35),
-        0 16px 28px rgba(0, 0, 0, 0.34),
-        0 32px 56px rgba(0, 0, 0, 0.26) !important;
+        0 0 0 1px rgba(255, 255, 255, 0.22),
+        inset 0 1.5px 0 rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.22),
+        0 3px 4px rgba(0, 0, 0, 0.36),
+        0 12px 18px rgba(0, 0, 0, 0.34),
+        0 24px 34px rgba(0, 0, 0, 0.26) !important;
 }
 .btn-elevated:active {
     transform: translateY(-1px);
     box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.14),
         inset 0 2px 4px rgba(0, 0, 0, 0.3),
-        0 4px 8px rgba(0, 0, 0, 0.25) !important;
+        0 4px 6px rgba(0, 0, 0, 0.26) !important;
 }
 
 /* Vidrio esmerilado: sólo para botones de fondo transparente/outline
    (Google, CTA del panel de marca) — sobre un botón 100% opaco
    (Sign in/Sign up) el blur no tendría nada detrás que desenfocar. */
 .btn-glass {
-    backdrop-filter: blur(14px) saturate(160%);
-    -webkit-backdrop-filter: blur(14px) saturate(160%);
-    background-color: rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: blur(14px) saturate(180%);
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.1) !important;
 }
 .btn-glass:hover {
-    background-color: rgba(255, 255, 255, 0.12) !important;
+    background-color: rgba(255, 255, 255, 0.18) !important;
 }
