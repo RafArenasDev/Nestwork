@@ -89,6 +89,13 @@ class TeamInvitationController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation declined.')]);
 
-        return to_route('dashboard');
+        // Declinar no te une a ningún equipo, así que a diferencia de
+        // accept() no podemos asumir que el usuario ya tiene current_team
+        // (ej. alguien invitado que todavía no fue asignado a un equipo
+        // por dominio) — to_route('dashboard') exigiría el parámetro
+        // {current_team} y rompería con un 500.
+        return $request->user()?->currentTeam
+            ? to_route('dashboard')
+            : to_route('home');
     }
 }

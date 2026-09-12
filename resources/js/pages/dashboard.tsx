@@ -53,9 +53,7 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                         <p className="text-muted-foreground text-xs">
                             Mensajes sin leer
                         </p>
-                        <p className="text-3xl font-semibold">
-                            {unreadTotal}
-                        </p>
+                        <p className="text-3xl font-semibold">{unreadTotal}</p>
                     </div>
                     <div className="bg-card rounded-xl border p-4">
                         <p className="text-muted-foreground text-xs">
@@ -74,8 +72,8 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
 
                     {recentConversations.length === 0 ? (
                         <p className="text-muted-foreground text-sm">
-                            Todavía no tienes conversaciones — usa el botón
-                            "+" del sidebar para empezar una.
+                            Todavía no tienes conversaciones — usa el botón "+"
+                            del sidebar para empezar una.
                         </p>
                     ) : (
                         <ul className="divide-y overflow-y-auto rounded-xl border">
@@ -100,9 +98,7 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                                                 />
                                             )}
                                             <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
-                                                {getInitials(
-                                                    conversation.name,
-                                                )}
+                                                {getInitials(conversation.name)}
                                             </AvatarFallback>
                                         </Avatar>
                                         <span className="min-w-0 flex-1">

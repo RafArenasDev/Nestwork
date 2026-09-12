@@ -38,7 +38,10 @@ import { useInitials } from '@/hooks/use-initials';
 import { useLocale } from '@/hooks/use-locale';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
-import { update as updateStatus, destroy as clearStatus } from '@/routes/user-status';
+import {
+    update as updateStatus,
+    destroy as clearStatus,
+} from '@/routes/user-status';
 
 const STATUS_PRESETS = [
     { preset: 'available', label: 'Disponible', dotColor: 'text-emerald-500' },
@@ -134,66 +137,68 @@ export function CurvedNavRail({ active, onChange }: Props) {
         <nav className="curved-rail" aria-label="Secciones">
             <TeamSwitcher iconOnly />
             <ul>
-                {RAIL_MODULES.map(({ key, label, icon: Icon, iconActive: IconActive }) => {
-                    const isActive = active === key;
-                    const badgeCount = badgeCountFor(key);
-                    const RenderedIcon = isActive ? IconActive : Icon;
-                    const button = (
-                        <button
-                            type="button"
-                            className="curved-rail-link"
-                            aria-label={label}
-                            aria-current={isActive ? 'page' : undefined}
-                            onClick={() => onChange(key)}
-                        >
-                            <span className="curved-rail-icon">
-                                <RenderedIcon
-                                    className="size-7"
-                                    strokeWidth={1.8}
-                                />
-                                {badgeCount > 0 && (
-                                    <Badge
-                                        variant="destructive"
-                                        className="absolute -top-2 -right-2 h-4 min-w-4 justify-center rounded-full px-1 text-[9px] leading-none"
-                                    >
-                                        {formatBadgeCount(badgeCount)}
-                                    </Badge>
-                                )}
-                            </span>
-                        </button>
-                    );
+                {RAIL_MODULES.map(
+                    ({ key, label, icon: Icon, iconActive: IconActive }) => {
+                        const isActive = active === key;
+                        const badgeCount = badgeCountFor(key);
+                        const RenderedIcon = isActive ? IconActive : Icon;
+                        const button = (
+                            <button
+                                type="button"
+                                className="curved-rail-link"
+                                aria-label={label}
+                                aria-current={isActive ? 'page' : undefined}
+                                onClick={() => onChange(key)}
+                            >
+                                <span className="curved-rail-icon">
+                                    <RenderedIcon
+                                        className="size-7"
+                                        strokeWidth={1.8}
+                                    />
+                                    {badgeCount > 0 && (
+                                        <Badge
+                                            variant="destructive"
+                                            className="absolute -top-2 -right-2 h-4 min-w-4 justify-center rounded-full px-1 text-[9px] leading-none"
+                                        >
+                                            {formatBadgeCount(badgeCount)}
+                                        </Badge>
+                                    )}
+                                </span>
+                            </button>
+                        );
 
-                    return (
-                        <li
-                            key={key}
-                            className={`curved-rail-item${isActive ? ' curved-rail-item--active' : ''}`}
-                        >
-                            <span
-                                className="curved-rail-notch curved-rail-notch--top"
-                                aria-hidden="true"
-                            />
-                            <span
-                                className="curved-rail-notch curved-rail-notch--bottom"
-                                aria-hidden="true"
-                            />
-                            {/* Sin tooltip cuando ya está seleccionado:
+                        return (
+                            <li
+                                key={key}
+                                className={`curved-rail-item${isActive ? ' curved-rail-item--active' : ''}`}
+                            >
+                                <span
+                                    className="curved-rail-notch curved-rail-notch--top"
+                                    aria-hidden="true"
+                                />
+                                <span
+                                    className="curved-rail-notch curved-rail-notch--bottom"
+                                    aria-hidden="true"
+                                />
+                                {/* Sin tooltip cuando ya está seleccionado:
                                 el título ya se ve en el header del
                                 sidebar, sería redundante. */}
-                            {isActive ? (
-                                button
-                            ) : (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        {button}
-                                    </TooltipTrigger>
-                                    <TooltipContent side="right">
-                                        {label}
-                                    </TooltipContent>
-                                </Tooltip>
-                            )}
-                        </li>
-                    );
-                })}
+                                {isActive ? (
+                                    button
+                                ) : (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            {button}
+                                        </TooltipTrigger>
+                                        <TooltipContent side="right">
+                                            {label}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
+                            </li>
+                        );
+                    },
+                )}
             </ul>
 
             <div className="curved-rail-footer">

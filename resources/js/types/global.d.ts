@@ -1,5 +1,8 @@
 import type { Auth } from '@/types/auth';
-import type { ConversationSummary, TeamMemberOption } from '@/types/conversations';
+import type {
+    ConversationSummary,
+    TeamMemberOption,
+} from '@/types/conversations';
 import type { Team } from '@/types/teams';
 
 declare module 'react' {
@@ -18,6 +21,7 @@ declare module '@inertiajs/core' {
             teams: Team[];
             conversations: ConversationSummary[];
             archivedConversations: ConversationSummary[];
+            teamMembers: TeamMemberOption[];
             [key: string]: unknown;
         };
     }

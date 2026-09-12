@@ -44,7 +44,7 @@ Sitio: `http://chat-app.test`
 ## Decisiones bloqueadas (no se vuelven a discutir sin pedirlo explícitamente)
 
 1. **MVP = solo Web.** Desktop/Mobile son fase futura condicionada a que la web esté estable.
-2. **TDD desde el primer commit** para lógica de backend crítica y frontend con estado real. *(En pausa desde el rediseño de auth — ver Pendientes.)*
+2. **TDD desde el primer commit** para lógica de backend crítica y frontend con estado real. _(En pausa desde el rediseño de auth — ver Pendientes.)_
 3. **Multi-tenancy: schema compartido** con `team_id` (= `workspace_id` conceptual), no schema-per-tenant.
 4. **Login: solo Google (Firebase) en el MVP**, sin password ni passkeys. Equipo asignado automático por dominio de correo (dominios públicos → equipo "Invitados" compartido; cualquier otro dominio → su propio equipo, primer usuario = Owner). Sin aprobación manual ni verificación DNS.
 5. **Multi-plataforma con la misma lógica, no proyectos aparte:** cuando la web llegue al punto de tener datos reales (no mocks), Android y desktop arrancan en paralelo reutilizando el mismo backend/lógica de dominio — no se tratan como iniciativas separadas.

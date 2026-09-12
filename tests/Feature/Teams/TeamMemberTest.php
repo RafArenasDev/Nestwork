@@ -113,7 +113,9 @@ test('team member role cannot be set to owner', function () {
 test('removed member current team is set to personal team', function () {
     $owner = User::factory()->create();
     $member = User::factory()->create();
-    $personalTeam = $member->personalTeam();
+    $personalTeam = Team::factory()->personal()->create();
+    $personalTeam->members()->attach($member, ['role' => TeamRole::Owner->value]);
+
     $team = Team::factory()->create();
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);

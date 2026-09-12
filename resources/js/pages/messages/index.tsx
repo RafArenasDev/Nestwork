@@ -369,67 +369,68 @@ function Thread({
                     <ScrollArea className="h-full flex-1 px-4">
                         <div className="flex flex-col gap-0.5 py-4">
                             {messages.map((message, index) => {
-                            const previous = messages[index - 1];
-                            const next = messages[index + 1];
-                            const isFirstInGroup =
-                                !previous || !isSameGroup(previous, message);
-                            const isLastInGroup =
-                                !next || !isSameGroup(message, next);
-                            const showDateSeparator =
-                                !previous ||
-                                dayKey(previous.createdAt) !==
-                                    dayKey(message.createdAt);
+                                const previous = messages[index - 1];
+                                const next = messages[index + 1];
+                                const isFirstInGroup =
+                                    !previous ||
+                                    !isSameGroup(previous, message);
+                                const isLastInGroup =
+                                    !next || !isSameGroup(message, next);
+                                const showDateSeparator =
+                                    !previous ||
+                                    dayKey(previous.createdAt) !==
+                                        dayKey(message.createdAt);
 
-                            return (
-                                <div key={message.id}>
-                                    {showDateSeparator && (
-                                        <div className="my-3 flex justify-center">
-                                            <span className="bg-foreground/5 text-muted-foreground rounded-full px-3 py-1 text-xs font-medium">
-                                                {formatDaySeparator(
-                                                    message.createdAt,
-                                                )}
-                                            </span>
-                                        </div>
-                                    )}
-                                    <MessageBubble
-                                        message={message}
-                                        getInitials={getInitials}
-                                        isFirstInGroup={
-                                            isFirstInGroup ||
-                                            showDateSeparator
-                                        }
-                                        isLastInGroup={isLastInGroup}
-                                    />
-                                </div>
-                            );
-                        })}
-                        <div ref={scrollBottomRef} />
-                    </div>
-                </ScrollArea>
-            </div>
+                                return (
+                                    <div key={message.id}>
+                                        {showDateSeparator && (
+                                            <div className="my-3 flex justify-center">
+                                                <span className="bg-foreground/5 text-muted-foreground rounded-full px-3 py-1 text-xs font-medium">
+                                                    {formatDaySeparator(
+                                                        message.createdAt,
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <MessageBubble
+                                            message={message}
+                                            getInitials={getInitials}
+                                            isFirstInGroup={
+                                                isFirstInGroup ||
+                                                showDateSeparator
+                                            }
+                                            isLastInGroup={isLastInGroup}
+                                        />
+                                    </div>
+                                );
+                            })}
+                            <div ref={scrollBottomRef} />
+                        </div>
+                    </ScrollArea>
+                </div>
 
-            <div className="flex items-end gap-2 border-t p-3">
-                <Textarea
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            handleSend();
-                        }
-                    }}
-                    placeholder="Escribe un mensaje..."
-                    className="max-h-40 min-h-10 flex-1 resize-none"
-                    rows={1}
-                />
-                <Button
-                    type="button"
-                    size="icon"
-                    disabled={sending || body.trim() === ''}
-                    onClick={handleSend}
-                >
-                    <Send className="size-4" />
-                </Button>
+                <div className="flex items-end gap-2 border-t p-3">
+                    <Textarea
+                        value={body}
+                        onChange={(event) => setBody(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                                event.preventDefault();
+                                handleSend();
+                            }
+                        }}
+                        placeholder="Escribe un mensaje..."
+                        className="max-h-40 min-h-10 flex-1 resize-none"
+                        rows={1}
+                    />
+                    <Button
+                        type="button"
+                        size="icon"
+                        disabled={sending || body.trim() === ''}
+                        onClick={handleSend}
+                    >
+                        <Send className="size-4" />
+                    </Button>
                 </div>
             </div>
         </div>
