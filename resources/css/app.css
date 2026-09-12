@@ -245,6 +245,35 @@ main[data-slot='sidebar-inset'],
     background-size: 100% 100vh;
 }
 
+/* Brillo/gloss extra SOLO en el panel de marca de la pantalla de
+   login/registro — NO toca `.bg-sidebar` (usado también por la
+   sidebar/mini-rail reales, ver feedback_nestwork_content_frame_css):
+   dos manchas radiales de luz (arriba-izquierda más fuerte, abajo-
+   derecha más tenue) por ENCIMA del --chrome-gradient de siempre, en
+   vez de reemplazarlo — mismo `background-attachment:fixed` para que
+   siga leyendo del mismo punto real de pantalla que la curva del
+   "abrazo" revela, sin costura. */
+.brand-pane-gloss {
+    background-image:
+        radial-gradient(
+            130% 100% at 12% 8%,
+            rgba(255, 255, 255, 0.22) 0%,
+            rgba(255, 255, 255, 0.06) 35%,
+            transparent 60%
+        ),
+        radial-gradient(
+            90% 70% at 92% 100%,
+            rgba(255, 255, 255, 0.1) 0%,
+            transparent 55%
+        ),
+        var(--chrome-gradient) !important;
+    background-attachment: fixed, fixed, fixed !important;
+    background-size:
+        100% 100vh,
+        100% 100vh,
+        100% 100vh !important;
+}
+
 /* Botones elevados 3D (pantalla de login/registro, SOLO botones reales
    — login/registrar/Google/CTA de marca — nunca inputs ni el combobox
    de país). Antes la sombra sólo vivía abajo (offset positivo): sobre

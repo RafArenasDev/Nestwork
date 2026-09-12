@@ -238,7 +238,7 @@ function BrandPane({
     const isRegister = mode === 'register';
 
     return (
-        <div className="bg-sidebar text-sidebar-foreground flex h-full flex-col items-center justify-center gap-6 p-10 text-center">
+        <div className="bg-sidebar brand-pane-gloss text-sidebar-foreground flex h-full flex-col items-center justify-center gap-6 p-10 text-center">
             <AppLogoIcon className="size-12 fill-current text-white" />
             <div className="space-y-2">
                 <p className="text-lg font-semibold">Nestwork</p>
