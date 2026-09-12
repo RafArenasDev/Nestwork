@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -106,7 +106,29 @@ export function Combobox({
                             </span>
                         )}
                     </span>
-                    <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
+                    {selected ? (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Limpiar selección"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onChange('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.stopPropagation();
+                                    event.preventDefault();
+                                    onChange('');
+                                }
+                            }}
+                            className="text-muted-foreground hover:text-foreground shrink-0"
+                        >
+                            <X className="size-4" />
+                        </span>
+                    ) : (
+                        <ChevronsUpDown className="text-muted-foreground size-4 shrink-0" />
+                    )}
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-(--radix-popover-trigger-width) p-0">

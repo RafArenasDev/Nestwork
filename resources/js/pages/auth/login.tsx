@@ -42,7 +42,7 @@ export default function AuthPage({
     const isRegister = panel === 'register';
 
     return (
-        <div className="bg-[var(--sidebar)]">
+        <div className="bg-sidebar">
             <Head
                 title={isRegister ? t.auth.registerTitle : t.auth.loginTitle}
             />
@@ -75,6 +75,7 @@ export default function AuthPage({
                                 <FormPane
                                     t={t}
                                     onShowTerms={() => setShowTerms(true)}
+                                    curveSide="right"
                                 >
                                     <SignInForm status={status} t={t} />
                                     <SwitchPrompt
@@ -100,6 +101,7 @@ export default function AuthPage({
                                 <FormPane
                                     t={t}
                                     onShowTerms={() => setShowTerms(true)}
+                                    curveSide="left"
                                 >
                                     <SignUpForm t={t} countries={countries} />
                                     <SwitchPrompt
@@ -184,13 +186,28 @@ function FormPane({
     children,
     t,
     onShowTerms,
+    curveSide,
 }: {
     children: React.ReactNode;
     t: ReturnType<typeof useLocale>['t'];
     onShowTerms: () => void;
+    /** Qué esquinas (arriba y abajo) se curvan hacia el panel de marca —
+     *  el "abrazo": esta card es 100% opaca (bg-[var(--background)]),
+     *  así que redondear su propia esquina recorta su fondo y deja ver
+     *  el fondo de la página (mismo --sidebar que el panel de marca) por
+     *  detrás — no hace falta ningún parche/máscara aparte, el color de
+     *  atrás ya es idéntico al de marca. */
+    curveSide: 'left' | 'right';
 }) {
+    const curveClass =
+        curveSide === 'left'
+            ? 'rounded-tl-[56px] rounded-bl-[56px]'
+            : 'rounded-tr-[56px] rounded-br-[56px]';
+
     return (
-        <div className="flex h-full flex-col bg-[var(--background)] p-10 sm:p-12">
+        <div
+            className={`flex h-full flex-col bg-[var(--background)] p-10 sm:p-12 ${curveClass}`}
+        >
             <div className="m-auto w-full max-w-sm">{children}</div>
             <p className="text-muted-foreground text-center text-xs">
                 © 2026–{new Date().getFullYear()} Nestwork ·{' '}
@@ -234,7 +251,7 @@ function BrandPane({
             <Button
                 type="button"
                 variant="outline"
-                className="h-11 rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white"
+                className="btn-elevated h-11 rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white"
                 onClick={onSwitch}
             >
                 {isRegister ? t.auth.backToSignIn : t.auth.createAccount}
@@ -363,7 +380,7 @@ function GoogleButton({
         <Button
             type="button"
             variant="outline"
-            className="h-11 w-full gap-2 rounded-full"
+            className="btn-elevated h-11 w-full gap-2 rounded-full"
             disabled={isSigningIn}
             onClick={onClick}
             data-test="google-login-button"
@@ -479,7 +496,7 @@ function SignInForm({
                 </div>
                 <Button
                     type="submit"
-                    className="h-11 w-full rounded-full"
+                    className="btn-elevated h-11 w-full rounded-full"
                     disabled={form.processing}
                 >
                     {form.processing ? <Spinner /> : null}
@@ -633,11 +650,17 @@ function SignUpForm({
                             form.setData('password_confirmation', value)
                         }
                         invalid={
-                            form.data.password_confirmation !== '' &&
-                            form.data.password_confirmation !==
-                                form.data.password
+                            Boolean(form.errors.password_confirmation) ||
+                            (form.data.password_confirmation !== '' &&
+                                form.data.password_confirmation !==
+                                    form.data.password)
                         }
                     />
+                    {form.errors.password_confirmation && (
+                        <p className="text-destructive text-sm">
+                            {form.errors.password_confirmation}
+                        </p>
+                    )}
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="register-country">
@@ -663,7 +686,7 @@ function SignUpForm({
                 </div>
                 <Button
                     type="submit"
-                    className="h-11 w-full rounded-full"
+                    className="btn-elevated h-11 w-full rounded-full"
                     disabled={form.processing}
                 >
                     {form.processing ? <Spinner /> : null}
