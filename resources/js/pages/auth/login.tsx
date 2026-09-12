@@ -1,35 +1,45 @@
-import { Form, Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import InputError from '@/components/input-error';
-import PasswordInput from '@/components/password-input';
+import FirebaseSessionController from '@/actions/App/Http/Controllers/Auth/FirebaseSessionController';
 import TeamInvitationAlert from '@/components/team-invitation-alert';
 import TermsAndConditionsModal from '@/components/terms-and-conditions-modal';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/hooks/use-locale';
-import { register } from '@/routes';
-import { store } from '@/routes/login';
-import { request } from '@/routes/password';
-import PasskeyVerify from '@/components/passkey-verify';
+import { signInWithGoogle } from '@/lib/firebase';
 import type { TeamInvitationContext } from '@/types';
 
 type Props = {
     status?: string;
-    canResetPassword: boolean;
     teamInvitation?: TeamInvitationContext | null;
 };
 
-export default function Login({
-    status,
-    canResetPassword,
-    teamInvitation,
-}: Props) {
+export default function Login({ status, teamInvitation }: Props) {
     const { t } = useLocale();
     const [showTerms, setShowTerms] = useState(false);
+    const [isSigningIn, setIsSigningIn] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleGoogleSignIn = async () => {
+        setError(null);
+        setIsSigningIn(true);
+
+        try {
+            const idToken = await signInWithGoogle();
+
+            router.post(
+                FirebaseSessionController.store().url,
+                { id_token: idToken },
+                {
+                    onError: () => setError(t.auth.genericError),
+                    onFinish: () => setIsSigningIn(false),
+                },
+            );
+        } catch {
+            setError(t.auth.genericError);
+            setIsSigningIn(false);
+        }
+    };
 
     return (
         <>
@@ -42,97 +52,28 @@ export default function Login({
                 />
             )}
 
-            <PasskeyVerify />
+            <div className="flex flex-col gap-6">
+                <Button
+                    type="button"
+                    className="w-full gap-2"
+                    disabled={isSigningIn}
+                    onClick={handleGoogleSignIn}
+                    data-test="google-login-button"
+                >
+                    {isSigningIn ? (
+                        <Spinner />
+                    ) : (
+                        <GoogleIcon className="size-4" />
+                    )}
+                    {isSigningIn ? t.auth.signingIn : t.auth.continueWithGoogle}
+                </Button>
 
-            <Form
-                {...store.form()}
-                resetOnSuccess={['password']}
-                className="flex flex-col gap-6"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">{t.auth.email}</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="email"
-                                    placeholder="email@example.com"
-                                />
-                                <InputError message={errors.email} />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">
-                                        {t.auth.password}
-                                    </Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            {t.auth.forgotPassword}
-                                        </TextLink>
-                                    )}
-                                </div>
-                                <PasswordInput
-                                    id="password"
-                                    name="password"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="current-password"
-                                    placeholder={t.auth.password}
-                                />
-                                <InputError message={errors.password} />
-                            </div>
-
-                            <div className="flex items-center space-x-3">
-                                <Checkbox
-                                    id="remember"
-                                    name="remember"
-                                    tabIndex={3}
-                                />
-                                <Label htmlFor="remember">
-                                    {t.auth.rememberMe}
-                                </Label>
-                            </div>
-
-                            <Button
-                                type="submit"
-                                className="mt-4 w-full"
-                                tabIndex={4}
-                                disabled={processing}
-                                data-test="login-button"
-                            >
-                                {processing && <Spinner />}
-                                {t.auth.logIn}
-                            </Button>
-                        </div>
-
-                        <div className="text-muted-foreground text-center text-sm">
-                            {t.auth.noAccount}{' '}
-                            <TextLink
-                                href={register({
-                                    query: {
-                                        invitation: teamInvitation?.code,
-                                    },
-                                })}
-                                data-test="register-link"
-                                tabIndex={5}
-                            >
-                                {t.auth.signUp}
-                            </TextLink>
-                        </div>
-                    </>
+                {error && (
+                    <p className="text-destructive text-center text-sm">
+                        {error}
+                    </p>
                 )}
-            </Form>
+            </div>
 
             {status && (
                 <div className="mb-4 text-center text-sm font-medium text-green-600">
@@ -159,7 +100,30 @@ export default function Login({
     );
 }
 
+function GoogleIcon({ className }: { className?: string }) {
+    return (
+        <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+            <path
+                fill="#4285F4"
+                d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.63h6.47c-.28 1.5-1.13 2.77-2.4 3.62v3h3.88c2.27-2.09 3.57-5.17 3.57-8.8Z"
+            />
+            <path
+                fill="#34A853"
+                d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.88-3c-1.08.72-2.45 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.26v3.1C3.24 21.3 7.28 24 12 24Z"
+            />
+            <path
+                fill="#FBBC05"
+                d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58v-3.1H1.26a12 12 0 0 0 0 10.78l4.01-3.1Z"
+            />
+            <path
+                fill="#EA4335"
+                d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.28 0 3.24 2.7 1.26 6.61l4.01 3.1C6.22 6.88 8.87 4.77 12 4.77Z"
+            />
+        </svg>
+    );
+}
+
 Login.layout = {
     title: 'Log in to your account',
-    description: 'Enter your email and password below to log in',
+    description: 'Sign in with your Google account to continue',
 };

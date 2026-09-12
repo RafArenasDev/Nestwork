@@ -4,7 +4,6 @@ import { useState } from 'react';
 import AppLogo from '@/components/app-logo';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { PasswordModal } from '@/components/password-modal';
 import { ProfileModal } from '@/components/profile-modal';
 import { TeamSwitcher } from '@/components/team-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -50,7 +49,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
     // Los modales viven acá, un nivel por encima del DropdownMenu — ver el
     // comentario en user-menu-content.tsx.
     const [profileOpen, setProfileOpen] = useState(false);
-    const [passwordOpen, setPasswordOpen] = useState(false);
 
     const mainNavItems: NavItem[] = [
         {
@@ -181,7 +179,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                 <UserMenuContent
                                     user={auth.user}
                                     onOpenProfile={() => setProfileOpen(true)}
-                                    onOpenPassword={() => setPasswordOpen(true)}
                                 />
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -192,7 +189,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
             </div>
 
             <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
-            <PasswordModal open={passwordOpen} onOpenChange={setPasswordOpen} />
 
             {breadcrumbs.length > 1 && (
                 <div className="border-sidebar-border/70 flex w-full border-b">

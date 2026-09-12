@@ -165,8 +165,9 @@ function Sidebar({
     return (
       <div
         data-slot="sidebar"
+        data-variant={variant}
         className={cn(
-          "bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col",
+          "peer bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col",
           className
         )}
         {...props}

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 
 trait HasTeams
 {
@@ -153,6 +154,10 @@ trait HasTeams
             id: $team->id,
             name: $team->name,
             slug: $team->slug,
+            // El equipo de invitados no tiene domain propio (agrupa
+            // varios proveedores públicos) — mostramos el dominio real
+            // del usuario como referencia en vez de dejarlo vacío.
+            domain: $team->domain ?? Str::after($this->email, '@'),
             isPersonal: $team->is_personal,
             role: $role?->value,
             roleLabel: $role?->label(),

@@ -11,7 +11,6 @@ export interface Dictionary {
     };
     userMenu: {
         profile: string;
-        password: string;
         theme: string;
         language: string;
     };
@@ -25,13 +24,9 @@ export interface Dictionary {
     auth: {
         loginTitle: string;
         loginDescription: string;
-        email: string;
-        password: string;
-        rememberMe: string;
-        forgotPassword: string;
-        logIn: string;
-        noAccount: string;
-        signUp: string;
+        continueWithGoogle: string;
+        signingIn: string;
+        genericError: string;
     };
     profileModal: {
         title: string;
@@ -39,16 +34,6 @@ export interface Dictionary {
         name: string;
         email: string;
         updated: string;
-    };
-    passwordModal: {
-        title: string;
-        description: string;
-        currentPassword: string;
-        newPassword: string;
-        confirmPassword: string;
-        generate: string;
-        mismatch: string;
-        savePassword: string;
     };
     terms: {
         title: string;
@@ -70,7 +55,6 @@ const en: Dictionary = {
     },
     userMenu: {
         profile: 'Profile',
-        password: 'Password',
         theme: 'Theme',
         language: 'Language',
     },
@@ -82,15 +66,11 @@ const en: Dictionary = {
         switchToLight: 'Switch to light theme',
     },
     auth: {
-        loginTitle: 'Log in to your account',
-        loginDescription: 'Enter your email and password below to log in',
-        email: 'Email address',
-        password: 'Password',
-        rememberMe: 'Remember me',
-        forgotPassword: 'Forgot password?',
-        logIn: 'Log in',
-        noAccount: "Don't have an account?",
-        signUp: 'Sign up',
+        loginTitle: 'Welcome to Nestwork',
+        loginDescription: 'Sign in with your Google account to continue',
+        continueWithGoogle: 'Continue with Google',
+        signingIn: 'Signing in...',
+        genericError: 'Something went wrong signing you in. Please try again.',
     },
     profileModal: {
         title: 'Profile',
@@ -98,16 +78,6 @@ const en: Dictionary = {
         name: 'Name',
         email: 'Email address',
         updated: 'Profile updated successfully',
-    },
-    passwordModal: {
-        title: 'Password',
-        description: 'Use a long, random password to keep your account secure.',
-        currentPassword: 'Current password',
-        newPassword: 'New password',
-        confirmPassword: 'Confirm password',
-        generate: 'Generate password',
-        mismatch: 'Passwords do not match.',
-        savePassword: 'Save password',
     },
     terms: {
         title: 'Terms and Conditions of Use',

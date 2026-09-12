@@ -1,7 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import { ChevronsUpDown } from 'lucide-react';
 import { useState } from 'react';
-import { PasswordModal } from '@/components/password-modal';
 import { ProfileModal } from '@/components/profile-modal';
 import {
     DropdownMenu,
@@ -22,10 +21,9 @@ export function NavUser() {
     const { auth, currentTeam } = usePage().props;
     const { state } = useSidebar();
     const isMobile = useIsMobile();
-    // Los modales viven acá, un nivel por encima del DropdownMenu — ver el
+    // El modal vive acá, un nivel por encima del DropdownMenu — ver el
     // comentario en user-menu-content.tsx.
     const [profileOpen, setProfileOpen] = useState(false);
-    const [passwordOpen, setPasswordOpen] = useState(false);
 
     return (
         <>
@@ -56,7 +54,6 @@ export function NavUser() {
                             <UserMenuContent
                                 user={auth.user}
                                 onOpenProfile={() => setProfileOpen(true)}
-                                onOpenPassword={() => setPasswordOpen(true)}
                             />
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -64,7 +61,6 @@ export function NavUser() {
             </SidebarMenu>
 
             <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
-            <PasswordModal open={passwordOpen} onOpenChange={setPasswordOpen} />
         </>
     );
 }

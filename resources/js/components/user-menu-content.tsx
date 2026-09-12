@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { KeyRound, LogOut, SunMoon, UserRound } from 'lucide-react';
+import { LogOut, SunMoon, UserRound } from 'lucide-react';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import {
@@ -17,22 +17,16 @@ import type { User } from '@/types';
 type Props = {
     user: User;
     onOpenProfile: () => void;
-    onOpenPassword: () => void;
 };
 
 /**
- * Los modales de Perfil/Contraseña NO viven acá: Radix desmonta
- * DropdownMenuContent (y todo lo que hay dentro) al cerrarse, así que si el
- * estado "open" viviera dentro de este componente, el modal se cerraría de
- * inmediato junto con el menú que lo abrió. Por eso reciben callbacks y el
- * estado real vive un nivel arriba (nav-user.tsx / app-header.tsx), mismo
- * patrón que Inventory-Manager.
+ * El modal de Perfil NO vive acá: Radix desmonta DropdownMenuContent (y todo
+ * lo que hay dentro) al cerrarse, así que si el estado "open" viviera dentro
+ * de este componente, el modal se cerraría de inmediato junto con el menú
+ * que lo abrió. Por eso recibe un callback y el estado real vive un nivel
+ * arriba (nav-user.tsx / app-header.tsx), mismo patrón que Inventory-Manager.
  */
-export function UserMenuContent({
-    user,
-    onOpenProfile,
-    onOpenPassword,
-}: Props) {
+export function UserMenuContent({ user, onOpenProfile }: Props) {
     const cleanup = useMobileNavigation();
     const { t } = useLocale();
 
@@ -53,10 +47,6 @@ export function UserMenuContent({
                 <DropdownMenuItem onClick={onOpenProfile}>
                     <UserRound className="mr-2" />
                     {t.userMenu.profile}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onOpenPassword}>
-                    <KeyRound className="mr-2" />
-                    {t.userMenu.password}
                 </DropdownMenuItem>
                 {/* preventDefault en onSelect: sin esto Radix cierra el menú
                     apenas se hace click en el switch, antes de que se alcance

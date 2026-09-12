@@ -2,6 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Conversations\ListConversationsForUser;
+use App\Data\TeamMemberOption;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -46,6 +49,34 @@ class HandleInertiaRequests extends Middleware
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
             'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
+            // Compartida en todas las páginas (no solo messages/*) para
+            // que la lista del mini-sidebar (AppSidebar) siempre tenga
+            // datos reales, sin importar en qué módulo esté el usuario.
+            // Una página específica (messages/show) puede sobrescribirla
+            // con su propia versión (con currentConversationId marcado).
+            'conversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam)
+                : [],
+            // Mismo dato pero solo lo archivado — alimenta la pestaña
+            // "Archivado" del mini-rail con datos reales.
+            'archivedConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true)
+                : [],
+            // Para el modal de "Nuevo chat" en el mini-sidebar de
+            // Mensajes — compartido globalmente por la misma razón que
+            // `conversations`.
+            'teamMembers' => fn () => $user && $user->currentTeam
+                ? $user->currentTeam->members()
+                    ->where('users.id', '!=', $user->id)
+                    ->orderBy('name')
+                    ->get()
+                    ->map(fn (User $member) => new TeamMemberOption(
+                        id: $member->id,
+                        name: $member->name,
+                        username: $member->username,
+                        avatar: $member->avatar,
+                    ))
+                : [],
         ];
     }
 }
