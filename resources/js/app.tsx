@@ -19,6 +19,10 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'welcome':
+            // El panel deslizante de auth/login arma su propia pantalla
+            // completa (login/registro en un solo componente) — no
+            // pasa por el layout genérico de 2 columnas.
+            case name === 'auth/login':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

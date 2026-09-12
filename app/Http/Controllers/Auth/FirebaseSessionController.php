@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Actions\Teams\AssignUserToDomainTeam;
 use App\Actions\Users\GenerateUniqueUsername;
+use App\Enums\AuthProvider;
 use App\Http\Controllers\Controller;
 use App\Http\Responses\Concerns\RedirectsToCurrentTeam;
+use App\Models\Country;
 use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +32,10 @@ class FirebaseSessionController extends Controller
         return Inertia::render('auth/login', [
             'status' => $request->session()->get('status'),
             'teamInvitation' => $this->teamInvitation($request),
+            'initialPanel' => 'login',
+            'countries' => Country::query()
+                ->orderBy('name')
+                ->get(['iso2', 'name', 'flag_url']),
         ]);
     }
 
@@ -92,7 +98,13 @@ class FirebaseSessionController extends Controller
                 'email' => $email,
                 'avatar' => $claims->get('picture'),
                 'email_verified_at' => now(),
+                'auth_provider' => AuthProvider::Google,
             ]);
+        } elseif ($user->auth_provider === AuthProvider::Password) {
+            // Cuenta que empezó con email+contraseña y ahora también
+            // inicia sesión con Google — queda habilitada para ambos
+            // métodos en vez de perder la contraseña existente.
+            $user->forceFill(['auth_provider' => AuthProvider::Both])->save();
         }
 
         $user->forceFill(['last_seen_at' => now()])->save();
