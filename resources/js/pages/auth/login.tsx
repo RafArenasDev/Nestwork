@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import FirebaseSessionController from '@/actions/App/Http/Controllers/Auth/FirebaseSessionController';
 import PasswordAuthController from '@/actions/App/Http/Controllers/Auth/PasswordAuthController';
@@ -233,7 +234,7 @@ function BrandPane({
             <Button
                 type="button"
                 variant="outline"
-                className="rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                className="h-11 rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white"
                 onClick={onSwitch}
             >
                 {isRegister ? t.auth.backToSignIn : t.auth.createAccount}
@@ -264,6 +265,88 @@ function SwitchPrompt({
                 {t.auth[actionKey]}
             </button>
         </p>
+    );
+}
+
+function PasswordInput({
+    id,
+    autoComplete,
+    value,
+    onChange,
+    invalid = false,
+}: {
+    id: string;
+    autoComplete: string;
+    value: string;
+    onChange: (value: string) => void;
+    invalid?: boolean;
+}) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+        <div className="relative">
+            <Input
+                id={id}
+                type={visible ? 'text' : 'password'}
+                autoComplete={autoComplete}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                aria-invalid={invalid}
+                className={`h-11 rounded-full px-4 pr-11 ${invalid ? 'border-destructive focus-visible:ring-destructive/30' : ''}`}
+            />
+            <button
+                type="button"
+                onClick={() => setVisible((prev) => !prev)}
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3.5 -translate-y-1/2"
+                aria-label={visible ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
+            >
+                {visible ? (
+                    <EyeOff className="size-4" />
+                ) : (
+                    <Eye className="size-4" />
+                )}
+            </button>
+        </div>
+    );
+}
+
+/** Reglas de contraseña visibles en vivo — deben calzar con
+ *  Password::min(12)->mixedCase()->numbers()->symbols() en
+ *  RegisterRequest (backend), no son sólo cosméticas acá. */
+function passwordRuleChecks(password: string) {
+    return [
+        { key: 'length', met: password.length >= 12 },
+        { key: 'uppercase', met: /[A-Z]/.test(password) },
+        { key: 'lowercase', met: /[a-z]/.test(password) },
+        { key: 'number', met: /[0-9]/.test(password) },
+        { key: 'symbol', met: /[^A-Za-z0-9]/.test(password) },
+    ] as const;
+}
+
+function PasswordStrengthHint({
+    password,
+    t,
+}: {
+    password: string;
+    t: ReturnType<typeof useLocale>['t'];
+}) {
+    if (!password) {
+        return null;
+    }
+
+    const unmet = passwordRuleChecks(password).filter((rule) => !rule.met);
+
+    if (unmet.length === 0) {
+        return null;
+    }
+
+    return (
+        <ul className="text-destructive space-y-0.5 text-xs">
+            {unmet.map((rule) => (
+                <li key={rule.key}>• {t.auth.passwordRules[rule.key]}</li>
+            ))}
+        </ul>
     );
 }
 
@@ -381,15 +464,12 @@ function SignInForm({
                     <Label htmlFor="login-password">
                         {t.auth.passwordLabel}
                     </Label>
-                    <Input
+                    <PasswordInput
                         id="login-password"
-                        className="h-11 rounded-full px-4"
-                        type="password"
                         autoComplete="current-password"
                         value={form.data.password}
-                        onChange={(event) =>
-                            form.setData('password', event.target.value)
-                        }
+                        onChange={(value) => form.setData('password', value)}
+                        invalid={Boolean(form.errors.password)}
                     />
                     {form.errors.password && (
                         <p className="text-destructive text-sm">
@@ -521,16 +601,20 @@ function SignUpForm({
                     <Label htmlFor="register-password">
                         {t.auth.passwordLabel}
                     </Label>
-                    <Input
+                    <PasswordInput
                         id="register-password"
-                        className="h-11 rounded-full px-4"
-                        type="password"
                         autoComplete="new-password"
                         value={form.data.password}
-                        onChange={(event) =>
-                            form.setData('password', event.target.value)
+                        onChange={(value) => form.setData('password', value)}
+                        invalid={
+                            Boolean(form.errors.password) ||
+                            (form.data.password !== '' &&
+                                passwordRuleChecks(form.data.password).some(
+                                    (rule) => !rule.met,
+                                ))
                         }
                     />
+                    <PasswordStrengthHint password={form.data.password} t={t} />
                     {form.errors.password && (
                         <p className="text-destructive text-sm">
                             {form.errors.password}
@@ -541,17 +625,17 @@ function SignUpForm({
                     <Label htmlFor="register-password-confirmation">
                         {t.auth.confirmPasswordLabel}
                     </Label>
-                    <Input
+                    <PasswordInput
                         id="register-password-confirmation"
-                        className="h-11 rounded-full px-4"
-                        type="password"
                         autoComplete="new-password"
                         value={form.data.password_confirmation}
-                        onChange={(event) =>
-                            form.setData(
-                                'password_confirmation',
-                                event.target.value,
-                            )
+                        onChange={(value) =>
+                            form.setData('password_confirmation', value)
+                        }
+                        invalid={
+                            form.data.password_confirmation !== '' &&
+                            form.data.password_confirmation !==
+                                form.data.password
                         }
                     />
                 </div>
@@ -571,9 +655,6 @@ function SignUpForm({
                         placeholder={t.auth.countryPlaceholder}
                         searchPlaceholder={t.auth.countrySearch}
                     />
-                    <p className="text-muted-foreground text-xs">
-                        {t.auth.languageFromCountryHint}
-                    </p>
                     {form.errors.country && (
                         <p className="text-destructive text-sm">
                             {form.errors.country}

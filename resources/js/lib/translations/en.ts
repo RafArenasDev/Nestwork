@@ -47,7 +47,13 @@ export interface Dictionary {
         countryPlaceholder: string;
         countrySearch: string;
         languageLabel: string;
-        languageFromCountryHint: string;
+        passwordRules: {
+            length: string;
+            uppercase: string;
+            lowercase: string;
+            number: string;
+            symbol: string;
+        };
     };
     profileModal: {
         title: string;
@@ -112,8 +118,13 @@ const en: Dictionary = {
         countryPlaceholder: 'Select your country',
         countrySearch: 'Search country...',
         languageLabel: 'Language',
-        languageFromCountryHint:
-            "We'll set your language based on your country — change it anytime in Settings.",
+        passwordRules: {
+            length: 'At least 12 characters',
+            uppercase: 'One uppercase letter',
+            lowercase: 'One lowercase letter',
+            number: 'One number',
+            symbol: 'One symbol',
+        },
     },
     profileModal: {
         title: 'Profile',

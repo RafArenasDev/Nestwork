@@ -13,7 +13,7 @@ export type UseLocaleReturn = {
 };
 
 const listeners = new Set<() => void>();
-let currentLocale: Locale = 'en';
+let currentLocale: Locale = 'es';
 
 const setCookie = (name: string, value: string, days = 365): void => {
     if (typeof document === 'undefined') {
@@ -26,12 +26,12 @@ const setCookie = (name: string, value: string, days = 365): void => {
 
 const getStoredLocale = (): Locale => {
     if (typeof window === 'undefined') {
-        return 'en';
+        return 'es';
     }
 
     const stored = localStorage.getItem('locale');
 
-    return stored && isSupportedLocale(stored) ? stored : 'en';
+    return stored && isSupportedLocale(stored) ? stored : 'es';
 };
 
 const subscribe = (callback: () => void) => {
@@ -60,7 +60,7 @@ export function useLocale(): UseLocaleReturn {
     const locale: Locale = useSyncExternalStore(
         subscribe,
         () => currentLocale,
-        () => 'en',
+        () => 'es',
     );
 
     const updateLocale = (next: Locale): void => {

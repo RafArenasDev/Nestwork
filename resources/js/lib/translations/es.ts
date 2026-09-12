@@ -50,8 +50,13 @@ const es: Dictionary = {
         countryPlaceholder: 'Selecciona tu país',
         countrySearch: 'Buscar país...',
         languageLabel: 'Idioma',
-        languageFromCountryHint:
-            'Configuramos tu idioma según tu país — puedes cambiarlo cuando quieras en Ajustes.',
+        passwordRules: {
+            length: 'Al menos 12 caracteres',
+            uppercase: 'Una letra mayúscula',
+            lowercase: 'Una letra minúscula',
+            number: 'Un número',
+            symbol: 'Un símbolo',
+        },
     },
     profileModal: {
         title: 'Perfil',

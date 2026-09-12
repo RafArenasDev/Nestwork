@@ -13,9 +13,9 @@ test('new users can register with email and password', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'Camila Torres',
         'email' => 'camila@example.com',
-        'password' => 'password',
+        'password' => 'Password123!',
         'country' => 'CO',
-        'password_confirmation' => 'password',
+        'password_confirmation' => 'Password123!',
     ]);
 
     $this->assertAuthenticated();
@@ -38,9 +38,9 @@ test('registration requires a unique email', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'Someone Else',
         'email' => 'taken@example.com',
-        'password' => 'password',
+        'password' => 'Password123!',
         'country' => 'CO',
-        'password_confirmation' => 'password',
+        'password_confirmation' => 'Password123!',
     ]);
 
     $response->assertSessionHasErrors('email');
@@ -51,8 +51,8 @@ test('registration requires a country', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'Camila Torres',
         'email' => 'camila@example.com',
-        'password' => 'password',
-        'password_confirmation' => 'password',
+        'password' => 'Password123!',
+        'password_confirmation' => 'Password123!',
     ]);
 
     $response->assertSessionHasErrors('country');
@@ -63,12 +63,24 @@ test('registration requires matching password confirmation', function () {
     $response = $this->post(route('register.store'), [
         'name' => 'Camila Torres',
         'email' => 'camila@example.com',
-        'password' => 'password',
+        'password' => 'Password123!',
         'country' => 'CO',
         'password_confirmation' => 'different',
     ]);
 
     $response->assertSessionHasErrors('password');
+    $this->assertGuest();
+});
+
+test('registration requires a password confirmation', function () {
+    $response = $this->post(route('register.store'), [
+        'name' => 'Camila Torres',
+        'email' => 'camila@example.com',
+        'password' => 'Password123!',
+        'country' => 'CO',
+    ]);
+
+    $response->assertSessionHasErrors('password_confirmation');
     $this->assertGuest();
 });
 
@@ -88,9 +100,9 @@ test('registering with an email already used by a google account is rejected', f
     $response = $this->post(route('register.store'), [
         'name' => 'Camila Torres',
         'email' => 'camila@example.com',
-        'password' => 'password',
+        'password' => 'Password123!',
         'country' => 'CO',
-        'password_confirmation' => 'password',
+        'password_confirmation' => 'Password123!',
     ]);
 
     $response->assertSessionHasErrors('email');
