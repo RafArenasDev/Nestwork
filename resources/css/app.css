@@ -123,6 +123,17 @@
         color-mix(in srgb, var(--sidebar) 90%, white 10%) 100%
     );
     --sidebar-ring: #3a4356;
+
+    /* Burbujas de chat: fijas entre tema claro/oscuro, igual criterio
+       que el "chrome" de arriba (pedido explícito: nada de gris neutro
+       ni de blanco/negro genérico del theme — deben distinguirse del
+       fondo de la card de contenido en cualquier tema). Reusa la misma
+       pareja navy-slate del sidebar para "recibido", así queda como un
+       material de marca, no un gris de sistema. */
+    --bubble-sent: #f5f1e8;
+    --bubble-sent-foreground: #141824;
+    --bubble-received: #141824;
+    --bubble-received-foreground: #eef0f4;
 }
 
 .dark {
