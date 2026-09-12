@@ -245,41 +245,31 @@ main[data-slot='sidebar-inset'],
     background-size: 100% 100vh;
 }
 
-/* Botones elevados 3D (pantalla de login/registro) — mismo espíritu que
-   .curved-rail-brand (sombra en capas + highlight interno), pero MUCHO
-   más pronunciado a pedido explícito ("no veo volumen ni liquid
-   glass") — degradé glossy horneado en el propio fondo (no un pseudo-
-   elemento, para no pelear con el z-index del texto) + sombra de
-   contacto/media/ambiental bien separada + levitación fuerte en hover.
-   `!important` en box-shadow/background-image: gana a `shadow-xs` del
-   variant "default" de Button (mismo box-shadow, misma especificidad,
-   y `cn()`/tailwind-merge no sabe fusionar una clase propia con una de
-   Tailwind — sin esto, cuál gana depende del orden de inserción de
-   cada hoja de estilo y en la práctica no se veía nada). */
+/* Botones elevados 3D (pantalla de login/registro, SOLO botones reales
+   — login/registrar/Google/CTA de marca — nunca inputs ni el combobox
+   de país). Antes la sombra sólo vivía abajo (offset positivo): sobre
+   un panel NEGRO, una sombra negra bajo un botón blanco es invisible,
+   así que Sign in/Sign up se veían "sin efecto". Ahora es un halo con
+   blur y offset 0 (crece parejo en los 4 lados, ver 2do valor de cada
+   box-shadow) — se nota sobre cualquier fondo, oscuro o claro, no sólo
+   "por abajo". `!important`: gana a `shadow-xs` del variant de Button
+   (mismo box-shadow, misma especificidad — sin esto no se veía nada). */
 .btn-elevated {
     position: relative;
-    /* Nunca un borde recto/plano — o no hay borde, o se sugiere el
-       volumen con el anillo suave de box-shadow de más abajo. */
     border-color: transparent !important;
     background-image: linear-gradient(
         180deg,
-        rgba(255, 255, 255, 0.55) 0%,
-        rgba(255, 255, 255, 0.18) 40%,
-        rgba(255, 255, 255, 0.02) 60%,
-        rgba(0, 0, 0, 0.08) 100%
+        rgba(255, 255, 255, 0.6) 0%,
+        rgba(255, 255, 255, 0.22) 40%,
+        rgba(255, 255, 255, 0.03) 60%,
+        rgba(0, 0, 0, 0.1) 100%
     ) !important;
-    /* El aro (0 0 0 1px) y el highlight superior reemplazan al borde;
-       el resto son 3 capas de sombra de CONTACTO (offset chico, blur
-       chico — así no “sangra” hacia arriba del botón) que crecen en
-       offset/blur juntas, para que la sombra se lea completamente
-       ABAJO, nunca alrededor. */
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.16),
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.9),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.2),
-        0 2px 3px rgba(0, 0, 0, 0.32),
-        0 8px 12px rgba(0, 0, 0, 0.3),
-        0 16px 24px rgba(0, 0, 0, 0.24) !important;
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        0 0 28px rgba(255, 255, 255, 0.22),
+        0 0 46px rgba(0, 0, 0, 0.4),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.22) !important;
     transition:
         transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
         box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -287,19 +277,18 @@ main[data-slot='sidebar-inset'],
 .btn-elevated:hover {
     transform: translateY(-3px);
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.22),
+        0 0 0 1px rgba(255, 255, 255, 0.35),
+        0 0 40px rgba(255, 255, 255, 0.32),
+        0 0 64px rgba(0, 0, 0, 0.46),
         inset 0 1.5px 0 rgba(255, 255, 255, 1),
-        inset 0 -2px 3px rgba(0, 0, 0, 0.22),
-        0 3px 4px rgba(0, 0, 0, 0.36),
-        0 12px 18px rgba(0, 0, 0, 0.34),
-        0 24px 34px rgba(0, 0, 0, 0.26) !important;
+        inset 0 -2px 3px rgba(0, 0, 0, 0.24) !important;
 }
 .btn-elevated:active {
     transform: translateY(-1px);
     box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.14),
-        inset 0 2px 4px rgba(0, 0, 0, 0.3),
-        0 4px 6px rgba(0, 0, 0, 0.26) !important;
+        0 0 0 1px rgba(255, 255, 255, 0.2),
+        0 0 16px rgba(255, 255, 255, 0.18),
+        inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* Vidrio esmerilado: sólo para botones de fondo transparente/outline

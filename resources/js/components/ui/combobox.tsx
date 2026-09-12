@@ -92,7 +92,7 @@ export function Combobox({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className="btn-elevated btn-glass h-11 w-full justify-between rounded-full px-4 font-normal"
+                    className="h-11 w-full justify-between rounded-full px-4 font-normal"
                 >
                     <span className="flex min-w-0 items-center gap-2 truncate">
                         {selected ? (
