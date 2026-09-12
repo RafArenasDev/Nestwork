@@ -245,33 +245,46 @@ main[data-slot='sidebar-inset'],
     background-size: 100% 100vh;
 }
 
-/* Brillo/gloss extra SOLO en el panel de marca de la pantalla de
-   login/registro — NO toca `.bg-sidebar` (usado también por la
-   sidebar/mini-rail reales, ver feedback_nestwork_content_frame_css):
-   dos manchas radiales de luz (arriba-izquierda más fuerte, abajo-
-   derecha más tenue) por ENCIMA del --chrome-gradient de siempre, en
-   vez de reemplazarlo — mismo `background-attachment:fixed` para que
-   siga leyendo del mismo punto real de pantalla que la curva del
-   "abrazo" revela, sin costura. */
+/* Brillo/gloss extra en la pantalla de login/registro — NO toca
+   `.bg-sidebar` (usado también por la sidebar/mini-rail reales, ver
+   feedback_nestwork_content_frame_css): dos manchas radiales de luz
+   por ENCIMA del --chrome-gradient de siempre, en vez de reemplazarlo.
+
+   Se aplica DOS VECES: al panel de marca visible Y al wrapper exterior
+   de toda la pantalla (bg-sidebar de más arriba) — la curva del
+   "abrazo" recorta la esquina del panel de formulario y revela el
+   fondo del WRAPPER EXTERIOR, no el del panel de marca (son hermanos,
+   no se solapan). Si sólo el panel de marca tuviera este brillo, la
+   esquina revelada se vería con el chrome-gradient plano de siempre —
+   costura visible justo en la curva.
+
+   `background-size` en `100vw` (no `100%`): un gradiente radial
+   posicionado en "12% 8%" significa un punto de pantalla distinto
+   según el ANCHO PROPIO de cada elemento si se usa "100%" (el panel de
+   marca mide 50% del viewport, el wrapper exterior 100% — dos anchos
+   distintos, dos posiciones reales distintas). Con `100vw` ambos leen
+   el mismo punto real de pantalla sin importar su propio ancho, igual
+   principio que ya usa `--chrome-gradient` en el eje vertical con
+   `100vh`. */
 .brand-pane-gloss {
     background-image:
         radial-gradient(
-            130% 100% at 12% 8%,
+            1400px 1000px at 12vw 8vh,
             rgba(255, 255, 255, 0.22) 0%,
             rgba(255, 255, 255, 0.06) 35%,
             transparent 60%
         ),
         radial-gradient(
-            90% 70% at 92% 100%,
+            900px 700px at 92vw 100vh,
             rgba(255, 255, 255, 0.1) 0%,
             transparent 55%
         ),
         var(--chrome-gradient) !important;
     background-attachment: fixed, fixed, fixed !important;
     background-size:
-        100% 100vh,
-        100% 100vh,
-        100% 100vh !important;
+        100vw 100vh,
+        100vw 100vh,
+        100vw 100vh !important;
 }
 
 /* Botones elevados 3D (pantalla de login/registro, SOLO botones reales

@@ -42,7 +42,7 @@ export default function AuthPage({
     const isRegister = panel === 'register';
 
     return (
-        <div className="bg-sidebar">
+        <div className="bg-sidebar brand-pane-gloss">
             <Head
                 title={isRegister ? t.auth.registerTitle : t.auth.loginTitle}
             />
@@ -199,10 +199,15 @@ function FormPane({
      *  atrás ya es idéntico al de marca. */
     curveSide: 'left' | 'right';
 }) {
+    // Sombra INSET (nunca se sale de esta caja, así nunca pelea con el
+    // pintado del panel de marca vecino) que oscurece apenas el borde
+    // curvo — sugiere volumen/espesor en esa esquina en vez de un panel
+    // 100% chato, sin tocar los otros 3 bordes (pegados al borde real
+    // de la pantalla, no hay nada que "levantar" ahí).
     const curveClass =
         curveSide === 'left'
-            ? 'rounded-tl-[56px] rounded-bl-[56px]'
-            : 'rounded-tr-[56px] rounded-br-[56px]';
+            ? 'rounded-tl-[56px] rounded-bl-[56px] shadow-[inset_30px_0_40px_-32px_rgba(0,0,0,0.45)]'
+            : 'rounded-tr-[56px] rounded-br-[56px] shadow-[inset_-30px_0_40px_-32px_rgba(0,0,0,0.45)]';
 
     return (
         <div
@@ -238,7 +243,7 @@ function BrandPane({
     const isRegister = mode === 'register';
 
     return (
-        <div className="bg-sidebar brand-pane-gloss text-sidebar-foreground flex h-full flex-col items-center justify-center gap-6 p-10 text-center">
+        <div className="text-sidebar-foreground flex h-full flex-col items-center justify-center gap-6 p-10 text-center">
             <AppLogoIcon className="size-12 fill-current text-white" />
             <div className="space-y-2">
                 <p className="text-lg font-semibold">Nestwork</p>
