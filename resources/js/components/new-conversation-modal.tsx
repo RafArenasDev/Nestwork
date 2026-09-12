@@ -63,8 +63,7 @@ export function NewConversationModal({ children }: PropsWithChildren) {
                 <DialogHeader>
                     <DialogTitle>Nuevo chat</DialogTitle>
                     <DialogDescription>
-                        Elige a alguien de tu equipo para empezar a
-                        conversar.
+                        Elige a alguien de tu equipo para empezar a conversar.
                     </DialogDescription>
                 </DialogHeader>
 

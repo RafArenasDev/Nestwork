@@ -7,20 +7,20 @@ use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('guests are redirected to the login page', function () {
-    $user = User::factory()->create();
-    $team = $user->currentTeam;
+    $team = Team::factory()->create();
 
-    $response = $this->get(route('dashboard'));
+    $response = $this->get(route('dashboard', $team));
     $response->assertRedirect(route('login'));
 });
 
 test('authenticated users can visit the dashboard', function () {
     $user = User::factory()->create();
-    $team = $user->currentTeam;
+    $team = Team::factory()->create();
+    $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
     $response = $this
         ->actingAs($user)
-        ->get(route('dashboard'));
+        ->get(route('dashboard', $team));
 
     $response->assertOk();
 });
@@ -32,6 +32,9 @@ test('dashboard includes pending invitations for the authenticated user', functi
 
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
 
+    $invitedUserTeam = Team::factory()->create();
+    $invitedUserTeam->members()->attach($invitedUser, ['role' => TeamRole::Owner->value]);
+
     $invitation = TeamInvitation::factory()->create([
         'team_id' => $team->id,
         'email' => 'invited@example.com',
@@ -40,7 +43,7 @@ test('dashboard includes pending invitations for the authenticated user', functi
 
     $response = $this
         ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+        ->get(route('dashboard', $invitedUserTeam));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -67,9 +70,12 @@ test('dashboard does not include accepted invitations', function () {
         'invited_by' => $owner->id,
     ]);
 
+    $invitedUserTeam = Team::factory()->create();
+    $invitedUserTeam->members()->attach($invitedUser, ['role' => TeamRole::Owner->value]);
+
     $response = $this
         ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+        ->get(route('dashboard', $invitedUserTeam));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -91,9 +97,12 @@ test('dashboard excludes expired invitations without deleting them', function ()
         'invited_by' => $owner->id,
     ]);
 
+    $invitedUserTeam = Team::factory()->create();
+    $invitedUserTeam->members()->attach($invitedUser, ['role' => TeamRole::Owner->value]);
+
     $response = $this
         ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+        ->get(route('dashboard', $invitedUserTeam));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page
@@ -119,9 +128,12 @@ test('dashboard does not include or delete other users invitations', function ()
         'invited_by' => $owner->id,
     ]);
 
+    $invitedUserTeam = Team::factory()->create();
+    $invitedUserTeam->members()->attach($invitedUser, ['role' => TeamRole::Owner->value]);
+
     $response = $this
         ->actingAs($invitedUser)
-        ->get(route('dashboard'));
+        ->get(route('dashboard', $invitedUserTeam));
 
     $response->assertOk();
     $response->assertInertia(fn (Assert $page) => $page

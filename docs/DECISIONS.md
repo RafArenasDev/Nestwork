@@ -66,6 +66,72 @@
 - **No portado (por ahora):** personalización de color de la sidebar — es una decisión de diseño real y nueva (no una réplica de algo ya definido), queda para la ronda de mockups en vez de improvisarse en código.
 - **Fix de CI encontrado al mismo tiempo:** el hook `prebuild`/`predev` de npm (que genera `version.ts` automáticamente antes de `build`/`dev`) no corría en CI — `.npmrc` tiene `ignore-scripts=true` (endurecimiento de seguridad legítimo contra scripts maliciosos de dependencias de terceros, que Inventory-Manager no tiene porque es de una generación anterior del starter kit). Ese flag también bloquea los hooks `pre`/`post` de nuestros propios scripts, no solo los de paquetes externos. Localmente no se notó porque el generador se había corrido a mano antes de probar. **Fix:** en vez de depender de la convención `pre<script>` de npm, `build`/`dev` ahora encadenan explícitamente `npm run generate-changelog && vp build` — `npm run <script>` explícito sigue funcionando con `ignore-scripts=true`, solo se bloquea el disparo automático por convención de nombre.
 
+## 2026-09-12 — CI roto en `main`: causa raíz y fix (formato, tipos, tests obsoletos)
+
+- **Síntoma:** el workflow `tests` fallaba en rojo tras mergear
+  `feature/chat-mvp-and-gotera-polish` (Google-only auth, domain teams,
+  chat MVP). Se investigó capa por capa.
+- **Capa 1 — formato:** 22 archivos (incluyendo `.claude/skills/*.md`,
+  `CLAUDE.md`, componentes React tocados en el merge) nunca pasaron por
+  `npm run check:fix` antes de commitear. `composer ci:check` corta en el
+  primer script que falla (`npm run check`), así que las capas 2 y 3 de
+  abajo quedaban ocultas detrás de este fallo — nunca se habían visto en
+  ningún run de CI.
+- **Capa 2 — tipos de props compartidas de Inertia rotos (~40 errores
+  `tsc`):** el `node_modules` local tenía **dos versiones distintas de
+  `@inertiajs/core`** (3.7.0 suelto/"extraneous" en la raíz vs. 3.7.1
+  resuelto por `@inertiajs/react`/`@inertiajs/vite` dentro de una
+  carpeta `.pnpm` sin lockfile de pnpm) — resto de un experimento previo
+  con pnpm (quedó `pnpm-workspace.yaml` con
+  `publicHoistPattern: ['@inertiajs/core']`, exactamente el workaround
+  típico para este bug) que nunca se completó ni se documentó. TypeScript
+  trataba ambas copias como módulos distintos, así que el
+  `declare module '@inertiajs/core' { interface InertiaConfig {...} }`
+  de `resources/js/types/global.d.ts` (que sigue el patrón oficial de
+  Inertia al pie de la letra) se aplicaba sobre la copia equivocada y
+  `usePage().props.*` tipaba como `unknown`/`{}` en decenas de
+  componentes. **Fix:** `rm -rf node_modules && npm install` (proyecto
+  real usa npm, no pnpm — no hay `pnpm-lock.yaml` versionado) deja una
+  única copia deduplicada de `@inertiajs/core`; se borró
+  `pnpm-workspace.yaml` para no dejar un cabo suelto que invite a repetir
+  el experimento a medias. Un solo error real de tipado sobrevivió al
+  reinstalar: faltaba `teamMembers: TeamMemberOption[]` en
+  `sharedPageProps` (el prop se comparte desde
+  `HandleInertiaRequests.php` pero nunca se agregó al tipo).
+- **Capa 3 — suite de Pest desactualizada (~47 tests rotos):** gran
+  parte de `tests/Feature/Auth/*` y `tests/Feature/Settings/SecurityTest`
+  probaban rutas de Fortify/Breeze (`login.store`, `register`,
+  `password.*`, `two-factor.*`, `security.edit`, factories
+  `unverified()`/`withTwoFactor()`) que **ya no existen** — el login es
+  Google-only vía Firebase desde el merge anterior, así que esas
+  pantallas/flujos fueron removidas mientras los tests que las cubrían
+  quedaron atrás. Se **eliminaron** esos archivos de test (no es "saltar
+  TDD", es borrar tests de funcionalidad que ya no existe — la política
+  TDD bloqueada en 2.1 sigue vigente para todo lo que sí sigue existiendo
+  o se construya de acá en más). Además se encontraron y arreglaron dos
+  bugs reales de producción, expuestos por tests que sí seguían siendo
+  válidos:
+  - `TeamController::destroy()` y `TeamMemberController::destroy()`
+    asumían que todo usuario tiene `personalTeam()`, pero desde que existe
+    el auto-join por dominio (`AssignUserToDomainTeam`) un usuario nuevo
+    **no** recibe un equipo personal automáticamente — solo se une al
+    equipo de su dominio. Si el usuario afectado no tenía equipo personal,
+    `switchTeam(null)` lanzaba `TypeError` (500). Fix: usar
+    `fallbackTeam($team)` (ya existía, pensado para esto) con fallback a
+    `current_team_id = null` si el usuario no queda en ningún otro
+    equipo.
+  - `TeamInvitationController::decline()` redirigía siempre a
+    `to_route('dashboard')`, que exige `{current_team}` — un usuario que
+    declina una invitación sin pertenecer todavía a ningún equipo
+    (invitado que nunca fue asignado por dominio) hacía crashear el
+    propio request. Fix: redirige a `dashboard` solo si el usuario tiene
+    `currentTeam`, si no a `home`.
+- **Pendiente relacionado:** ninguno de estos tests cubre todavía el
+  caso "usuario autenticado sin ningún equipo" como estado de UI de
+  primera clase — hoy solo evita el 500. Diseñar esa pantalla es parte
+  del trabajo de Fase A del prompt de mejoras v2 (ver sección 2 y el
+  pedido explícito del usuario de no crear equipo en el login/registro).
+
 ## Pendiente / no cubierto en esta sesión
 
 - No se escribieron tests nuevos para `HandleLocale` ni para los modales (violación puntual de la política de TDD bloqueada en 2.1 — se hizo así por la urgencia de dejar el entorno andando; hay que volver y cubrir esto antes de dar por cerrada esta porción de trabajo).

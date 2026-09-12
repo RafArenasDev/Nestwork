@@ -197,7 +197,8 @@
    la derecha, el 8% de más se come el margen hacia el avatar y quedan
    pegados. Estas SÍ crecen desde la izquierda — mismo efecto lupa, pero
    alejándose del avatar en vez de invadirlo. */
-.sidebar-row--active .sidebar-row-link:has([data-slot='avatar'])
+.sidebar-row--active
+    .sidebar-row-link:has([data-slot='avatar'])
     .sidebar-row-label {
     transform-origin: left center;
 }

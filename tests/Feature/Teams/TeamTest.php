@@ -33,11 +33,10 @@ test('teams can be created', function () {
 });
 
 test('personal team returns the team owned by the user', function () {
-    $otherUser = User::factory()->create();
-    $user = User::factory()->make();
-    $user->save();
+    $user = User::factory()->create();
 
-    $otherUser->personalTeam()->members()->attach($user, [
+    $otherTeam = Team::factory()->create();
+    $otherTeam->members()->attach($user, [
         'role' => TeamRole::Member->value,
     ]);
 
@@ -194,7 +193,9 @@ test('deleting current team switches to alphabetically first remaining team', fu
 
 test('deleting current team falls back to personal team when alphabetically first', function () {
     $user = User::factory()->create();
-    $personalTeam = $user->personalTeam();
+    $personalTeam = Team::factory()->personal()->create();
+    $personalTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
+
     $team = Team::factory()->create(['name' => 'Zulu Team']);
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
@@ -217,7 +218,9 @@ test('deleting current team falls back to personal team when alphabetically firs
 
 test('deleting non current team leaves current team unchanged', function () {
     $user = User::factory()->create();
-    $personalTeam = $user->personalTeam();
+    $personalTeam = Team::factory()->personal()->create();
+    $personalTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
+
     $team = Team::factory()->create();
     $team->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
@@ -284,7 +287,8 @@ test('leaving current team switches to alphabetically first remaining team', fun
 
 test('personal teams cannot be left', function () {
     $user = User::factory()->create();
-    $personalTeam = $user->personalTeam();
+    $personalTeam = Team::factory()->personal()->create();
+    $personalTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
     $response = $this
         ->actingAs($user)
@@ -325,6 +329,9 @@ test('deleting team switches other affected users to their personal team', funct
     $owner = User::factory()->create();
     $member = User::factory()->create();
 
+    $memberPersonalTeam = Team::factory()->personal()->create();
+    $memberPersonalTeam->members()->attach($member, ['role' => TeamRole::Owner->value]);
+
     $team = Team::factory()->create();
     $team->members()->attach($owner, ['role' => TeamRole::Owner->value]);
     $team->members()->attach($member, ['role' => TeamRole::Member->value]);
@@ -346,7 +353,8 @@ test('deleting team switches other affected users to their personal team', funct
 test('personal teams cannot be deleted', function () {
     $user = User::factory()->create();
 
-    $personalTeam = $user->personalTeam();
+    $personalTeam = Team::factory()->personal()->create();
+    $personalTeam->members()->attach($user, ['role' => TeamRole::Owner->value]);
 
     $response = $this
         ->actingAs($user)
