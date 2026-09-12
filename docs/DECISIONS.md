@@ -111,21 +111,21 @@
   o se construya de acá en más). Además se encontraron y arreglaron dos
   bugs reales de producción, expuestos por tests que sí seguían siendo
   válidos:
-  - `TeamController::destroy()` y `TeamMemberController::destroy()`
-    asumían que todo usuario tiene `personalTeam()`, pero desde que existe
-    el auto-join por dominio (`AssignUserToDomainTeam`) un usuario nuevo
-    **no** recibe un equipo personal automáticamente — solo se une al
-    equipo de su dominio. Si el usuario afectado no tenía equipo personal,
-    `switchTeam(null)` lanzaba `TypeError` (500). Fix: usar
-    `fallbackTeam($team)` (ya existía, pensado para esto) con fallback a
-    `current_team_id = null` si el usuario no queda en ningún otro
-    equipo.
-  - `TeamInvitationController::decline()` redirigía siempre a
-    `to_route('dashboard')`, que exige `{current_team}` — un usuario que
-    declina una invitación sin pertenecer todavía a ningún equipo
-    (invitado que nunca fue asignado por dominio) hacía crashear el
-    propio request. Fix: redirige a `dashboard` solo si el usuario tiene
-    `currentTeam`, si no a `home`.
+    - `TeamController::destroy()` y `TeamMemberController::destroy()`
+      asumían que todo usuario tiene `personalTeam()`, pero desde que existe
+      el auto-join por dominio (`AssignUserToDomainTeam`) un usuario nuevo
+      **no** recibe un equipo personal automáticamente — solo se une al
+      equipo de su dominio. Si el usuario afectado no tenía equipo personal,
+      `switchTeam(null)` lanzaba `TypeError` (500). Fix: usar
+      `fallbackTeam($team)` (ya existía, pensado para esto) con fallback a
+      `current_team_id = null` si el usuario no queda en ningún otro
+      equipo.
+    - `TeamInvitationController::decline()` redirigía siempre a
+      `to_route('dashboard')`, que exige `{current_team}` — un usuario que
+      declina una invitación sin pertenecer todavía a ningún equipo
+      (invitado que nunca fue asignado por dominio) hacía crashear el
+      propio request. Fix: redirige a `dashboard` solo si el usuario tiene
+      `currentTeam`, si no a `home`.
 - **Pendiente relacionado:** ninguno de estos tests cubre todavía el
   caso "usuario autenticado sin ningún equipo" como estado de UI de
   primera clase — hoy solo evita el 500. Diseñar esa pantalla es parte
