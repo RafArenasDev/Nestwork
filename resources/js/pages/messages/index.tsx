@@ -48,12 +48,36 @@ type Props = {
 };
 
 export default function MessagesIndex({ conversation, messages }: Props) {
+    const page = usePage();
+    const currentTeam = page.props.currentTeam;
+
+    const closeConversation = () => {
+        if (!currentTeam) {
+            return;
+        }
+
+        // preserveUrl: la dirección del navegador se queda siempre en
+        // "/messages" — abrir o cerrar un chat es un cambio de props,
+        // nunca una navegación real a "/messages/{id}" (pedido
+        // explícito: nada de IDs de conversación visibles en la barra
+        // de direcciones).
+        router.visit(messagesIndex(currentTeam.slug).url, {
+            preserveUrl: true,
+            preserveScroll: true,
+            only: ['conversation', 'messages'],
+        });
+    };
+
     return (
         <>
             <Head title={conversation ? conversation.name : 'Mensajes'} />
 
             {conversation ? (
-                <Thread conversation={conversation} messages={messages} />
+                <Thread
+                    conversation={conversation}
+                    messages={messages}
+                    onClose={closeConversation}
+                />
             ) : (
                 <EmptyState />
             )}
@@ -126,10 +150,12 @@ function ConversationHeader({
     conversation,
     currentTeamSlug,
     getInitials,
+    onClose,
 }: {
     conversation: ActiveConversation;
     currentTeamSlug: string | undefined;
     getInitials: (name: string) => string;
+    onClose: () => void;
 }) {
     const handleToggleArchive = () => {
         if (!currentTeamSlug) {
@@ -142,11 +168,16 @@ function ConversationHeader({
             {
                 preserveScroll: true,
                 // Un chat archivado sale de la lista principal — no
-                // tiene sentido quedarse mirándolo, volvemos a la
-                // bandeja como al archivar en Gmail/WhatsApp Web.
+                // tiene sentido quedarse mirándolo, cerramos el modal
+                // como al archivar en Gmail/WhatsApp Web. preserveUrl:
+                // la barra de direcciones nunca sale de "/messages".
                 onSuccess: () =>
                     !conversation.isArchived &&
-                    router.visit(messagesIndex(currentTeamSlug).url),
+                    router.visit(messagesIndex(currentTeamSlug).url, {
+                        preserveUrl: true,
+                        preserveScroll: true,
+                        only: ['conversation', 'messages'],
+                    }),
             },
         );
     };
@@ -256,27 +287,21 @@ function ConversationHeader({
                     </DropdownMenuContent>
                 </DropdownMenu>
 
-                {currentTeamSlug && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-8"
-                                aria-label="Cerrar chat"
-                                onClick={() =>
-                                    router.visit(
-                                        messagesIndex(currentTeamSlug).url,
-                                    )
-                                }
-                            >
-                                <X className="size-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Cerrar chat</TooltipContent>
-                    </Tooltip>
-                )}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8"
+                            aria-label="Cerrar chat"
+                            onClick={onClose}
+                        >
+                            <X className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Cerrar chat</TooltipContent>
+                </Tooltip>
             </div>
         </div>
     );
@@ -313,9 +338,11 @@ function DisabledActionIcon({
 function Thread({
     conversation,
     messages,
+    onClose,
 }: {
     conversation: ActiveConversation;
     messages: MessageData[];
+    onClose: () => void;
 }) {
     const page = usePage();
     const currentTeam = page.props.currentTeam;
@@ -363,6 +390,7 @@ function Thread({
                     conversation={conversation}
                     currentTeamSlug={currentTeam?.slug}
                     getInitials={getInitials}
+                    onClose={onClose}
                 />
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -481,8 +509,8 @@ function MessageBubble({
     const bubbleColor = failed
         ? 'bg-destructive/15'
         : message.isMine
-          ? 'bg-primary'
-          : 'bg-muted';
+          ? 'bg-[var(--bubble-sent)]'
+          : 'bg-[var(--bubble-received)]';
 
     return (
         <div
@@ -511,8 +539,8 @@ function MessageBubble({
                     failed
                         ? 'text-foreground ring-destructive/40 ring-1'
                         : message.isMine
-                          ? 'text-primary-foreground'
-                          : ''
+                          ? 'text-[var(--bubble-sent-foreground)]'
+                          : 'text-[var(--bubble-received-foreground)]'
                 }`}
             >
                 {isLastInGroup && (

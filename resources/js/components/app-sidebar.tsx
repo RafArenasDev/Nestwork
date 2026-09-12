@@ -1,4 +1,4 @@
-import { Link, router, usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { ArchiveRestore, Plus } from 'lucide-react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
 import { PresenceDot } from '@/components/presence-dot';
@@ -152,12 +152,32 @@ function ConversationRow({
                 className="sidebar-row-notch sidebar-row-notch--bottom"
                 aria-hidden="true"
             />
-            <Link
-                href={
-                    currentTeamSlug
-                        ? showMessage([currentTeamSlug, conversation.id]).url
-                        : '#'
-                }
+            <button
+                type="button"
+                onClick={() => {
+                    if (!currentTeamSlug) {
+                        return;
+                    }
+
+                    // router.visit + preserveUrl en vez de <Link>: abre
+                    // el chat como modal sin nunca navegar a
+                    // "/messages/{id}" — la barra de direcciones se
+                    // queda en "/messages" (pedido explícito: nada de
+                    // IDs de conversación expuestos en la URL).
+                    router.visit(
+                        showMessage([currentTeamSlug, conversation.id]).url,
+                        {
+                            preserveUrl: true,
+                            preserveScroll: true,
+                            only: [
+                                'conversation',
+                                'messages',
+                                'conversations',
+                                'archivedConversations',
+                            ],
+                        },
+                    );
+                }}
                 className={`sidebar-row-link${showUnarchive ? ' sidebar-row-link--actionable' : ''}`}
             >
                 <span className="relative mr-3 inline-flex shrink-0">
@@ -187,7 +207,7 @@ function ConversationRow({
                         {conversation.unreadCount}
                     </Badge>
                 )}
-            </Link>
+            </button>
             {showUnarchive && currentTeamSlug && (
                 <Tooltip>
                     <TooltipTrigger asChild>
