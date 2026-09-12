@@ -251,7 +251,7 @@ function BrandPane({
             <Button
                 type="button"
                 variant="outline"
-                className="btn-elevated h-11 rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white/10 hover:text-white"
+                className="btn-elevated btn-glass h-11 rounded-full border-white/30 px-6 text-white hover:text-white"
                 onClick={onSwitch}
             >
                 {isRegister ? t.auth.backToSignIn : t.auth.createAccount}
@@ -380,7 +380,7 @@ function GoogleButton({
         <Button
             type="button"
             variant="outline"
-            className="btn-elevated h-11 w-full gap-2 rounded-full"
+            className="btn-elevated btn-glass h-11 w-full gap-2 rounded-full"
             disabled={isSigningIn}
             onClick={onClick}
             data-test="google-login-button"
