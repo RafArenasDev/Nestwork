@@ -199,15 +199,17 @@ function FormPane({
      *  atrás ya es idéntico al de marca. */
     curveSide: 'left' | 'right';
 }) {
-    // Sombra INSET (nunca se sale de esta caja, así nunca pelea con el
-    // pintado del panel de marca vecino) que oscurece apenas el borde
-    // curvo — sugiere volumen/espesor en esa esquina en vez de un panel
-    // 100% chato, sin tocar los otros 3 bordes (pegados al borde real
-    // de la pantalla, no hay nada que "levantar" ahí).
+    // form-pane-elevated-*: sombra INSET en los 4 bordes (nunca se sale
+    // de esta caja, nunca pelea con el pintado del panel de marca
+    // vecino) — luz arriba, viñeta abajo, y el lado curvo bien
+    // oscurecido para leerse como la esquina "levantada" hacia el
+    // panel de marca. Los otros 3 bordes están pegados al borde real
+    // de la pantalla, pero al ser INSET la sombra igual se ve por
+    // dentro sin necesitar margen hacia afuera.
     const curveClass =
         curveSide === 'left'
-            ? 'rounded-tl-[56px] rounded-bl-[56px] shadow-[inset_30px_0_40px_-32px_rgba(0,0,0,0.45)]'
-            : 'rounded-tr-[56px] rounded-br-[56px] shadow-[inset_-30px_0_40px_-32px_rgba(0,0,0,0.45)]';
+            ? 'form-pane-elevated-left rounded-tl-[56px] rounded-bl-[56px]'
+            : 'form-pane-elevated-right rounded-tr-[56px] rounded-br-[56px]';
 
     return (
         <div
@@ -255,8 +257,7 @@ function BrandPane({
             </div>
             <Button
                 type="button"
-                variant="outline"
-                className="btn-elevated btn-glass h-11 rounded-full border-white/30 px-6 text-white hover:text-white"
+                className="btn-elevated h-11 rounded-full bg-white px-6 text-[#141824] hover:bg-white/90"
                 onClick={onSwitch}
             >
                 {isRegister ? t.auth.backToSignIn : t.auth.createAccount}
@@ -384,8 +385,7 @@ function GoogleButton({
     return (
         <Button
             type="button"
-            variant="outline"
-            className="btn-elevated btn-glass h-11 w-full gap-2 rounded-full"
+            className="btn-elevated h-11 w-full gap-2 rounded-full"
             disabled={isSigningIn}
             onClick={onClick}
             data-test="google-login-button"

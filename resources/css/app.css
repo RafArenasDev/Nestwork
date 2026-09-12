@@ -333,14 +333,27 @@ main[data-slot='sidebar-inset'],
         inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Vidrio esmerilado: sólo para botones de fondo transparente/outline
-   (Google, CTA del panel de marca) — sobre un botón 100% opaco
-   (Sign in/Sign up) el blur no tendría nada detrás que desenfocar. */
-.btn-glass {
-    backdrop-filter: blur(14px) saturate(180%);
-    -webkit-backdrop-filter: blur(14px) saturate(180%);
-    background-color: rgba(255, 255, 255, 0.1) !important;
+/* Volumen de la card negra/blanca de login-registro (pantalla auth) —
+   como la card toca los 3 bordes reales de la pantalla (arriba, abajo,
+   lado exterior) no hay margen para una sombra hacia afuera ahí: es
+   toda INSET — luz sutil arriba (como si el "sol" viniera de arriba),
+   viñeta oscura abajo, y bordes izq/der oscurecidos. El lado curvo
+   (hacia el panel de marca) se oscurece bastante más para leerse como
+   la esquina "levantada" que se dobla hacia el panel vecino — variante
+   -left/-right según qué lado sea ese. */
+.form-pane-elevated-left {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 50px 70px -55px rgba(255, 255, 255, 0.1),
+        inset 0 -60px 90px -60px rgba(0, 0, 0, 0.55),
+        inset 50px 0 80px -55px rgba(0, 0, 0, 0.5),
+        inset -30px 0 60px -55px rgba(0, 0, 0, 0.3);
 }
-.btn-glass:hover {
-    background-color: rgba(255, 255, 255, 0.18) !important;
+.form-pane-elevated-right {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 50px 70px -55px rgba(255, 255, 255, 0.1),
+        inset 0 -60px 90px -60px rgba(0, 0, 0, 0.55),
+        inset -50px 0 80px -55px rgba(0, 0, 0, 0.5),
+        inset 30px 0 60px -55px rgba(0, 0, 0, 0.3);
 }
