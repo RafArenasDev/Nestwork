@@ -8,6 +8,7 @@ readonly class UserTeam
         public int $id,
         public string $name,
         public string $slug,
+        public ?string $domain,
         public bool $isPersonal,
         public ?string $role,
         public ?string $roleLabel,

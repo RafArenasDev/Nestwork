@@ -13,7 +13,6 @@ const es: Dictionary = {
     },
     userMenu: {
         profile: 'Perfil',
-        password: 'Contraseña',
         theme: 'Tema',
         language: 'Idioma',
     },
@@ -25,16 +24,12 @@ const es: Dictionary = {
         switchToLight: 'Cambiar a tema claro',
     },
     auth: {
-        loginTitle: 'Inicia sesión en tu cuenta',
+        loginTitle: 'Bienvenido a Nestwork',
         loginDescription:
-            'Ingresá tu correo electrónico y contraseña para iniciar sesión',
-        email: 'Correo electrónico',
-        password: 'Contraseña',
-        rememberMe: 'Recordar sesión',
-        forgotPassword: '¿Olvidaste tu contraseña?',
-        logIn: 'Iniciar sesión',
-        noAccount: '¿No tenés una cuenta?',
-        signUp: 'Registrarse',
+            'Inicia sesión con tu cuenta de Google para continuar',
+        continueWithGoogle: 'Continuar con Google',
+        signingIn: 'Iniciando sesión...',
+        genericError: 'Algo salió mal al iniciar sesión. Intenta de nuevo.',
     },
     profileModal: {
         title: 'Perfil',
@@ -42,17 +37,6 @@ const es: Dictionary = {
         name: 'Nombre',
         email: 'Correo electrónico',
         updated: 'Perfil actualizado correctamente',
-    },
-    passwordModal: {
-        title: 'Contraseña',
-        description:
-            'Usá una contraseña larga y aleatoria para mantener tu cuenta segura.',
-        currentPassword: 'Contraseña actual',
-        newPassword: 'Nueva contraseña',
-        confirmPassword: 'Confirmar contraseña',
-        generate: 'Generar contraseña',
-        mismatch: 'Las contraseñas no coinciden.',
-        savePassword: 'Guardar contraseña',
     },
     terms: {
         title: 'Términos y Condiciones de Uso',

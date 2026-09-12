@@ -17,5 +17,14 @@ export function AppShell({ children, variant = 'sidebar' }: Props) {
         );
     }
 
-    return <SidebarProvider defaultOpen={isOpen}>{children}</SidebarProvider>;
+    return (
+        // `h-dvh` (no solo min-h-*): con `collapsible="none"` el
+        // <Sidebar> real es un simple hijo flex con `h-full` — si este
+        // wrapper solo tiene min-height (altura intrínseca/auto), ese
+        // `h-full` no tiene contra qué resolverse y el sidebar colapsa
+        // al alto de su contenido en vez de ocupar toda la pantalla.
+        <SidebarProvider defaultOpen={isOpen} className="h-dvh">
+            {children}
+        </SidebarProvider>
+    );
 }

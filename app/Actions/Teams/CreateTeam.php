@@ -12,11 +12,12 @@ class CreateTeam
     /**
      * Create a new team and add the user as owner.
      */
-    public function handle(User $user, string $name, bool $isPersonal = false): Team
+    public function handle(User $user, string $name, ?string $domain = null, bool $isPersonal = false): Team
     {
-        return DB::transaction(function () use ($user, $name, $isPersonal) {
+        return DB::transaction(function () use ($user, $name, $domain, $isPersonal) {
             $team = Team::create([
                 'name' => $name,
+                'domain' => $domain,
                 'is_personal' => $isPersonal,
             ]);
 

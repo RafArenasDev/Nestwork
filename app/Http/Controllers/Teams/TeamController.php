@@ -36,7 +36,11 @@ class TeamController extends Controller
      */
     public function store(SaveTeamRequest $request, CreateTeam $createTeam): RedirectResponse
     {
-        $team = $createTeam->handle($request->user(), $request->validated('name'));
+        $team = $createTeam->handle(
+            $request->user(),
+            $request->validated('name'),
+            $request->validated('domain'),
+        );
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Team created.')]);
 

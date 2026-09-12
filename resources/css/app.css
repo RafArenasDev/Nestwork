@@ -2,6 +2,9 @@
 
 @import 'tw-animate-css';
 
+@import './curved-nav-rail.css';
+@import './sidebar-list.css';
+
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
@@ -62,7 +65,7 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
+    --background: #fff;
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
     --card-foreground: oklch(0.145 0 0);
@@ -87,18 +90,44 @@
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+
+    /* El "chrome" de la app (mini-sidebar, sidebar, header) es fijo:
+       no cambia entre tema claro/oscuro — solo el contenido del
+       dashboard (--background, --card, etc. de arriba) sí cambia.
+       Por eso estos tokens NO se redefinen en .dark más abajo. Un
+       azul-marino propio en vez de gris neutro (pedido explícito:
+       "el gris me molesta para lo que deseo lograr"). */
+    /* Tono corporativo: slate oscuro desaturado (no el navy más
+       saturado de antes) — más "SaaS profesional", menos "azul de
+       marca". */
+    --sidebar: #141824;
+    --sidebar-foreground: #eef0f4;
+    --sidebar-primary: #eef0f4;
+    --sidebar-primary-foreground: #141824;
+    --sidebar-accent: #1e2432;
+    --sidebar-accent-foreground: #eef0f4;
+    --sidebar-border: #262d3d;
+    /* Oscuro arriba, aclarando hacia abajo — misma variable la usa el
+       panel del sidebar y el fondo del item activo de la mini, para
+       que ambos "chorreados" luzcan del mismo material.
+
+       Solo 2 paradas (no 3): un stop intermedio crea un quiebre en la
+       tasa de cambio del color justo en su punto — el ojo humano
+       exagera esa clase de quiebres (Mach bands) y se percibe como un
+       "bloque" con borde propio en vez de un degradé liso, sobre todo
+       cerca del header. Con 2 paradas la tasa de cambio es constante
+       de punta a punta, sin ese quiebre perceptual. */
+    --chrome-gradient: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--sidebar) 82%, black 18%) 0%,
+        color-mix(in srgb, var(--sidebar) 90%, white 10%) 100%
+    );
+    --sidebar-ring: #3a4356;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
+    /* Negro puro, igual que la mini-sidebar — pedido explícito. */
+    --background: #000;
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.145 0 0);
     --card-foreground: oklch(0.985 0 0);
@@ -122,14 +151,7 @@
     --chart-3: oklch(0.769 0.188 70.08);
     --chart-4: oklch(0.627 0.265 303.9);
     --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    /* --sidebar-* fijos en :root — ver comentario ahí arriba. */
 }
 
 @layer base {
@@ -140,4 +162,74 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/* Tooltip: negro puro en tema claro (igual que el negro de la mini,
+   no el negro-casi oklch de --foreground) — con bg-foreground el claro
+   quedaba un poco menos negro de lo pedido. En oscuro se deja tal cual
+   (blanco de --foreground), ya confirmado como correcto. El color real
+   se define acá (no con clases de Tailwind en el componente), así hay
+   un solo lugar que tocar. */
+:root {
+    --tooltip-bg: #000;
+    --tooltip-fg: #fff;
+}
+.dark {
+    --tooltip-bg: var(--foreground);
+    --tooltip-fg: var(--background);
+}
+[data-slot='tooltip-content'] {
+    background-color: var(--tooltip-bg) !important;
+    color: var(--tooltip-fg);
+}
+[data-slot='tooltip-arrow'] {
+    background-color: var(--tooltip-bg);
+    fill: var(--tooltip-bg);
+}
+
+/* Tono del "chrome" con leve degradé (no plano): da profundidad/3D en
+   vez de un color sólido chato. Cubre tanto el panel del sidebar como
+   el hueco que rellena has-data-[variant=inset]:bg-sidebar detrás del
+   header/dashboard, Y el fondo del item activo de la mini y las
+   muescas de ambas curvas (ver curved-nav-rail.css y
+   sidebar-list.css).
+
+   `background-attachment: fixed` es la pieza clave: ancla el degradé
+   al viewport real en vez de al cuadro de cada elemento. Sin esto,
+   cada pieza (panel completo del sidebar, píldora chica de la mini,
+   muesca de 14-16px) calculaba su propio 0%→100% sobre SU PROPIA
+   altura, y aunque cada una se viera lisa por dentro, el color en el
+   punto exacto donde una pieza toca a la otra no coincidía — se veía
+   como una costura/"lego" en vez de una gotera continua. Con
+   background-attachment:fixed + el mismo background-size en todas,
+   todas leen el mismo punto del degradé según su posición real en
+   pantalla, sin importar en qué elemento del DOM estén. */
+.bg-sidebar,
+[data-slot='sidebar-wrapper'],
+[data-slot='sidebar-header'],
+.curved-rail-item--active .curved-rail-link,
+.curved-rail-notch,
+.sidebar-row-notch::before {
+    background-image: var(--chrome-gradient);
+    background-attachment: fixed;
+    background-size: 100% 100vh;
+}
+
+/* Mismo mecanismo, ahora para el lado "panel": el item seleccionado del
+   sidebar y el área de contenido son DOS elementos DOM distintos —
+   igual que pasaba con el chrome antes de este truco, un
+   `background-color` plano en cada uno puede leerse con una tonalidad
+   levemente distinta entre sí según cómo el navegador componga cada
+   capa (ej. la fila seleccionada tiene un hijo con `transform`, lo que
+   la promueve a su propia capa). Anclando ambos al mismo
+   background-attachment:fixed se leen del mismo punto real de pantalla
+   sin importar la capa, igual que ya hacíamos con --chrome-gradient. */
+:root {
+    --content-tone: linear-gradient(var(--background), var(--background));
+}
+main[data-slot='sidebar-inset'],
+.sidebar-row--active {
+    background-image: var(--content-tone);
+    background-attachment: fixed;
+    background-size: 100% 100vh;
 }
