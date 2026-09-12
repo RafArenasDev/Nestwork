@@ -333,27 +333,33 @@ main[data-slot='sidebar-inset'],
         inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Volumen de la card negra/blanca de login-registro (pantalla auth) —
-   como la card toca los 3 bordes reales de la pantalla (arriba, abajo,
-   lado exterior) no hay margen para una sombra hacia afuera ahí: es
-   toda INSET — luz sutil arriba (como si el "sol" viniera de arriba),
-   viñeta oscura abajo, y bordes izq/der oscurecidos. El lado curvo
-   (hacia el panel de marca) se oscurece bastante más para leerse como
-   la esquina "levantada" que se dobla hacia el panel vecino — variante
-   -left/-right según qué lado sea ese. */
+/* Volumen de la card negra/blanca de login-registro, concentrado
+   JUNTO A LA CURVA (no toda la card) — mismo espíritu que
+   .btn-elevated: un resplandor blanco (se nota en la card NEGRA, casi
+   no se ve en la blanca) + una sombra oscura (al revés: se nota en la
+   card BLANCA, casi no se ve en la negra) + una línea brillante justo
+   en el borde curvo. Entre las tres, el volumen se nota en los dos
+   temas sin exagerar el resto de la card, que se queda plana/pura.
+   Variante -left/-right según de qué lado está la curva. */
 .form-pane-elevated-left {
+    background-image: linear-gradient(
+        to left,
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.08) 15%,
+        transparent 35%
+    );
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        inset 0 50px 70px -55px rgba(255, 255, 255, 0.1),
-        inset 0 -60px 90px -60px rgba(0, 0, 0, 0.55),
-        inset 50px 0 80px -55px rgba(0, 0, 0, 0.5),
-        inset -30px 0 60px -55px rgba(0, 0, 0, 0.3);
+        inset 1.5px 0 0 rgba(255, 255, 255, 0.55),
+        inset 40px 0 50px -35px rgba(0, 0, 0, 0.45);
 }
 .form-pane-elevated-right {
+    background-image: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0.35) 0%,
+        rgba(255, 255, 255, 0.08) 15%,
+        transparent 35%
+    );
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        inset 0 50px 70px -55px rgba(255, 255, 255, 0.1),
-        inset 0 -60px 90px -60px rgba(0, 0, 0, 0.55),
-        inset -50px 0 80px -55px rgba(0, 0, 0, 0.5),
-        inset 30px 0 60px -55px rgba(0, 0, 0, 0.3);
+        inset -1.5px 0 0 rgba(255, 255, 255, 0.55),
+        inset -40px 0 50px -35px rgba(0, 0, 0, 0.45);
 }
