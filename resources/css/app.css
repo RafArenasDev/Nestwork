@@ -152,8 +152,12 @@
     --muted-foreground: oklch(0.708 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
+    /* El valor por defecto (L 0.396, C 0.141) es un rojo muy apagado
+       sobre negro puro — se percibe rosado, no rojo. Uno más claro y
+       saturado (mismo que usan los temas shadcn oscuros por defecto)
+       se lee como rojo real. */
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.704 0.191 22.216);
     --border: oklch(0.269 0 0);
     --input: oklch(0.269 0 0);
     --ring: oklch(0.439 0 0);
@@ -243,4 +247,117 @@ main[data-slot='sidebar-inset'],
     background-image: var(--content-tone);
     background-attachment: fixed;
     background-size: 100% 100vh;
+}
+
+/* Brillo/gloss extra en la pantalla de login/registro — NO toca
+   `.bg-sidebar` (usado también por la sidebar/mini-rail reales, ver
+   feedback_nestwork_content_frame_css): dos manchas radiales de luz
+   por ENCIMA del --chrome-gradient de siempre, en vez de reemplazarlo.
+
+   Se aplica DOS VECES: al panel de marca visible Y al wrapper exterior
+   de toda la pantalla (bg-sidebar de más arriba) — la curva del
+   "abrazo" recorta la esquina del panel de formulario y revela el
+   fondo del WRAPPER EXTERIOR, no el del panel de marca (son hermanos,
+   no se solapan). Si sólo el panel de marca tuviera este brillo, la
+   esquina revelada se vería con el chrome-gradient plano de siempre —
+   costura visible justo en la curva.
+
+   `background-size` en `100vw` (no `100%`): un gradiente radial
+   posicionado en "12% 8%" significa un punto de pantalla distinto
+   según el ANCHO PROPIO de cada elemento si se usa "100%" (el panel de
+   marca mide 50% del viewport, el wrapper exterior 100% — dos anchos
+   distintos, dos posiciones reales distintas). Con `100vw` ambos leen
+   el mismo punto real de pantalla sin importar su propio ancho, igual
+   principio que ya usa `--chrome-gradient` en el eje vertical con
+   `100vh`. */
+.brand-pane-gloss {
+    background-image:
+        radial-gradient(
+            1400px 1000px at 12vw 8vh,
+            rgba(255, 255, 255, 0.22) 0%,
+            rgba(255, 255, 255, 0.06) 35%,
+            transparent 60%
+        ),
+        radial-gradient(
+            900px 700px at 92vw 100vh,
+            rgba(255, 255, 255, 0.1) 0%,
+            transparent 55%
+        ),
+        var(--chrome-gradient) !important;
+    background-attachment: fixed, fixed, fixed !important;
+    background-size:
+        100vw 100vh,
+        100vw 100vh,
+        100vw 100vh !important;
+}
+
+/* Botones elevados 3D (pantalla de login/registro, SOLO botones reales
+   — login/registrar/Google/CTA de marca — nunca inputs ni el combobox
+   de país). Antes la sombra sólo vivía abajo (offset positivo): sobre
+   un panel NEGRO, una sombra negra bajo un botón blanco es invisible,
+   así que Sign in/Sign up se veían "sin efecto". Ahora es un halo con
+   blur y offset 0 (crece parejo en los 4 lados, ver 2do valor de cada
+   box-shadow) — se nota sobre cualquier fondo, oscuro o claro, no sólo
+   "por abajo". `!important`: gana a `shadow-xs` del variant de Button
+   (mismo box-shadow, misma especificidad — sin esto no se veía nada).
+   Un solo valor para los dos temas (nada de override por `.dark`): el
+   halo grande original se montaba sobre inputs/títulos vecinos en
+   tema claro — acá el blur es más corto en base para que no invada
+   nada, y el hover es SIEMPRE más grande que el reposo (efecto lupa
+   de "esto es interactivo"), nunca al revés. */
+.btn-elevated {
+    position: relative;
+    border-color: transparent !important;
+    background-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.6) 0%,
+        rgba(255, 255, 255, 0.22) 40%,
+        rgba(255, 255, 255, 0.03) 60%,
+        rgba(0, 0, 0, 0.1) 100%
+    ) !important;
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.25),
+        0 0 12px rgba(255, 255, 255, 0.16),
+        0 0 18px rgba(0, 0, 0, 0.26),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.22) !important;
+    transition:
+        transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.btn-elevated:hover {
+    transform: translateY(-3px);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.35),
+        0 0 22px rgba(255, 255, 255, 0.26),
+        0 0 32px rgba(0, 0, 0, 0.34),
+        inset 0 1.5px 0 rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(0, 0, 0, 0.24) !important;
+}
+.btn-elevated:active {
+    transform: translateY(-1px);
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.2),
+        0 0 16px rgba(255, 255, 255, 0.18),
+        inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Volumen de la card negra/blanca de login-registro en los 4 bordes:
+   un resplandor blanco difuminado (se nota en la card NEGRA, casi no
+   se ve en la blanca) + una sombra oscura difuminada (al revés: se
+   nota en la card BLANCA, casi no se ve en la negra). Todo con spread
+   negativo (sin stops/bordes duros) — se lee como volumen, no como
+   división. Simétrica en los 4 lados: la card es una sola pieza que
+   se desliza completa (no dos mitades compartiendo un borde), así que
+   no hay "lado curvo" que cambie según el estado. */
+.form-card-elevated {
+    box-shadow:
+        inset 0 20px 30px -24px rgba(255, 255, 255, 0.12),
+        inset 0 -20px 30px -24px rgba(255, 255, 255, 0.1),
+        inset 20px 0 30px -24px rgba(255, 255, 255, 0.1),
+        inset -20px 0 30px -24px rgba(255, 255, 255, 0.1),
+        inset 0 20px 30px -24px rgba(0, 0, 0, 0.35),
+        inset 0 -20px 30px -24px rgba(0, 0, 0, 0.35),
+        inset 20px 0 30px -24px rgba(0, 0, 0, 0.3),
+        inset -20px 0 30px -24px rgba(0, 0, 0, 0.3);
 }

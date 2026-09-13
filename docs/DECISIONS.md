@@ -132,6 +132,57 @@
   del trabajo de Fase A del prompt de mejoras v2 (ver sección 2 y el
   pedido explícito del usuario de no crear equipo en el login/registro).
 
+## 2026-09-12 — Auth dual (Google + email/contraseña), país/idioma, países-estados-ciudades desde API abierta
+
+- **Decisión:** se reactivó el login con email+contraseña (`PasswordAuthController`)
+  junto al ya existente de Google/Firebase, con `users.auth_provider`
+  (`google`/`password`/`both`) para saber cómo se registró cada cuenta.
+  Registrar con un email ya usado por una cuenta de Google se **rechaza**
+  (no se vincula en silencio) — vincular ambos métodos a una cuenta ya
+  autenticada es un flujo aparte (Ajustes > Seguridad, todavía no
+  construido) para evitar que alguien "tome" una cuenta ajena sabiendo
+  sólo su email.
+- **Pantalla de login/registro:** panel único con slide de 3 paneles
+  (login | marca | registro), a pantalla completa (no una card flotante),
+  con fallback de una sola columna con fundido en mobile. La marca del
+  chrome (colores fijos del sidebar) es reutilizada en el panel de marca;
+  el panel de formulario usa `--background` (blanco/negro puro) en vez de
+  `--card`, a pedido explícito ("nada de opacos/brillos").
+- **País en vez de idioma en el registro:** el usuario elige país (no
+  idioma) — el idioma se deriva del país (`countries.locale`) y se setea
+  como cookie `locale` en la respuesta de registro, sin preguntárselo.
+  Editable después desde Ajustes (pendiente de construir esa UI).
+- **`countries`/`states`/`cities` desde una API abierta real
+  (countriesnow.space, gratuita, sin key) en vez de un JSON quemado en
+  el repo** — pedido explícito del usuario ("JSON o data quemada al
+  estilo mock no es profesional"). Un `CountriesSeeder` llama tres
+  endpoints (países+estados, banderas, países+ciudades) y puebla las tres
+  tablas; se dispara automáticamente desde una migración
+  (`seed_countries_states_and_cities`), no como paso manual aparte.
+    - **Limitación real de la fuente:** countriesnow no expone la
+      jerarquía completa departamento→ciudad en un solo endpoint (las
+      ciudades vienen listadas por país, no por estado) — `cities.state_id`
+      queda `null` por ahora. La relación ya está modelada
+      (`City belongsTo State`) para cuando se resuelva ese vínculo con
+      otra fuente o un cruce de datos posterior.
+    - **Tests NO llaman a la API real:** la misma migración detecta
+      `app()->environment('testing')` y siembra 3 países fijos (CO/MX/US)
+      en vez de pegarle a countriesnow — depender de un tercero en cada
+      corrida de la suite (que migra desde cero) haría los tests lentos y
+      frágiles, violando la política de TDD bloqueada en 2.1. Esto es
+      deliberado, no un atajo silencioso.
+    - **Banderas:** se usa la URL SVG real que devuelve el propio API
+      (Wikimedia Commons) en vez de emoji — en Windows los emoji de
+      bandera se renderizan como el código de país en texto plano (ej.
+      "CO"), no como la bandera.
+- **Pendiente/deferred de esta ronda:** el "abrazo" curvo entre el panel
+  de marca y el panel de formulario (mismo lenguaje visual que la curva
+  de la sidebar) no se implementó — la geometría de la técnica de la
+  sidebar (una pastilla que sobresale de un riel) no traslada 1:1 a dos
+  paneles rectangulares iguales; requiere una ronda de diseño propia en
+  vez de improvisarse. Tampoco se construyó todavía la UI de Ajustes
+  para cambiar idioma/vincular Google+contraseña manualmente.
+
 ## Pendiente / no cubierto en esta sesión
 
 - No se escribieron tests nuevos para `HandleLocale` ni para los modales (violación puntual de la política de TDD bloqueada en 2.1 — se hizo así por la urgencia de dejar el entorno andando; hay que volver y cubrir esto antes de dar por cerrada esta porción de trabajo).
