@@ -733,7 +733,16 @@ function Thread({
                     className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
                 >
                     <ScrollArea className="h-full flex-1 px-4">
-                        <div className="flex w-full min-w-0 flex-col gap-0.5 py-4 pb-8">
+                        <div
+                            // pb-10 (no pb-8): el avatar del último mensaje
+                            // vive translate-y-3 (12px) MÁS abajo que el
+                            // borde inferior de la burbuja — el aire de
+                            // acá tiene que sobrar respecto al avatar, no
+                            // sólo respecto a la burbuja, o queda cortado
+                            // justo al enviar (el mensaje nuevo entra con
+                            // su avatar ya desplazado).
+                            className="flex w-full min-w-0 flex-col gap-0.5 py-4 pb-10"
+                        >
                             {liveMessages.map((message, index) => {
                                 const previous = liveMessages[index - 1];
                                 const next = liveMessages[index + 1];
@@ -946,10 +955,15 @@ function MessageBubble({
             className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''} ${isFirstInGroup ? 'mt-2' : 'mt-px'}`}
         >
             <Avatar
-                // translate-y-2: centra el avatar sobre la cola (que vive
-                // pegada al borde inferior de la burbuja) en vez de
-                // quedar alineado arriba de ella.
-                className={`size-7 shrink-0 ${isLastInGroup ? 'translate-y-2' : 'invisible'}`}
+                // translate-y-3: centra el avatar sobre la cola. El skew
+                // de la cola no es un simple cuadrado desplazado: medido
+                // en el DOM (getBoundingClientRect), su caja visual
+                // (post-transform) queda ~4.7px más abajo que el centro
+                // del avatar con el offset viejo (translate-y-2/8px) —
+                // por eso 8px se veía todavía alineado hacia arriba/
+                // "pegado al bottom" en vez de centrado en el pico.
+                // 12px (translate-y-3) sí calza con el centro real.
+                className={`size-7 shrink-0 ${isLastInGroup ? 'translate-y-3' : 'invisible'}`}
             >
                 {message.userAvatar && (
                     <AvatarImage
@@ -973,7 +987,12 @@ function MessageBubble({
                 borde de la burbuja y la cola, que se ve como una muesca
                 de otro tono en vez de una sola pieza continua. */}
             <div
-                className={`relative max-w-[70%] min-w-0 rounded-2xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${bubbleColor} ${
+                // rounded-3xl (no -2xl): el pico ya quedó bien tal cual
+                // está — pedido explícito de sumarle MÁS curva al resto
+                // de la burbuja, no tocar la esquina de la cola (esa
+                // sigue -none, cuadrada a propósito, ver comentario
+                // arriba).
+                className={`relative max-w-[70%] min-w-0 rounded-3xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${bubbleColor} ${
                     isLastInGroup
                         ? message.isMine
                             ? 'rounded-br-none'

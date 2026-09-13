@@ -87,7 +87,8 @@ function formatBadgeCount(count: number): string {
 }
 
 export function CurvedNavRail({ active, onChange }: Props) {
-    const { auth, conversations, statusPresets } = usePage().props;
+    const { auth, conversations, archivedConversations, statusPresets } =
+        usePage().props;
     const getInitials = useInitials();
     const { t } = useLocale();
     const cleanup = useMobileNavigation();
@@ -101,6 +102,14 @@ export function CurvedNavRail({ active, onChange }: Props) {
     const conversationsWithActivity = conversations.filter(
         (conversation) => conversation.unreadCount > 0,
     ).length;
+    // Un chat archivado sale de "Mensajes" (se filtra ahí) pero sigue
+    // recibiendo mensajes en vivo — sin este badge en el ícono de
+    // Archivo, un no-leído ahí quedaba invisible para siempre a menos
+    // que el usuario entrara a revisar manualmente.
+    const unreadArchivedCount = archivedConversations.reduce(
+        (total, conversation) => total + conversation.unreadCount,
+        0,
+    );
 
     const badgeCountFor = (key: RailModuleKey): number => {
         if (key === 'messages') {
@@ -109,6 +118,10 @@ export function CurvedNavRail({ active, onChange }: Props) {
 
         if (key === 'activity') {
             return conversationsWithActivity;
+        }
+
+        if (key === 'archived') {
+            return unreadArchivedCount;
         }
 
         return 0;

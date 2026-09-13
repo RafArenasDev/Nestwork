@@ -228,7 +228,17 @@ function ConversationRow({
                         <button
                             type="button"
                             aria-label="Desarchivar"
-                            className="sidebar-row-action text-muted-foreground hover:text-foreground rounded p-1"
+                            // Blanco fijo, no --muted-foreground/--foreground
+                            // (que cambian con el tema global) — este botón
+                            // vive sobre el sidebar de conversaciones, que
+                            // siempre es oscuro sin importar el tema; con
+                            // los tokens de tema, el hover en tema claro
+                            // pintaba el ícono casi negro sobre ese fondo
+                            // oscuro, prácticamente invisible. El hover es
+                            // un relleno blanco (mismo lenguaje que el
+                            // ícono activo del mini-rail), no un cambio de
+                            // color de ícono.
+                            className="sidebar-row-action rounded-full p-1 text-white/60 transition-colors hover:bg-white hover:text-[#141824]"
                             onClick={() =>
                                 router.patch(
                                     toggleArchive([
