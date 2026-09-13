@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -43,6 +44,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Team> $teams
  * @property-read Collection<int, Conversation> $conversations
  * @property-read Country|null $country
+ * @property-read Collection<int, Favorite> $favorites
  */
 #[Fillable(['name', 'username', 'country_id', 'email', 'password', 'auth_provider', 'avatar', 'current_team_id', 'status_preset', 'status_emoji', 'status_text', 'status_expires_at'])]
 #[Hidden(['password', 'remember_token'])]
@@ -138,7 +140,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->belongsToMany(Conversation::class, 'conversation_participants')
             ->using(ConversationParticipant::class)
-            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'last_read_message_id'])
+            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'hidden_at', 'role', 'last_read_message_id'])
             ->withTimestamps();
     }
 
@@ -148,5 +150,13 @@ class User extends Authenticatable implements MustVerifyEmail
     public function country(): BelongsTo
     {
         return $this->belongsTo(Country::class);
+    }
+
+    /**
+     * @return HasMany<Favorite, $this>
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
     }
 }

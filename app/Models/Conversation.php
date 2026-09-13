@@ -18,6 +18,12 @@ use Illuminate\Support\Carbon;
  * @property int $team_id
  * @property ConversationType $type
  * @property string|null $name
+ * @property bool $is_public
+ * @property string|null $avatar_path
+ * @property string|null $description
+ * @property bool $is_ephemeral
+ * @property int|null $ephemeral_ttl_seconds
+ * @property int|null $default_message_ttl_seconds
  * @property int $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -28,7 +34,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ConversationParticipant> $conversationParticipants
  * @property-read ConversationParticipant|null $pivot Only set when loaded through User::conversations().
  */
-#[Fillable(['team_id', 'type', 'name', 'created_by'])]
+#[Fillable(['team_id', 'type', 'name', 'is_public', 'avatar_path', 'description', 'is_ephemeral', 'ephemeral_ttl_seconds', 'default_message_ttl_seconds', 'created_by'])]
 class Conversation extends Model
 {
     /** @use HasFactory<ConversationFactory> */
@@ -38,6 +44,8 @@ class Conversation extends Model
     {
         return [
             'type' => ConversationType::class,
+            'is_public' => 'boolean',
+            'is_ephemeral' => 'boolean',
         ];
     }
 
@@ -80,7 +88,7 @@ class Conversation extends Model
     {
         return $this->belongsToMany(User::class, 'conversation_participants')
             ->using(ConversationParticipant::class)
-            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'last_read_message_id'])
+            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'hidden_at', 'role', 'last_read_message_id'])
             ->withTimestamps();
     }
 
