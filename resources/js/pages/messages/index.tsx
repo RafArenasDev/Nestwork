@@ -1105,9 +1105,19 @@ function MessageBubble({
     // mt-2.5 (no mt-px): ahora CADA mensaje muestra su hora debajo, así
     // que ese "pegado" de antes (pensado para cuando sólo el último de
     // la racha tenía pie) quedaba muy poco aire entre la hora de un
-    // mensaje y la burbuja del siguiente.
+    // mensaje y la burbuja del siguiente. Si ESTE mensaje tiene badge de
+    // respuesta (que sobresale -mt-6 = 24px por encima de su propia
+    // burbuja), mt-2/mt-2.5 no alcanzan — el badge quedaba traslapado
+    // con la hora del mensaje de arriba. mt-8 le da aire de sobra al
+    // badge sin importar si es o no el primero de la racha.
+    const topMargin = message.replyToId
+        ? 'mt-8'
+        : isFirstInGroup
+          ? 'mt-2'
+          : 'mt-2.5';
+
     return (
-        <div className={isFirstInGroup ? 'mt-2' : 'mt-2.5'}>
+        <div className={topMargin}>
             <div
                 className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''}`}
             >
