@@ -1,5 +1,9 @@
 <?php
 
+use App\Enums\TeamRole;
+use App\Models\Conversation;
+use App\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +51,31 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Attach a user to a team with the given role (defaults to Member), for
+ * tests that need a team member without caring about the full team
+ * onboarding flow.
+ */
+function attachTeamMember(Team $team, User $user, TeamRole $role = TeamRole::Member): void
+{
+    $team->members()->attach($user, ['role' => $role->value]);
+}
+
+/**
+ * Create a DM conversation between two users on the given team and
+ * attach both as participants, mirroring what
+ * App\Actions\Conversations\StartConversationWithUser does.
+ */
+function makeDmConversation(Team $team, User $a, User $b): Conversation
+{
+    $conversation = Conversation::factory()->create(['team_id' => $team->id, 'created_by' => $a->id]);
+
+    $conversation->participants()->attach([
+        $a->id => ['joined_at' => now()],
+        $b->id => ['joined_at' => now()],
+    ]);
+
+    return $conversation;
 }
