@@ -189,7 +189,19 @@ class MessagesController extends Controller
             'last_read_message_id' => $message->id,
         ]);
 
-        broadcast(new MessageSent($message))->toOthers();
+        // El mensaje YA quedó guardado arriba — un tropiezo de Reverb acá
+        // (por ejemplo, el servidor reiniciándose y perdiendo el
+        // registro de la app por un instante: "No matching application
+        // for ID") no puede tumbar la petición entera. Sin este
+        // try/catch, esa excepción rompía el redirect completo y el
+        // mensaje se quedaba pegado en "enviando" del lado del cliente
+        // (la UI optimista nunca recibía la respuesta que la reemplaza
+        // por el mensaje real) a pesar de estar bien guardado en la BD.
+        try {
+            broadcast(new MessageSent($message))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         // No usar back(): la sesión registra como "URL anterior" la última
         // petición GET real, que es messages.show — pero el navegador se
@@ -219,7 +231,14 @@ class MessagesController extends Controller
             'last_read_message_id' => $lastMessageId,
         ]);
 
-        broadcast(new MessageRead($conversation, $user->id, $lastMessageId));
+        // Mismo criterio que en store(): last_read_message_id ya quedó
+        // guardado arriba, un tropiezo de Reverb acá no puede tumbar
+        // este ping silencioso.
+        try {
+            broadcast(new MessageRead($conversation, $user->id, $lastMessageId));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return response()->json(['lastReadMessageId' => $lastMessageId]);
     }
