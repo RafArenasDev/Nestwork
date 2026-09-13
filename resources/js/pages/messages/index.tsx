@@ -879,7 +879,7 @@ function MessageStatus({ message }: { message: MessageData }) {
 
     if (message.status === 'failed') {
         return (
-            <span className="text-destructive mt-0.5 flex items-center justify-end gap-1 text-[10px] font-medium">
+            <span className="text-destructive flex items-center gap-1 text-[10px] font-medium">
                 <CircleAlert className="size-3" />
                 No se pudo enviar
             </span>
@@ -887,7 +887,7 @@ function MessageStatus({ message }: { message: MessageData }) {
     }
 
     return (
-        <span className="mt-0.5 flex items-center justify-end gap-0.5 text-[10px] opacity-70">
+        <span className="flex items-center gap-0.5">
             {message.status === 'sending' && <Clock className="size-3" />}
             {message.status === 'read' && (
                 <CheckCheck
@@ -951,32 +951,32 @@ function MessageBubble({
           : 'bg-[var(--bubble-received)]';
 
     return (
-        <div
-            className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''} ${isFirstInGroup ? 'mt-2' : 'mt-px'}`}
-        >
-            <Avatar
-                // translate-y-3: centra el avatar sobre la cola. El skew
-                // de la cola no es un simple cuadrado desplazado: medido
-                // en el DOM (getBoundingClientRect), su caja visual
-                // (post-transform) queda ~4.7px más abajo que el centro
-                // del avatar con el offset viejo (translate-y-2/8px) —
-                // por eso 8px se veía todavía alineado hacia arriba/
-                // "pegado al bottom" en vez de centrado en el pico.
-                // 12px (translate-y-3) sí calza con el centro real.
-                className={`size-7 shrink-0 ${isLastInGroup ? 'translate-y-3' : 'invisible'}`}
+        <div className={isFirstInGroup ? 'mt-2' : 'mt-px'}>
+            <div
+                className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''}`}
             >
-                {message.userAvatar && (
-                    <AvatarImage
-                        src={message.userAvatar}
-                        alt={message.userName}
-                    />
-                )}
-                <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
-                    {getInitials(message.userName)}
-                </AvatarFallback>
-            </Avatar>
+                <Avatar
+                    // items-end en la fila alinea este avatar con lo último
+                    // de la columna [burbuja + hora/read] de abajo — o sea,
+                    // con la hora y el check de leído, NO con el pico (pedido
+                    // explícito: "alinea el avatar... con el hora y read...
+                    // no con el pico"). Sin translate: la hora/read ya vive
+                    // en esa misma columna, así que el borde inferior de esa
+                    // fila ES el de la hora — items-end alcanza solo.
+                    className={`size-7 shrink-0 ${isLastInGroup ? '' : 'invisible'}`}
+                >
+                    {message.userAvatar && (
+                        <AvatarImage
+                            src={message.userAvatar}
+                            alt={message.userName}
+                        />
+                    )}
+                    <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
+                        {getInitials(message.userName)}
+                    </AvatarFallback>
+                </Avatar>
 
-            {/* Cola: un cuadrado del mismo color de la burbuja, esquinas
+                {/* Cola: un cuadrado del mismo color de la burbuja, esquinas
                 apenas redondeadas, inclinado con `skew` y pegado al
                 borde inferior — el mismo truco que WhatsApp/Telegram
                 (cuadrado sesgado, no un triángulo recto ni una máscara
@@ -986,96 +986,115 @@ function MessageBubble({
                 curva ahí (incluso un radio chico) deja un hueco entre el
                 borde de la burbuja y la cola, que se ve como una muesca
                 de otro tono en vez de una sola pieza continua. */}
-            <div
-                // rounded-3xl (no -2xl): el pico ya quedó bien tal cual
-                // está — pedido explícito de sumarle MÁS curva al resto
-                // de la burbuja, no tocar la esquina de la cola (esa
-                // sigue -none, cuadrada a propósito, ver comentario
-                // arriba).
-                className={`relative max-w-[70%] min-w-0 rounded-3xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${bubbleColor} ${
-                    isLastInGroup
-                        ? message.isMine
-                            ? 'rounded-br-none'
-                            : 'rounded-bl-none'
-                        : ''
-                } ${
-                    failed
-                        ? 'text-foreground ring-destructive/40 ring-1'
-                        : message.isMine
-                          ? 'text-[var(--bubble-sent-foreground)]'
-                          : 'text-[var(--bubble-received-foreground)]'
-                }`}
-            >
-                {isLastInGroup && (
-                    <span
-                        aria-hidden="true"
-                        className={`pointer-events-none absolute bottom-0 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
-                    />
-                )}
-
-                {message.replyToId && (
+                <div
+                    // max-w-[70%] va ACÁ, no en la burbuja de adentro: un %
+                    // en un hijo de un flex item sin ancho propio es
+                    // referencia circular en CSS — el navegador no puede
+                    // resolverla y colapsa al mínimo posible (por eso "OK"
+                    // se veía "O"/"K" en dos líneas, y la burbuja se veía
+                    // angosta y separada del avatar). Acá sí hay un ancho
+                    // de referencia real: el de la fila completa.
+                    className="flex max-w-[70%] min-w-0 flex-col"
+                >
                     <div
-                        className={`mb-1 max-w-[240px] rounded-md border-l-2 px-2 py-1 text-xs opacity-80 ${
-                            message.isMine
-                                ? 'border-l-[var(--bubble-sent-foreground)]/40 bg-black/10'
-                                : 'border-l-sky-400 bg-black/20'
+                        // rounded-3xl (no -2xl): el pico ya quedó bien tal cual
+                        // está — pedido explícito de sumarle MÁS curva al resto
+                        // de la burbuja, no tocar la esquina de la cola (esa
+                        // sigue -none, cuadrada a propósito, ver comentario
+                        // arriba).
+                        className={`relative min-w-0 rounded-3xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${bubbleColor} ${
+                            isLastInGroup
+                                ? message.isMine
+                                    ? 'rounded-br-none'
+                                    : 'rounded-bl-none'
+                                : ''
+                        } ${
+                            failed
+                                ? 'text-foreground ring-destructive/40 ring-1'
+                                : message.isMine
+                                  ? 'text-[var(--bubble-sent-foreground)]'
+                                  : 'text-[var(--bubble-received-foreground)]'
                         }`}
                     >
-                        <p className="truncate font-medium">
-                            {message.replyToUserName}
-                        </p>
-                        <p className="truncate">{message.replyToBody}</p>
-                    </div>
-                )}
+                        {isLastInGroup && (
+                            <span
+                                aria-hidden="true"
+                                className={`pointer-events-none absolute bottom-0 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
+                            />
+                        )}
 
-                {/* max-w fijo en px (no %): el wrapper interno de
+                        {message.replyToId && (
+                            <div
+                                className={`mb-1 max-w-[240px] rounded-md border-l-2 px-2 py-1 text-xs opacity-80 ${
+                                    message.isMine
+                                        ? 'border-l-[var(--bubble-sent-foreground)]/40 bg-black/10'
+                                        : 'border-l-sky-400 bg-black/20'
+                                }`}
+                            >
+                                <p className="truncate font-medium">
+                                    {message.replyToUserName}
+                                </p>
+                                <p className="truncate">
+                                    {message.replyToBody}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* max-w fijo en px (no %): el wrapper interno de
                     ScrollArea (Radix) mide contenido con un
                     `display:table`, que crece sin límite frente a texto
                     sin espacios — un % no lo frena porque la tabla no
                     tiene ancho definido a priori, un px sí. */}
-                <p className="max-w-[420px] break-words whitespace-pre-wrap">
-                    {message.body}
-                </p>
-                {/* Hora/check sólo en el último mensaje de la racha — igual
-                    criterio que Slack/Telegram, para no repetir la marca de
-                    tiempo en cada burbuja de una tanda seguida. */}
-                {isLastInGroup && (
-                    <>
-                        <div
-                            className={`mt-1 flex items-center gap-1 text-[10px] opacity-70 ${message.isMine ? 'justify-end' : ''}`}
-                        >
-                            {formatBubbleTime(message.createdAt)}
-                        </div>
-                        <MessageStatus message={message} />
-                    </>
-                )}
-            </div>
+                        <p className="max-w-[420px] break-words whitespace-pre-wrap">
+                            {message.body}
+                        </p>
+                    </div>
 
-            {/* Grupo de acciones al hover: sólo aparece con el mouse
+                    {/* Hora fuera de la burbuja, en TODAS (no sólo la última de
+                    la racha) — pedido explícito: "todas las burbujas deben
+                    mostrar hora... la quiero fuera de las burbujas". Vive en
+                    la MISMA columna que la burbuja (no una fila aparte) para
+                    heredar gratis su mismo borde izq/der — nada de spacers
+                    del ancho del avatar para no taparse con él. Separación
+                    extra del lado de la cola/avatar (pr-2 si es mío, pl-2
+                    si es del otro) — pegada al borde se traslapaba con el
+                    pico, que justo de ese lado sobresale un poco de la
+                    burbuja. mt-1.5 (no mt-0.5): más aire respecto a la
+                    burbuja, no tan pegado. */}
+                    <div
+                        className={`text-muted-foreground mt-1.5 flex items-center gap-1 text-[10px] ${message.isMine ? 'justify-end pr-2' : 'justify-start pl-2'}`}
+                    >
+                        <span>{formatBubbleTime(message.createdAt)}</span>
+                        <MessageStatus message={message} />
+                    </div>
+                </div>
+
+                {/* Grupo de acciones al hover: sólo aparece con el mouse
                 encima de la fila (no depende de clic derecho). Vive al
                 lado externo de la burbuja (lejos del avatar) gracias al
                 mismo flex-row-reverse que ya posiciona todo lo demás. */}
-            <div className="pointer-events-none flex shrink-0 items-center self-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100">
-                <BubbleActionButton
-                    icon={Reply}
-                    label="Responder"
-                    onClick={() => onReply(message)}
-                />
-                <BubbleActionButton
-                    icon={Smile}
-                    label="Reaccionar (próximamente)"
-                    disabled
-                />
-                <BubbleActionButton
-                    icon={Forward}
-                    label="Reenviar (próximamente)"
-                    disabled
-                />
-                <BubbleActionButton
-                    icon={MoreHorizontal}
-                    label="Más opciones (próximamente)"
-                    disabled
-                />
+                <div className="pointer-events-none flex shrink-0 items-center self-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100">
+                    <BubbleActionButton
+                        icon={Reply}
+                        label="Responder"
+                        onClick={() => onReply(message)}
+                    />
+                    <BubbleActionButton
+                        icon={Smile}
+                        label="Reaccionar (próximamente)"
+                        disabled
+                    />
+                    <BubbleActionButton
+                        icon={Forward}
+                        label="Reenviar (próximamente)"
+                        disabled
+                    />
+                    <BubbleActionButton
+                        icon={MoreHorizontal}
+                        label="Más opciones (próximamente)"
+                        disabled
+                    />
+                </div>
             </div>
         </div>
     );
