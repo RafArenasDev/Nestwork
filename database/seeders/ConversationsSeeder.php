@@ -6,6 +6,7 @@ use App\Actions\Teams\AssignUserToDomainTeam;
 use App\Actions\Users\GenerateUniqueUsername;
 use App\Enums\ConversationType;
 use App\Models\Conversation;
+use App\Models\Country;
 use App\Models\Message;
 use App\Models\Team;
 use App\Models\User;
@@ -25,9 +26,12 @@ class ConversationsSeeder extends Seeder
      * name (+ domain, o email explícito para las 3 cuentas reales del
      * dev — mismo nombre, no puede autogenerarse o dos colisionan en
      * el mismo email). Mezcla dominios públicos (van a "Invitados") e
-     * institucionales (cada uno con su propio equipo).
+     * institucionales (cada uno con su propio equipo). `country` es
+     * opcional (iso2) — por defecto Colombia; se usa para probar el
+     * flujo con al menos un usuario angloparlante (locale derivado en
+     * inglés).
      *
-     * @var list<array{name: string, domain: string|null, email: string|null}>
+     * @var list<array{name: string, domain: string|null, email: string|null, country?: string}>
      */
     private const SEED_USERS = [
         // Cuentas reales del dev — las únicas 3 con acceso real para
@@ -47,6 +51,7 @@ class ConversationsSeeder extends Seeder
         ['name' => 'Santiago Gómez', 'domain' => 'outlook.com', 'email' => null],
         ['name' => 'Laura Jiménez', 'domain' => 'hotmail.com', 'email' => null],
         ['name' => 'Diego Hernández', 'domain' => 'yahoo.com', 'email' => null],
+        ['name' => 'Chris Johnson', 'domain' => 'gmail.com', 'email' => null, 'country' => 'US'],
 
         // "Areandina" — solo para poder armar un grupo de prueba; nombres
         // genéricos a propósito (no de personas reales) aunque el
@@ -71,6 +76,9 @@ class ConversationsSeeder extends Seeder
 
         $assignToDomainTeam = new AssignUserToDomainTeam;
         $generateUsername = new GenerateUniqueUsername;
+        $countryIds = Country::query()
+            ->whereIn('iso2', ['CO', 'US'])
+            ->pluck('id', 'iso2');
 
         foreach (self::SEED_USERS as $seedUser) {
             $email = $seedUser['email'] ?? $this->emailFor($seedUser['name'], $seedUser['domain']);
@@ -80,6 +88,7 @@ class ConversationsSeeder extends Seeder
                 [
                     'name' => $seedUser['name'],
                     'username' => $generateUsername->handle($seedUser['name']),
+                    'country_id' => $countryIds[$seedUser['country'] ?? 'CO'],
                     'email_verified_at' => now(),
                     'last_seen_at' => fake()->dateTimeBetween('-3 days', 'now'),
                 ],

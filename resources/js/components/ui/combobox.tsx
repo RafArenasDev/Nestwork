@@ -44,6 +44,7 @@ type ComboboxProps = {
     searchPlaceholder?: string;
     emptyLabel?: string;
     triggerId?: string;
+    invalid?: boolean;
 };
 
 /** Combobox liviano (Popover + filtro) — mismo espíritu que el patrón
@@ -57,6 +58,7 @@ export function Combobox({
     searchPlaceholder = 'Buscar...',
     emptyLabel = 'Sin resultados.',
     triggerId,
+    invalid = false,
 }: ComboboxProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
@@ -92,6 +94,7 @@ export function Combobox({
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
+                    aria-invalid={invalid}
                     className="h-11 w-full justify-between rounded-full px-4 font-normal"
                 >
                     <span className="flex min-w-0 items-center gap-2 truncate">

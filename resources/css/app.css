@@ -152,8 +152,12 @@
     --muted-foreground: oklch(0.708 0 0);
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
+    /* El valor por defecto (L 0.396, C 0.141) es un rojo muy apagado
+       sobre negro puro — se percibe rosado, no rojo. Uno más claro y
+       saturado (mismo que usan los temas shadcn oscuros por defecto)
+       se lee como rojo real. */
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.704 0.191 22.216);
     --border: oklch(0.269 0 0);
     --input: oklch(0.269 0 0);
     --ring: oklch(0.439 0 0);
@@ -295,7 +299,12 @@ main[data-slot='sidebar-inset'],
    blur y offset 0 (crece parejo en los 4 lados, ver 2do valor de cada
    box-shadow) — se nota sobre cualquier fondo, oscuro o claro, no sólo
    "por abajo". `!important`: gana a `shadow-xs` del variant de Button
-   (mismo box-shadow, misma especificidad — sin esto no se veía nada). */
+   (mismo box-shadow, misma especificidad — sin esto no se veía nada).
+   Un solo valor para los dos temas (nada de override por `.dark`): el
+   halo grande original se montaba sobre inputs/títulos vecinos en
+   tema claro — acá el blur es más corto en base para que no invada
+   nada, y el hover es SIEMPRE más grande que el reposo (efecto lupa
+   de "esto es interactivo"), nunca al revés. */
 .btn-elevated {
     position: relative;
     border-color: transparent !important;
@@ -308,8 +317,8 @@ main[data-slot='sidebar-inset'],
     ) !important;
     box-shadow:
         0 0 0 1px rgba(255, 255, 255, 0.25),
-        0 0 28px rgba(255, 255, 255, 0.22),
-        0 0 46px rgba(0, 0, 0, 0.4),
+        0 0 12px rgba(255, 255, 255, 0.16),
+        0 0 18px rgba(0, 0, 0, 0.26),
         inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
         inset 0 -2px 3px rgba(0, 0, 0, 0.22) !important;
     transition:
@@ -320,8 +329,8 @@ main[data-slot='sidebar-inset'],
     transform: translateY(-3px);
     box-shadow:
         0 0 0 1px rgba(255, 255, 255, 0.35),
-        0 0 40px rgba(255, 255, 255, 0.32),
-        0 0 64px rgba(0, 0, 0, 0.46),
+        0 0 22px rgba(255, 255, 255, 0.26),
+        0 0 32px rgba(0, 0, 0, 0.34),
         inset 0 1.5px 0 rgba(255, 255, 255, 1),
         inset 0 -2px 3px rgba(0, 0, 0, 0.24) !important;
 }
@@ -333,21 +342,22 @@ main[data-slot='sidebar-inset'],
         inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Volumen de la card negra/blanca de login-registro, concentrado
-   JUNTO A LA CURVA (no toda la card) — dos sombras INSET difuminadas
-   (spread negativo, sin ningún stop/borde duro): un resplandor blanco
-   suave (se nota en la card NEGRA, casi no se ve en la blanca) + una
-   sombra oscura (al revés: se nota en la card BLANCA, casi no se ve en
-   la negra). Nada de línea recta ni de degradé con stops marcados —
-   sólo blur, para que se lea como volumen y no como una división.
-   Variante -left/-right según de qué lado está la curva. */
-.form-pane-elevated-left {
+/* Volumen de la card negra/blanca de login-registro en los 4 bordes:
+   un resplandor blanco difuminado (se nota en la card NEGRA, casi no
+   se ve en la blanca) + una sombra oscura difuminada (al revés: se
+   nota en la card BLANCA, casi no se ve en la negra). Todo con spread
+   negativo (sin stops/bordes duros) — se lee como volumen, no como
+   división. Simétrica en los 4 lados: la card es una sola pieza que
+   se desliza completa (no dos mitades compartiendo un borde), así que
+   no hay "lado curvo" que cambie según el estado. */
+.form-card-elevated {
     box-shadow:
-        inset 28px 0 36px -26px rgba(255, 255, 255, 0.16),
-        inset 40px 0 50px -35px rgba(0, 0, 0, 0.45);
-}
-.form-pane-elevated-right {
-    box-shadow:
-        inset -28px 0 36px -26px rgba(255, 255, 255, 0.16),
-        inset -40px 0 50px -35px rgba(0, 0, 0, 0.45);
+        inset 0 20px 30px -24px rgba(255, 255, 255, 0.12),
+        inset 0 -20px 30px -24px rgba(255, 255, 255, 0.1),
+        inset 20px 0 30px -24px rgba(255, 255, 255, 0.1),
+        inset -20px 0 30px -24px rgba(255, 255, 255, 0.1),
+        inset 0 20px 30px -24px rgba(0, 0, 0, 0.35),
+        inset 0 -20px 30px -24px rgba(0, 0, 0, 0.35),
+        inset 20px 0 30px -24px rgba(0, 0, 0, 0.3),
+        inset -20px 0 30px -24px rgba(0, 0, 0, 0.3);
 }

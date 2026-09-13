@@ -3,10 +3,12 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
 import FirebaseSessionController from '@/actions/App/Http/Controllers/Auth/FirebaseSessionController';
 import PasswordAuthController from '@/actions/App/Http/Controllers/Auth/PasswordAuthController';
+import PasswordResetLinkController from '@/actions/App/Http/Controllers/Auth/PasswordResetLinkController';
 import AppLogoIcon from '@/components/app-logo-icon';
 import TeamInvitationAlert from '@/components/team-invitation-alert';
 import TermsAndConditionsModal from '@/components/terms-and-conditions-modal';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Combobox } from '@/components/ui/combobox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +18,19 @@ import { signInWithGoogle } from '@/lib/firebase';
 import type { TeamInvitationContext } from '@/types';
 
 type Panel = 'login' | 'register';
+
+const FOUNDING_YEAR = 2026;
+
+/** "2026" mientras estemos en el año de fundación, "2026–2028" recién
+ *  cuando el año actual lo supere — nunca un rango con el mismo año
+ *  repetido dos veces. */
+function copyrightYears(): string {
+    const currentYear = new Date().getFullYear();
+
+    return currentYear > FOUNDING_YEAR
+        ? `${FOUNDING_YEAR}–${currentYear}`
+        : `${FOUNDING_YEAR}`;
+}
 
 type CountryOption = {
     iso2: string;
@@ -39,6 +54,7 @@ export default function AuthPage({
     const { t } = useLocale();
     const [panel, setPanel] = useState<Panel>(initialPanel);
     const [showTerms, setShowTerms] = useState(false);
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
     const isRegister = panel === 'register';
 
     return (
@@ -57,36 +73,32 @@ export default function AuthPage({
             )}
 
             <div className="h-dvh w-full overflow-hidden text-[var(--foreground)]">
-                {/* Desktop: pista de 3 paneles (login | marca | registro),
-                    la ventana sólo muestra 2 a la vez — deslizar un panel
-                    de ancho revela el otro lado, con el panel de marca
-                    siempre entre los dos formularios. */}
+                {/* Desktop: la MARCA es el fondo fijo (siempre de punta a
+                    punta, nunca se mueve — el mismo bg-sidebar/gloss del
+                    div raíz de esta página). Lo único que se desliza es
+                    la CARD del formulario (fondo negro/blanco según
+                    tema): en login está a la derecha, en registro a la
+                    izquierda, con sólo 2 esquinas curvas hacia el centro
+                    (ver FormPane) — el giro de esquina anima su propio
+                    border-radius, no es un salto de clase. */}
                 <div className="hidden h-full lg:block">
                     <div className="relative h-full w-full overflow-hidden">
+                        {/* Contenido de marca: no tiene fondo propio (el
+                            fondo constante ya lo pone el div raíz), sólo
+                            se reposiciona al lado contrario de la card.
+                            Copyright/términos viven ACÁ (pegados abajo,
+                            altura fija) y no en la card del form — así
+                            nunca compiten con el largo del form ni se
+                            aprietan cuando aparecen errores. */}
                         <div
-                            className="flex h-full w-[150%] transition-transform duration-500 ease-in-out"
+                            className="absolute inset-y-0 left-0 flex w-1/2 flex-col p-10 transition-transform duration-500 ease-in-out sm:p-12"
                             style={{
                                 transform: isRegister
-                                    ? 'translateX(-33.3333%)'
+                                    ? 'translateX(100%)'
                                     : 'translateX(0%)',
                             }}
                         >
-                            <div className="w-1/3 shrink-0">
-                                <FormPane
-                                    t={t}
-                                    onShowTerms={() => setShowTerms(true)}
-                                    curveSide="right"
-                                >
-                                    <SignInForm status={status} t={t} />
-                                    <SwitchPrompt
-                                        promptKey="noAccountYet"
-                                        actionKey="createAccount"
-                                        onClick={() => setPanel('register')}
-                                        t={t}
-                                    />
-                                </FormPane>
-                            </div>
-                            <div className="w-1/3 shrink-0">
+                            <div className="m-auto">
                                 <BrandPane
                                     mode={panel}
                                     onSwitch={() =>
@@ -97,21 +109,69 @@ export default function AuthPage({
                                     t={t}
                                 />
                             </div>
-                            <div className="w-1/3 shrink-0">
-                                <FormPane
-                                    t={t}
-                                    onShowTerms={() => setShowTerms(true)}
-                                    curveSide="left"
+                            <p className="text-sidebar-foreground/70 pt-6 text-center text-xs">
+                                © {copyrightYears()} Nestwork ·{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTerms(true)}
+                                    className="hover:text-sidebar-foreground underline underline-offset-2"
                                 >
-                                    <SignUpForm t={t} countries={countries} />
-                                    <SwitchPrompt
-                                        promptKey="alreadyHaveAccount"
-                                        actionKey="backToSignIn"
-                                        onClick={() => setPanel('login')}
+                                    {t.terms.linkLabel}
+                                </button>
+                            </p>
+                        </div>
+
+                        {/* Card del formulario: única, se desliza. */}
+                        <div
+                            className="absolute inset-y-0 left-0 w-1/2 transition-transform duration-500 ease-in-out"
+                            style={{
+                                transform: isRegister
+                                    ? 'translateX(0%)'
+                                    : 'translateX(100%)',
+                            }}
+                        >
+                            <FormPane
+                                curveSide={isRegister ? 'right' : 'left'}
+                                align={isRegister ? 'top' : 'center'}
+                            >
+                                {isRegister ? (
+                                    <>
+                                        <SignUpForm
+                                            t={t}
+                                            countries={countries}
+                                        />
+                                        <SwitchPrompt
+                                            promptKey="alreadyHaveAccount"
+                                            actionKey="backToSignIn"
+                                            onClick={() => setPanel('login')}
+                                            t={t}
+                                        />
+                                    </>
+                                ) : showForgotPassword ? (
+                                    <ForgotPasswordForm
                                         t={t}
+                                        onBackToLogin={() =>
+                                            setShowForgotPassword(false)
+                                        }
                                     />
-                                </FormPane>
-                            </div>
+                                ) : (
+                                    <>
+                                        <SignInForm
+                                            status={status}
+                                            t={t}
+                                            onForgotPassword={() =>
+                                                setShowForgotPassword(true)
+                                            }
+                                        />
+                                        <SwitchPrompt
+                                            promptKey="noAccountYet"
+                                            actionKey="createAccount"
+                                            onClick={() => setPanel('register')}
+                                            t={t}
+                                        />
+                                    </>
+                                )}
+                            </FormPane>
                         </div>
                     </div>
                 </div>
@@ -123,45 +183,66 @@ export default function AuthPage({
                         <div className="mb-6 flex flex-col items-center gap-2 text-center">
                             <AppLogoIcon className="size-9 fill-current text-[var(--foreground)]" />
                             <h1 className="text-xl font-semibold">
-                                {isRegister
-                                    ? t.auth.registerTitle
-                                    : t.auth.loginTitle}
+                                {showForgotPassword
+                                    ? t.auth.forgotPasswordTitle
+                                    : isRegister
+                                      ? t.auth.registerTitle
+                                      : t.auth.loginTitle}
                             </h1>
                             <p className="text-muted-foreground text-sm">
-                                {isRegister
-                                    ? t.auth.registerDescription
-                                    : t.auth.loginDescription}
+                                {showForgotPassword
+                                    ? t.auth.forgotPasswordDescription
+                                    : isRegister
+                                      ? t.auth.registerDescription
+                                      : t.auth.loginDescription}
                             </p>
                         </div>
 
                         <div
-                            key={panel}
+                            key={showForgotPassword ? 'forgot-password' : panel}
                             className="animate-in fade-in duration-300"
                         >
-                            {isRegister ? (
+                            {showForgotPassword ? (
+                                <ForgotPasswordForm
+                                    t={t}
+                                    onBackToLogin={() =>
+                                        setShowForgotPassword(false)
+                                    }
+                                />
+                            ) : isRegister ? (
                                 <SignUpForm t={t} countries={countries} />
                             ) : (
-                                <SignInForm status={status} t={t} />
+                                <SignInForm
+                                    status={status}
+                                    t={t}
+                                    onForgotPassword={() =>
+                                        setShowForgotPassword(true)
+                                    }
+                                />
                             )}
                         </div>
 
-                        <SwitchPrompt
-                            promptKey={
-                                isRegister
-                                    ? 'alreadyHaveAccount'
-                                    : 'noAccountYet'
-                            }
-                            actionKey={
-                                isRegister ? 'backToSignIn' : 'createAccount'
-                            }
-                            onClick={() =>
-                                setPanel(isRegister ? 'login' : 'register')
-                            }
-                            t={t}
-                        />
+                        {!showForgotPassword && (
+                            <SwitchPrompt
+                                promptKey={
+                                    isRegister
+                                        ? 'alreadyHaveAccount'
+                                        : 'noAccountYet'
+                                }
+                                actionKey={
+                                    isRegister
+                                        ? 'backToSignIn'
+                                        : 'createAccount'
+                                }
+                                onClick={() =>
+                                    setPanel(isRegister ? 'login' : 'register')
+                                }
+                                t={t}
+                            />
+                        )}
 
                         <p className="text-muted-foreground mt-auto pt-6 text-center text-xs">
-                            © 2026–{new Date().getFullYear()} Nestwork ·{' '}
+                            © {copyrightYears()} Nestwork ·{' '}
                             <button
                                 type="button"
                                 onClick={() => setShowTerms(true)}
@@ -182,57 +263,53 @@ export default function AuthPage({
     );
 }
 
+/** La card real: la ÚNICA que se mueve en desktop (ver AuthPage). Sólo
+ *  2 esquinas curvas activas — las que dan al CENTRO de la pantalla
+ *  (hacia donde mira mientras está activa): registro (card a la
+ *  izquierda) curva a la derecha; login (card a la derecha) curva a la
+ *  izquierda. El cambio de esquina anima el `border-radius` en vez de
+ *  saltar entre clases (transition en el propio inline style) — así el
+ *  giro se siente parte del mismo slide, no un corte brusco. El
+ *  copyright/términos NO viven acá (ver BrandPane) — así un form largo
+ *  con errores de validación nunca los aprieta contra el pie.
+ *  `align="top"`: título/form pegados arriba (registro); `align=
+ *  "center"` (default, login/forgot) mantiene el centrado vertical de
+ *  siempre. */
 function FormPane({
     children,
-    t,
-    onShowTerms,
     curveSide,
+    align = 'center',
 }: {
     children: React.ReactNode;
-    t: ReturnType<typeof useLocale>['t'];
-    onShowTerms: () => void;
-    /** Qué esquinas (arriba y abajo) se curvan hacia el panel de marca —
-     *  el "abrazo": esta card es 100% opaca (bg-[var(--background)]),
-     *  así que redondear su propia esquina recorta su fondo y deja ver
-     *  el fondo de la página (mismo --sidebar que el panel de marca) por
-     *  detrás — no hace falta ningún parche/máscara aparte, el color de
-     *  atrás ya es idéntico al de marca. */
     curveSide: 'left' | 'right';
+    align?: 'center' | 'top';
 }) {
-    // form-pane-elevated-*: sombra INSET en los 4 bordes (nunca se sale
-    // de esta caja, nunca pelea con el pintado del panel de marca
-    // vecino) — luz arriba, viñeta abajo, y el lado curvo bien
-    // oscurecido para leerse como la esquina "levantada" hacia el
-    // panel de marca. Los otros 3 bordes están pegados al borde real
-    // de la pantalla, pero al ser INSET la sombra igual se ve por
-    // dentro sin necesitar margen hacia afuera.
-    const curveClass =
-        curveSide === 'left'
-            ? 'form-pane-elevated-left rounded-tl-[56px] rounded-bl-[56px]'
-            : 'form-pane-elevated-right rounded-tr-[56px] rounded-br-[56px]';
+    const borderRadius =
+        curveSide === 'left' ? '56px 0 0 56px' : '0 56px 56px 0';
 
     return (
         <div
-            className={`flex h-full flex-col bg-[var(--background)] p-10 sm:p-12 ${curveClass}`}
+            className="form-card-elevated flex h-full flex-col bg-[var(--background)] p-10 sm:p-12"
+            style={{
+                borderRadius,
+                transition: 'border-radius 500ms ease-in-out',
+            }}
         >
-            <div className="m-auto w-full max-w-sm">{children}</div>
-            <p className="text-muted-foreground text-center text-xs">
-                © 2026–{new Date().getFullYear()} Nestwork ·{' '}
-                <button
-                    type="button"
-                    onClick={onShowTerms}
-                    className="hover:text-foreground underline underline-offset-2"
-                >
-                    {t.terms.linkLabel}
-                </button>
-            </p>
+            <div
+                className={`w-full max-w-sm ${align === 'top' ? 'mx-auto pt-6' : 'm-auto'}`}
+            >
+                {children}
+            </div>
         </div>
     );
 }
 
 /** Panel de marca: siempre lleva logo + descripción editorial + CTA — el
  *  contenido cambia según a qué lado te está por llevar el CTA, nunca
- *  se queda vacío ni duplica el formulario. */
+ *  se queda vacío ni duplica el formulario. En desktop sólo se
+ *  REPOSICIONA (nunca tiene fondo propio): el bg constante (--sidebar/
+ *  gloss) ya lo pone el contenedor raíz de la página, siempre de punta
+ *  a punta — la card del form es lo único que se desliza por encima. */
 function BrandPane({
     mode,
     onSwitch,
@@ -245,7 +322,7 @@ function BrandPane({
     const isRegister = mode === 'register';
 
     return (
-        <div className="text-sidebar-foreground flex h-full flex-col items-center justify-center gap-6 p-10 text-center">
+        <div className="text-sidebar-foreground flex flex-col items-center gap-6 text-center">
             <AppLogoIcon className="size-12 fill-current text-white" />
             <div className="space-y-2">
                 <p className="text-lg font-semibold">Nestwork</p>
@@ -409,13 +486,15 @@ function Divider({ label }: { label: string }) {
 function SignInForm({
     status,
     t,
+    onForgotPassword,
 }: {
     status?: string;
     t: ReturnType<typeof useLocale>['t'];
+    onForgotPassword: () => void;
 }) {
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [googleError, setGoogleError] = useState<string | null>(null);
-    const form = useForm({ email: '', password: '' });
+    const form = useForm({ email: '', password: '', remember: false });
 
     const handleGoogleSignIn = async () => {
         setGoogleError(null);
@@ -436,7 +515,7 @@ function SignInForm({
     };
 
     return (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-7">
             <div className="hidden text-left lg:block">
                 <h1 className="text-xl font-semibold">{t.auth.loginTitle}</h1>
                 <p className="text-muted-foreground text-sm">
@@ -471,6 +550,7 @@ function SignInForm({
                         className="h-11 rounded-full px-4"
                         type="email"
                         autoComplete="email"
+                        aria-invalid={Boolean(form.errors.email)}
                         value={form.data.email}
                         onChange={(event) =>
                             form.setData('email', event.target.value)
@@ -498,14 +578,36 @@ function SignInForm({
                             {form.errors.password}
                         </p>
                     )}
+                    <button
+                        type="button"
+                        onClick={onForgotPassword}
+                        className="text-muted-foreground hover:text-foreground justify-self-end text-xs underline underline-offset-2"
+                    >
+                        {t.auth.forgotPassword}
+                    </button>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Checkbox
+                        id="login-remember"
+                        checked={form.data.remember}
+                        onCheckedChange={(checked) =>
+                            form.setData('remember', checked === true)
+                        }
+                    />
+                    <Label
+                        htmlFor="login-remember"
+                        className="text-muted-foreground text-sm font-normal"
+                    >
+                        {t.auth.rememberMe}
+                    </Label>
                 </div>
                 <Button
                     type="submit"
-                    className="btn-elevated h-11 w-full rounded-full"
+                    className="btn-elevated mt-3 h-11 w-full rounded-full"
                     disabled={form.processing}
                 >
                     {form.processing ? <Spinner /> : null}
-                    {t.auth.signIn}
+                    {form.processing ? t.auth.signingIn : t.auth.signIn}
                 </Button>
             </form>
 
@@ -554,7 +656,7 @@ function SignUpForm({
     };
 
     return (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-7">
             <div className="hidden text-left lg:block">
                 <h1 className="text-xl font-semibold">
                     {t.auth.registerTitle}
@@ -590,6 +692,7 @@ function SignUpForm({
                         id="register-name"
                         className="h-11 rounded-full px-4"
                         autoComplete="name"
+                        aria-invalid={Boolean(form.errors.name)}
                         value={form.data.name}
                         onChange={(event) =>
                             form.setData('name', event.target.value)
@@ -608,6 +711,7 @@ function SignUpForm({
                         className="h-11 rounded-full px-4"
                         type="email"
                         autoComplete="email"
+                        aria-invalid={Boolean(form.errors.email)}
                         value={form.data.email}
                         onChange={(event) =>
                             form.setData('email', event.target.value)
@@ -675,6 +779,7 @@ function SignUpForm({
                         triggerId="register-country"
                         value={form.data.country || null}
                         onChange={(value) => form.setData('country', value)}
+                        invalid={Boolean(form.errors.country)}
                         options={countries.map((country) => ({
                             value: country.iso2,
                             label: country.name,
@@ -691,13 +796,88 @@ function SignUpForm({
                 </div>
                 <Button
                     type="submit"
-                    className="btn-elevated h-11 w-full rounded-full"
+                    className="btn-elevated mt-3 h-11 w-full rounded-full"
                     disabled={form.processing}
                 >
                     {form.processing ? <Spinner /> : null}
                     {form.processing ? t.auth.creatingAccount : t.auth.signUp}
                 </Button>
             </form>
+        </div>
+    );
+}
+
+/** Reemplaza al SignInForm en el mismo panel (no navega a /forgot-password)
+ *  — pedir el link de recuperación es parte del flujo de login, no una
+ *  página aparte. El botón de abajo vuelve al login en vez del típico
+ *  "volver atrás" del navegador. */
+function ForgotPasswordForm({
+    t,
+    onBackToLogin,
+}: {
+    t: ReturnType<typeof useLocale>['t'];
+    onBackToLogin: () => void;
+}) {
+    const form = useForm({ email: '' });
+
+    return (
+        <div className="flex flex-col gap-7">
+            <div className="hidden text-left lg:block">
+                <h1 className="text-xl font-semibold">
+                    {t.auth.forgotPasswordTitle}
+                </h1>
+                <p className="text-muted-foreground text-sm">
+                    {t.auth.forgotPasswordDescription}
+                </p>
+            </div>
+
+            <form
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    form.post(PasswordResetLinkController.store().url);
+                }}
+                className="flex flex-col gap-4"
+            >
+                <div className="grid gap-2">
+                    <Label htmlFor="forgot-email">{t.auth.emailLabel}</Label>
+                    <Input
+                        id="forgot-email"
+                        className="h-11 rounded-full px-4"
+                        type="email"
+                        autoComplete="email"
+                        autoFocus
+                        aria-invalid={Boolean(form.errors.email)}
+                        value={form.data.email}
+                        onChange={(event) =>
+                            form.setData('email', event.target.value)
+                        }
+                    />
+                    {form.errors.email && (
+                        <p className="text-destructive text-sm">
+                            {form.errors.email}
+                        </p>
+                    )}
+                </div>
+                <Button
+                    type="submit"
+                    className="btn-elevated mt-3 h-11 w-full rounded-full"
+                    disabled={form.processing}
+                >
+                    {form.processing ? <Spinner /> : null}
+                    {form.processing
+                        ? t.auth.sendingResetLink
+                        : t.auth.sendResetLink}
+                </Button>
+            </form>
+
+            <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full rounded-full"
+                onClick={onBackToLogin}
+            >
+                {t.auth.backToLogin}
+            </Button>
         </div>
     );
 }

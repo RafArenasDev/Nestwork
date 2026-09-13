@@ -54,6 +54,17 @@ export interface Dictionary {
             number: string;
             symbol: string;
         };
+        rememberMe: string;
+        forgotPassword: string;
+        forgotPasswordTitle: string;
+        forgotPasswordDescription: string;
+        sendResetLink: string;
+        sendingResetLink: string;
+        backToLogin: string;
+        resetPasswordTitle: string;
+        resetPasswordDescription: string;
+        resetPassword: string;
+        resettingPassword: string;
     };
     profileModal: {
         title: string;
@@ -125,6 +136,18 @@ const en: Dictionary = {
             number: 'One number',
             symbol: 'One symbol',
         },
+        rememberMe: 'Keep me signed in',
+        forgotPassword: 'Forgot your password?',
+        forgotPasswordTitle: 'Reset your password',
+        forgotPasswordDescription:
+            "Enter your email and we'll send you a reset link",
+        sendResetLink: 'Send reset link',
+        sendingResetLink: 'Sending...',
+        backToLogin: 'Back to sign in',
+        resetPasswordTitle: 'Choose a new password',
+        resetPasswordDescription: 'Enter a new password for your account',
+        resetPassword: 'Reset password',
+        resettingPassword: 'Resetting...',
     },
     profileModal: {
         title: 'Profile',

@@ -57,6 +57,18 @@ const es: Dictionary = {
             number: 'Un número',
             symbol: 'Un símbolo',
         },
+        rememberMe: 'Mantener sesión iniciada',
+        forgotPassword: '¿Olvidaste tu contraseña?',
+        forgotPasswordTitle: 'Recupera tu contraseña',
+        forgotPasswordDescription:
+            'Ingresa tu correo y te enviaremos un link para restablecerla',
+        sendResetLink: 'Enviar link de recuperación',
+        sendingResetLink: 'Enviando...',
+        backToLogin: 'Volver a iniciar sesión',
+        resetPasswordTitle: 'Elige una nueva contraseña',
+        resetPasswordDescription: 'Ingresa una nueva contraseña para tu cuenta',
+        resetPassword: 'Restablecer contraseña',
+        resettingPassword: 'Restableciendo...',
     },
     profileModal: {
         title: 'Perfil',

@@ -46,14 +46,14 @@ class PasswordAuthController extends Controller
     ): RedirectResponse {
         $name = $request->validated('name');
         $countryCode = strtoupper((string) $request->validated('country'));
+        $country = Country::query()->where('iso2', $countryCode)->firstOrFail();
 
         $user = User::create([
             'name' => $name,
             'username' => $generateUniqueUsername->handle($name),
             'email' => $request->validated('email'),
             'password' => $request->validated('password'),
-            'country' => $countryCode,
-            'email_verified_at' => now(),
+            'country_id' => $country->id,
             'auth_provider' => AuthProvider::Password,
         ]);
 
@@ -64,13 +64,16 @@ class PasswordAuthController extends Controller
         Auth::login($user, remember: true);
         $request->session()->regenerate();
 
+        // A diferencia de Google (que ya llega con el correo verificado
+        // por Firebase), el registro por contraseña sí necesita el
+        // flujo real de verificación — el middleware `verified` en las
+        // rutas de equipo se encarga de redirigir a `verification.notice`
+        // mientras no la complete.
+        $user->sendEmailVerificationNotification();
+
         // El idioma se deriva del país elegido — nunca se le pregunta
         // en el registro. Queda editable después desde Ajustes.
-        $locale = Country::query()->where('iso2', $countryCode)->value('locale');
-
-        if ($locale) {
-            Cookie::queue('locale', $locale, 60 * 24 * 365);
-        }
+        Cookie::queue('locale', $country->locale, 60 * 24 * 365);
 
         return redirect()->intended(
             $this->redirectPathForCurrentTeam($request, '/dashboard')
@@ -82,11 +85,12 @@ class PasswordAuthController extends Controller
      */
     public function login(LoginRequest $request): RedirectResponse
     {
-        $credentials = $request->validated();
+        $credentials = $request->safe()->only(['email', 'password']);
+        $remember = $request->boolean('remember');
 
         $user = User::query()->where('email', $credentials['email'])->first();
 
-        if (! $user || ! $user->password || ! Auth::attempt($credentials, remember: true)) {
+        if (! $user || ! $user->password || ! Auth::attempt($credentials, remember: $remember)) {
             throw ValidationException::withMessages([
                 'email' => __('These credentials do not match our records.'),
             ]);

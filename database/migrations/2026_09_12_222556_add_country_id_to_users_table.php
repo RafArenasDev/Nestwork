@@ -6,25 +6,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            // Código ISO 3166-1 alpha-2 (ej. "CO", "MX"), elegido en el
-            // registro — no se infiere del dominio de correo ni de la IP.
-            $table->string('country', 2)->nullable()->after('username');
+            // FK real a `countries` (no un string ISO2 suelto) — así se
+            // puede hacer join limpio y, más adelante, traer
+            // estados/ciudades del mismo país sin repetir el dato.
+            $table->foreignId('country_id')->nullable()->after('username')->constrained()->nullOnDelete();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('country');
+            $table->dropConstrainedForeignId('country_id');
         });
     }
 };

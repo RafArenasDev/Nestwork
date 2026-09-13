@@ -23,7 +23,7 @@ test('new users can register with email and password', function () {
     $user = User::query()->where('email', 'camila@example.com')->firstOrFail();
 
     expect($user->name)->toBe('Camila Torres');
-    expect($user->country)->toBe('CO');
+    expect($user->country->iso2)->toBe('CO');
     expect($user->auth_provider)->toBe(AuthProvider::Password);
     // Auto-join por dominio, igual que Google — nunca se pide crear/
     // nombrar un equipo durante el registro.
