@@ -19,6 +19,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import { useOpenConversationUnseen } from '@/hooks/use-open-conversation-unseen';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
 import type { ConversationSummary } from '@/types/conversations';
 
@@ -139,6 +140,16 @@ function ConversationRow({
     tooltip?: string;
 }) {
     const getInitials = useInitials();
+    const openUnseen = useOpenConversationUnseen();
+    // Mientras este chat está abierto y seleccionado, Thread ya sabe en
+    // el momento cuántos mensajes sin leer hay (mismo número del botón
+    // flotante "N mensajes nuevos") — se usa ese en vez del que trae el
+    // prop, que sólo se actualiza tras un viaje de ida y vuelta al
+    // backend.
+    const unreadCount =
+        conversation.isCurrent && openUnseen.conversationId === conversation.id
+            ? openUnseen.count
+            : conversation.unreadCount;
 
     const row = (
         <li
@@ -199,7 +210,7 @@ function ConversationRow({
                 <span className="sidebar-row-label flex-1 truncate">
                     {conversation.name}
                 </span>
-                {conversation.unreadCount > 0 && (
+                {unreadCount > 0 && (
                     <Badge
                         variant="destructive"
                         // Rojo fijo, no la variable --destructive (que
@@ -207,7 +218,7 @@ function ConversationRow({
                         // curved-nav-rail.tsx.
                         className="ml-2 h-5 min-w-5 shrink-0 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[10px] dark:bg-[oklch(0.577_0.245_27.325)]"
                     >
-                        {conversation.unreadCount}
+                        {unreadCount}
                     </Badge>
                 )}
             </button>

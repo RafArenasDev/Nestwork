@@ -48,6 +48,10 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import {
+    clearOpenConversationUnseen,
+    setOpenConversationUnseen,
+} from '@/hooks/use-open-conversation-unseen';
 import type { ActiveConversation, MessageData } from '@/types';
 
 type Props = {
@@ -385,6 +389,18 @@ function Thread({
     useEffect(() => {
         liveMessagesRef.current = liveMessages;
     }, [liveMessages]);
+
+    // Badge del sidebar junto al nombre del chat SELECCIONADO: usa este
+    // mismo número al instante (sin esperar la vuelta al backend) —
+    // ver hooks/use-open-conversation-unseen.tsx. Se limpia al cerrar
+    // este chat para no dejar un conteo pegado si se reabre otro.
+    useEffect(() => {
+        setOpenConversationUnseen(conversation.id, unseenCount);
+    }, [conversation.id, unseenCount]);
+
+    useEffect(() => {
+        return () => clearOpenConversationUnseen(conversation.id);
+    }, [conversation.id]);
 
     // Ping silencioso al backend (PATCH messages.read, NO es una visita
     // Inertia) cuando el usuario efectivamente llega al fondo del chat —
