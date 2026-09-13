@@ -2,7 +2,7 @@
 
 > Plataforma de chat interno para empresas — workspaces identificados por dominio de correo, mensajería en tiempo real, pensada para equipos chicos/medianos sin el costo de Slack/Teams.
 
-**Estado:** 🚧 En desarrollo — Fase 0 (setup) casi completa, Fase 1 (MVP) no iniciada. Ver `docs/ROADMAP.md` para el detalle.
+**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`, la **Fase A (auth dual + pantalla split)** quedó terminada el 2026-09-12/13 (ver Pendientes para el detalle de qué sigue). Ver `docs/ROADMAP.md` para el detalle de fases originales.
 
 ---
 
@@ -23,7 +23,7 @@
 
 ## Stack (resumen — ver `docs/STACK.md` para el detalle completo)
 
-- **Backend:** Laravel 13 + Inertia. Auth vía Firebase (Google OAuth) — Fortify/passkeys/2FA/password se quitaron por completo.
+- **Backend:** Laravel 13 + Inertia. Auth **dual**: Google (Firebase) + email/contraseña propio (pantalla split con panel de marca deslizante), con verificación de correo real y recuperación de contraseña — passkeys/2FA siguen fuera de alcance.
 - **Frontend:** React 19 + Tailwind 4 + shadcn/ui + Wayfinder
 - **Base de datos:** PostgreSQL
 - **Tiempo real:** Laravel Reverb (🔲 pendiente de instalar)
@@ -46,14 +46,32 @@ Sitio: `http://chat-app.test`
 1. **MVP = solo Web.** Desktop/Mobile son fase futura condicionada a que la web esté estable.
 2. **TDD desde el primer commit** para lógica de backend crítica y frontend con estado real. _(En pausa desde el rediseño de auth — ver Pendientes.)_
 3. **Multi-tenancy: schema compartido** con `team_id` (= `workspace_id` conceptual), no schema-per-tenant.
-4. **Login: solo Google (Firebase) en el MVP**, sin password ni passkeys. Equipo asignado automático por dominio de correo (dominios públicos → equipo "Invitados" compartido; cualquier otro dominio → su propio equipo, primer usuario = Owner). Sin aprobación manual ni verificación DNS.
+4. ~~Login: solo Google (Firebase) en el MVP, sin password ni passkeys.~~ **Actualizado 2026-09-13:** se reintrodujo login por email/contraseña (Fase A de `PROMPT-MEJORAS-NESTWORK-v2.md`) junto a Google — un usuario puede tener ambos métodos vinculados a la misma cuenta. Passkeys siguen fuera de alcance. Equipo asignado automático por dominio de correo (dominios públicos → equipo "Invitados" compartido; cualquier otro dominio → su propio equipo, primer usuario = Owner) — aplica igual para alta por Google o por contraseña. Sin aprobación manual ni verificación DNS.
 5. **Multi-plataforma con la misma lógica, no proyectos aparte:** cuando la web llegue al punto de tener datos reales (no mocks), Android y desktop arrancan en paralelo reutilizando el mismo backend/lógica de dominio — no se tratan como iniciativas separadas.
 
 Ver `CLAUDE.md` para el brief completo que gobierna cómo trabaja Claude Code en este proyecto.
 
+## Fase A (auth dual + pantalla split) — terminada 2026-09-13
+
+Ver `PROMPT-MEJORAS-NESTWORK-v2.md` sección 2 para el spec original y sección 17 para el plan de fases completo (B en adelante sigue pendiente, ver más abajo). Lo que quedó implementado y ya está en `main`:
+
+- Pantalla `/login` y `/register` con panel deslizante: una sola card de formulario se mueve (curva animada hacia el centro, sin costuras/flash), el panel de marca queda fijo como fondo.
+- Login por email+contraseña junto a Google, con vinculación automática de ambos métodos a la misma cuenta (`AuthProvider::Both`).
+- Recuperar contraseña integrado al mismo panel (sin navegar a otra pantalla) + pantalla de `reset-password/{token}` por link de correo.
+- Checkbox "Mantener sesión iniciada" (remember-me real, ya no forzado a `true`).
+- **Verificación de correo real** (antes se auto-verificaba al registrarse) — `MustVerifyEmail` + rutas `verify-email`/`verify-email/{id}/{hash}`/reenvío. En dev, `MAIL_MAILER=log` — el link de verificación queda en `storage/logs/laravel.log` hasta que se configure Mailpit/SMTP real.
+- Mensajes de validación en español para visitantes sin cuenta aún (antes salían en inglés) vía fallback por `Accept-Language` en `HandleLocale`.
+- Ajustes visuales: color de error legible en tema oscuro, borde rojo en todos los inputs (antes solo contraseña), brillo de botones sin invadir campos vecinos, copyright dinámico.
+- Skeleton (no spinner) al entrar al dashboard tras login/registro exitoso — login/registro conservan su spinner de botón, sin skeleton ahí.
+
+**Pendiente dentro de la propia Fase A** (no bloqueante, pero sin resolver):
+
+- No hay UI en Ajustes > Seguridad para que el usuario vea/gestione qué métodos de login tiene vinculados — hoy el vínculo pasa solo (automático), pero no es visible.
+- `MAIL_MAILER` sigue en `log` — falta decidir/activar Mailpit (ya viene con Herd) o un SMTP real para que los correos de verificación/recuperación lleguen de verdad.
+
 ## Pendientes (explícitos, para no perderlos de vista)
 
-- **Skeleton/spinner en el dashboard** para cargas que tarden — evitar pantalla en blanco durante una navegación/refresh.
+- **Resto del roadmap de `PROMPT-MEJORAS-NESTWORK-v2.md` (Fases B a K)** — navegación data-driven, schema extendido (attachments/reactions/message_receipts/etc.), seeder de volumen real, burbujas de mensaje corregidas, paginación por cursor + búsqueda global, Actividad/estados/roles/baja de cuenta, notificaciones, personalización visual, chats secretos, llamadas. Nada de esto se empezó todavía — continuar por acá.
 - **Tiempo real (Laravel Reverb):** WebSockets, indicador de "escribiendo...", notificaciones en vivo.
 - **Sonidos + notificaciones de escritorio/navegador.**
 - **UI de chat:** burbujas, scroll area, vista dividida (2-3 chats a la vez con foco automático en el que recibe mensaje), badges de no leídos, animaciones.
