@@ -19,7 +19,7 @@ class MessageFactory extends Factory
      *
      * @var list<string>
      */
-    private const LINES = [
+    public const LINES = [
         'Hola, ¿cómo vas con eso?',
         'Todo bien por acá, ¿y tú?',
         '¿Ya revisaste el correo que te mandé ayer?',
