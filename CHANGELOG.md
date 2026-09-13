@@ -11,6 +11,23 @@ Git. El modal de "Novedades" del sidebar y el badge de versión se generan
 de este archivo en build time — ver `scripts/generate-changelog.mjs`
 (mismo mecanismo que Inventory-Manager).
 
+## v0.1.3 - 2026-09-13
+
+Más opciones de estado personal, y trabajo de base (sin cambios visibles todavía) para lo que viene: adjuntos, reacciones, respuestas y canales.
+
+- **Nueva función:** El menú de "Cambiar estado" ahora ofrece 10 opciones (antes 4-8 fijas), con emoji y texto en tu idioma.
+- **Velocidad:** Preparación interna de la base de datos para mensajes con adjuntos, reacciones, respuestas citadas, reenvíos y canales de equipo — todavía sin interfaz, viene en próximas versiones.
+
+## v0.1.2 - 2026-09-13
+
+Segunda forma de iniciar sesión: correo y contraseña, además de Google.
+
+- **Nueva función:** Inicio de sesión y registro con correo y contraseña, junto al ya existente con Google — podés usar cualquiera de los dos, o vincular ambos a la misma cuenta.
+- **Nueva función:** Verificación de correo real al registrarte, y recuperación de contraseña si la olvidás.
+- **Diseño:** Pantalla de inicio de sesión y registro rediseñada con un panel que se desliza entre ambos formularios.
+- **Nueva función:** Casilla "Mantener sesión iniciada" para no tener que loguearte cada vez.
+- **Corrección:** Mensajes de error en español para quien todavía no tiene cuenta.
+
 ## v0.1.1 - 2026-09-10
 
 Ajustes visuales para que el panel de usuario se vea y se comporte de forma consistente: modales que abren correctamente, tema oscuro con fondo difuminado, y una barra lateral más limpia.

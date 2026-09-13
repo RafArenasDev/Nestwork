@@ -14,6 +14,14 @@ Se corre antes de marcar una fase como "terminada" en `ROADMAP.md`. Los tests au
 - [ ] Modal de Contraseña: cambiar contraseña funciona, botón "generar contraseña" llena ambos campos, mensaje de "no coinciden" aparece si corresponde.
 - [ ] `.env` con la contraseña real de Postgres no aparece en ningún archivo versionado (`git status` limpio de `.env`).
 
+## Fases B/C/D (nav data-driven + schema extendido + seeder de volumen)
+
+- [ ] El dropdown "Cambiar estado" del avatar en el rail muestra los 10 presets sembrados (no los 8 hardcodeados de antes), con el label en el idioma activo (ES/EN).
+- [ ] Elegir un preset del dropdown sigue actualizando el estado (emoji + texto) en el header/avatar como antes.
+- [ ] `php artisan migrate` corre limpio desde cero (`migrate:fresh`) sin errores, y `php artisan migrate:rollback` revierte las migraciones nuevas sin dejar la BD en un estado roto.
+- [ ] Login/chat existentes (cuentas reales del dev) siguen funcionando igual después de correr `nestwork:seed-demo` — el comando es aditivo, no debería romper nada.
+- [ ] `php artisan nestwork:seed-demo --users=15 --messages=150` corre sin errores y deja usuarios logueables con la contraseña documentada.
+
 ## Fase 1 — MVP (cuando exista la feature)
 
 - [ ] Registro con Google OAuth crea usuario y lo asocia correctamente si ya existía por email.

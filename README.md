@@ -2,7 +2,7 @@
 
 > Plataforma de chat interno para empresas — workspaces identificados por dominio de correo, mensajería en tiempo real, pensada para equipos chicos/medianos sin el costo de Slack/Teams.
 
-**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`, la **Fase A (auth dual + pantalla split)** quedó terminada el 2026-09-12/13 (ver Pendientes para el detalle de qué sigue). Ver `docs/ROADMAP.md` para el detalle de fases originales.
+**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13) y **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) terminadas — sigue la Fase E (burbujas/composer). Ver Pendientes para el detalle. Ver `docs/ROADMAP.md` para el detalle de fases originales.
 
 ---
 
@@ -69,9 +69,18 @@ Ver `PROMPT-MEJORAS-NESTWORK-v2.md` sección 2 para el spec original y sección 
 - No hay UI en Ajustes > Seguridad para que el usuario vea/gestione qué métodos de login tiene vinculados — hoy el vínculo pasa solo (automático), pero no es visible.
 - `MAIL_MAILER` sigue en `log` — falta decidir/activar Mailpit (ya viene con Herd) o un SMTP real para que los correos de verificación/recuperación lleguen de verdad.
 
+## Fases B/C/D (nav data-driven + schema extendido + seeder de volumen) — terminadas 2026-09-13
+
+Ver `docs/DECISIONS.md` (entradas del 2026-09-13) para el detalle técnico completo. Resumen:
+
+- **Estados de usuario data-driven:** tabla `status_presets` (sembrada por `StatusPresetSeeder`, 10 presets) reemplaza los arrays quemados que antes vivían en `curved-nav-rail.tsx`; se comparten al frontend vía Inertia (`statusPresets`), con el label ya resuelto en el idioma activo. Los 4 módulos del rail (Inicio/Mensajes/Actividad/Archivo) se dejaron intencionalmente como están — son IA estructural de la app, no contenido editable.
+- **Schema extendido (aditivo, sin tocar nada existente):** `conversations` gana `is_public`/`avatar_path`/`description`/`is_ephemeral`/`ephemeral_ttl_seconds`/`default_message_ttl_seconds`; `conversation_participants` gana `role`/`hidden_at`; `messages` gana `type`/`metadata` (jsonb)/`reply_to_message_id`/`forwarded_from_message_id`/`forwarded_from_conversation_id`/`is_hidden`. Tablas nuevas: `attachments`, `reactions`, `message_receipts`, `link_previews`, `message_deletions`, `favorites` (polimórfica), `status_presets`. `ConversationType` gana el case `Channel`. **Todavía sin UI ni Actions propias** — es la base para las fases E en adelante.
+- **ADR: no BLOB en la BD** para adjuntos/grabaciones — object storage (MinIO en prod) + solo metadata/ruta en `attachments`. Documentado en `docs/DECISIONS.md`.
+- **Comando `php artisan nestwork:seed-demo`** (parametrizable, `--users`/`--messages`) genera volumen real: por defecto ~80 usuarios (contraseña `Nestwork2026!`, ver `SeedDemoData::DEMO_PASSWORD`) repartidos en 5 empresas falsas + el team "Invitados", con dms/groups/channels y miles de mensajes con reacciones y respuestas. No reemplaza a `ConversationsSeeder` (que sigue teniendo las 3 cuentas reales del dev) ni corre en `migrate:fresh --seed` — es opt-in.
+
 ## Pendientes (explícitos, para no perderlos de vista)
 
-- **Resto del roadmap de `PROMPT-MEJORAS-NESTWORK-v2.md` (Fases B a K)** — navegación data-driven, schema extendido (attachments/reactions/message_receipts/etc.), seeder de volumen real, burbujas de mensaje corregidas, paginación por cursor + búsqueda global, Actividad/estados/roles/baja de cuenta, notificaciones, personalización visual, chats secretos, llamadas. Nada de esto se empezó todavía — continuar por acá.
+- **Resto del roadmap de `PROMPT-MEJORAS-NESTWORK-v2.md` (Fases E a K)** — burbujas de mensaje corregidas + composer con formato, paginación por cursor + salto a fecha + búsqueda global, Actividad/estados de usuario (UI)/roles de admin/baja de cuenta, notificaciones, personalización visual (gradientes de sidebar), chats secretos + mensajes temporales, llamadas. Fases B/C/D (nav data-driven, schema extendido, seeder de volumen) ya están — ver sección de arriba.
 - **Tiempo real (Laravel Reverb):** WebSockets, indicador de "escribiendo...", notificaciones en vivo.
 - **Sonidos + notificaciones de escritorio/navegador.**
 - **UI de chat:** burbujas, scroll area, vista dividida (2-3 chats a la vez con foco automático en el que recibe mensaje), badges de no leídos, animaciones.

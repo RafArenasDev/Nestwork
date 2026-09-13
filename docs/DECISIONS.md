@@ -183,6 +183,101 @@
   vez de improvisarse. Tampoco se construyó todavía la UI de Ajustes
   para cambiar idioma/vincular Google+contraseña manualmente.
 
+## 2026-09-13 — Fase B/C de PROMPT-MEJORAS-NESTWORK-v2.md: nav data-driven + schema extendido
+
+- **ADR: NO usar BLOB en la base de datos.** Los archivos (imágenes, videos,
+  audios, documentos, grabaciones de llamadas) **no se guardan como BLOB en
+  PostgreSQL**. Se guardan en almacenamiento de objetos (disco local en dev,
+  y en producción algo S3-compatible — **MinIO** por auto-hospedable, sin
+  depender de un proveedor de pago). La BD solo guarda metadata y la
+  ruta/clave del objeto (tabla `attachments`). Un chat corporativo con
+  adjuntos multiplica el tamaño de la BD sin necesidad, hace los backups
+  lentísimos, no permite servir archivos con CDN/cache HTTP, y complica la
+  replicación — es el patrón estándar de la industria (WhatsApp, Slack,
+  Telegram). Único uso legítimo de un campo binario en la BD: cachés muy
+  chicos y efímeros (ej. blur-hash), no el archivo completo.
+- **Estados de usuario (`status_presets`) pasan de arrays quemados en
+  `curved-nav-rail.tsx` (`STATUS_PRESETS`/`CUSTOM_STATUSES`) a una tabla
+  real** sembrada por `StatusPresetSeeder` (idempotente, `updateOrCreate`
+  por `key`) y compartida al frontend vía Inertia (`statusPresets` en
+  `HandleInertiaRequests`), con el label en el idioma activo resuelto en el
+  backend (`App::getLocale()`). Los 4 keys originales (`available`/`away`/
+  `busy`/`dnd`) se conservaron tal cual porque `User::presenceStatus()` los
+  compara por string literal para derivar el punto de presencia — no
+  renombrar sin tocar ese método también.
+  - **Adaptación respecto al spec:** el documento proponía que
+    `users.status_preset` pase a ser un FK numérico a `status_presets`.
+    Se optó por mantenerlo como el `string` que ya existía (ahora
+    validado contra `StatusPreset::where('is_enabled', true)->pluck('key')`
+    en vez de un `Rule::in([...])` quemado) en lugar de agregar
+    `status_preset_id` — logra el mismo objetivo (nada quemado, catálogo
+    editable) sin tocar el resto del código que ya lee `status_preset`
+    como string.
+  - **No se abordó en esta ronda** (queda para la Fase G — "Actividad +
+    estados de usuario"): UI de "Personalizado…" con picker de emoji libre,
+    duración configurable, historial de últimos estados usados.
+- **Módulos del rail (Inicio/Mensajes/Actividad/Archivo) se dejaron
+  hardcodeados a propósito.** Son 4 secciones estructurales de la IA de la
+  app (no contenido editable por team/admin), y sus iconos son componentes
+  React (no hay forma sensata de guardar un componente en BD) — data-driving
+  esto sería sobre-ingeniería sin beneficio real. La interpretación de
+  "nada quemado" que sí se aplicó es la de contenido/catálogos que
+  realmente varían (estados de usuario, y lo que viene en fases siguientes:
+  `content_blocks` del panel de auth, etc.).
+- **Migraciones aditivas de schema (sección 3 del prompt v2):**
+  `conversations` gana `is_public`/`avatar_path`/`description`/
+  `is_ephemeral`/`ephemeral_ttl_seconds`/`default_message_ttl_seconds`;
+  `conversation_participants` gana `role`/`hidden_at`; `messages` gana
+  `type`/`metadata` (jsonb)/`reply_to_message_id`/
+  `forwarded_from_message_id`/`forwarded_from_conversation_id`/`is_hidden`.
+  Tablas nuevas: `favorites` (polimórfica: conversation/user/team),
+  `message_deletions` ("eliminar solo para mí"), `attachments`,
+  `reactions`, `message_receipts`, `link_previews`, `status_presets`.
+  `ConversationType` gana el case `Channel` (se mantuvo `Dm`/`Group`
+  existente en vez de renombrar a `direct`, que hubiera sido puro churn de
+  nombres sin necesidad funcional). Nuevos enums: `MessageType`,
+  `AttachmentType`, `ConversationParticipantRole`.
+- **Deliberadamente fuera de esta ronda** (quedan para su fase
+  correspondiente del prompt v2): tablas `calls`/`call_participants`/
+  `call_recordings` (Fase K, gateadas a decidir proveedor de SFU antes);
+  `activity_events` (Fase G, sección 6 — el prompt mismo deja abierto si
+  conviene tabla dedicada vs. componer la consulta); columna `tsvector`
+  generada para búsqueda global (Fase F, sección 4.3). No se escribió UI
+  ni Actions nuevas para ninguna tabla nueva todavía — esto es solo el
+  schema base, sección 17 del prompt v2 las secuencia en fases posteriores.
+
+## 2026-09-13 — Fase D de PROMPT-MEJORAS-NESTWORK-v2.md: comando `nestwork:seed-demo`
+
+- **Decisión:** comando artisan dedicado (`app/Console/Commands/SeedDemoData.php`),
+  `php artisan nestwork:seed-demo {--users=80} {--messages=5000}`, en vez de
+  reemplazar `ConversationsSeeder` (que se queda tal cual, con las 3 cuentas
+  reales del dev). Es **opt-in**, no corre en `migrate:fresh --seed` — sembrar
+  miles de mensajes en cada reset de BD sería demasiado lento para el día a
+  día de desarrollo.
+- **Distribución de usuarios:** por defecto reparte entre 5 dominios de
+  empresa falsos (uno grande a propósito, `acmestudio.test`, para garantizar
+  al menos un team de 20+ miembros) y un pool de proveedores públicos
+  (gmail/outlook/hotmail/yahoo, van al team "Invitados" compartido) —
+  reutiliza `AssignUserToDomainTeam`/`GenerateUniqueUsername`, la misma
+  lógica que usa el login real. Contraseña conocida para todos:
+  `Nestwork2026!` (constante `SeedDemoData::DEMO_PASSWORD`).
+- **Corrida de referencia (2026-09-13, sin resetear la BD, sobre datos ya
+  existentes):** 110 usuarios, 7 teams, 91 conversaciones (113 dm, 24 group,
+  3 channel con 20+ miembros), 5240 mensajes, 1235 reacciones, 373
+  respuestas (`reply_to_message_id`) — volumen suficiente para probar scroll
+  infinito, salto a fecha y búsqueda con datos reales en Fase F.
+- **Por qué no se hizo `migrate:fresh` antes de correrlo:** el entorno de
+  dev estaba corriendo (`composer run dev`) mientras se hacía esta sesión —
+  resetear la BD hubiera invalidado cualquier sesión de navegador abierta.
+  El comando es aditivo (usa `firstOrCreate` para usuarios), así que corrió
+  sin problema sobre los datos ya sembrados por `ConversationsSeeder`.
+- **Performance:** los mensajes se crean con `Message::create()` (Eloquent,
+  no inserts crudos) pero envueltos en una `DB::transaction()` por
+  conversación — el costo real de miles de inserts uno por uno es el
+  autocommit por fila, no el overhead de Eloquent en sí; ~5000 mensajes +
+  reacciones tardaron un par de minutos, aceptable para un comando manual
+  de un solo uso.
+
 ## Pendiente / no cubierto en esta sesión
 
 - No se escribieron tests nuevos para `HandleLocale` ni para los modales (violación puntual de la política de TDD bloqueada en 2.1 — se hizo así por la urgencia de dejar el entorno andando; hay que volver y cubrir esto antes de dar por cerrada esta porción de trabajo).
