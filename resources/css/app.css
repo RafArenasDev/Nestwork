@@ -132,8 +132,21 @@
        material de marca, no un gris de sistema. */
     --bubble-sent: #f5f1e8;
     --bubble-sent-foreground: #141824;
-    --bubble-received: #141824;
+    /* Negro puro (no #141824/navy-slate) — pedido explícito: "negra el
+       bg", igual en los dos temas, sin el matiz azulado que #141824 sí
+       tiene. Ya era fija entre temas (no se redefine en .dark más
+       abajo); lo que cambió acá es el tono en sí, no la fijeza. */
+    --bubble-received: #000;
     --bubble-received-foreground: #eef0f4;
+
+    /* Avatares (título del chat + burbujas): dos tonos fijos, iguales
+       en los dos temas — "mío" (lo que yo envío) un negro más claro,
+       "recibido" (el otro participante) negro puro, igual que
+       --bubble-received. Pedido explícito: "juega con eso" para que se
+       distingan de un vistazo quién es quién. */
+    --avatar-mine: #33383f;
+    --avatar-received: #000;
+    --avatar-foreground: #eef0f4;
 }
 
 .dark {

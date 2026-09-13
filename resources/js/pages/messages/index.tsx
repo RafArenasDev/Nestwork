@@ -239,7 +239,10 @@ function ConversationHeader({
                             alt={conversation.name}
                         />
                     )}
-                    <AvatarFallback className="bg-[var(--sidebar-accent)] text-[var(--sidebar-accent-foreground)]">
+                    {/* El título del chat siempre muestra al OTRO
+                        participante (o al grupo) — tono "recibido"
+                        fijo, nunca el "mío". */}
+                    <AvatarFallback className="bg-[var(--avatar-received)] text-[var(--avatar-foreground)]">
                         {getInitials(conversation.name)}
                     </AvatarFallback>
                 </Avatar>
@@ -386,6 +389,10 @@ function Thread({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     const isNearBottomRef = useRef(true);
+    // Distingue el primer render (mensajes ya cargados, no son
+    // "nuevos") de una llegada real, para no contar el historial
+    // inicial como no-leído.
+    const hasMountedRef = useRef(false);
     const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -540,6 +547,11 @@ function Thread({
             isNearBottomRef.current = nearBottom;
             setIsNearBottom(nearBottom);
 
+            // Desplazarse hasta el fondo SÍ cuenta como interacción real
+            // (mover la rueda/arrastrar el dedo) — a diferencia de que
+            // un mensaje nuevo simplemente auto-scrollee a la vista
+            // porque ya estabas ahí, ver el comentario en el
+            // useLayoutEffect de abajo.
             if (nearBottom) {
                 setUnseenCount(0);
                 markAsRead();
@@ -552,6 +564,46 @@ function Thread({
         return () => viewport.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // Marcar como leído ya NO depende sólo de estar desplazado al fondo
+    // cuando llega un mensaje — pedido explícito: "una cosa es enviado
+    // y otra leído en tiempo real", puede estar con el chat abierto y
+    // al fondo sin estar realmente mirando la pantalla (hablando con
+    // alguien al lado, mirando el celular). Hace falta evidencia real
+    // de que el usuario está interactuando con ESTE chat: mousemove,
+    // click, touch o tecla, mientras está al fondo. Sólo entonces se
+    // marca leído y se borra el badge/contador.
+    useEffect(() => {
+        const panel = panelRef.current;
+
+        if (!panel) {
+            return;
+        }
+
+        const handleInteraction = () => {
+            if (!isNearBottomRef.current) {
+                return;
+            }
+
+            setUnseenCount(0);
+            markAsRead();
+        };
+
+        panel.addEventListener('mousemove', handleInteraction);
+        panel.addEventListener('click', handleInteraction);
+        panel.addEventListener('keydown', handleInteraction);
+        panel.addEventListener('touchstart', handleInteraction, {
+            passive: true,
+        });
+
+        return () => {
+            panel.removeEventListener('mousemove', handleInteraction);
+            panel.removeEventListener('click', handleInteraction);
+            panel.removeEventListener('keydown', handleInteraction);
+            panel.removeEventListener('touchstart', handleInteraction);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     // useLayoutEffect (no useEffect): corre antes de que el navegador
     // pinte el frame, así el salto al fondo ya está hecho en el primer
     // frame visible — con useEffect a veces se alcanzaba a ver medio
@@ -559,16 +611,24 @@ function Thread({
     // que ScrollArea (Radix) todavía no terminó de medir su viewport en
     // ese mismo tick (por ejemplo, justo al abrir un chat). Si el
     // usuario está leyendo historial más arriba, no lo interrumpe: en
-    // vez de saltar solo, suma al contador del botón flotante.
+    // vez de saltar solo, suma al contador del botón flotante — y AUNQUE
+    // esté al fondo, un mensaje que sólo auto-scrollea a la vista NO se
+    // marca leído solo (ver el useEffect de arriba): sólo suma al
+    // contador hasta que haya una interacción real.
     useLayoutEffect(() => {
-        if (!isNearBottomRef.current) {
+        if (!hasMountedRef.current) {
+            hasMountedRef.current = true;
+        } else if (!liveMessages[liveMessages.length - 1]?.isMine) {
+            // Un mensaje propio (lo acabo de enviar yo) nunca cuenta
+            // como "no leído" — sólo lo que llega de otros.
             setUnseenCount((count) => count + 1);
+        }
 
+        if (!isNearBottomRef.current) {
             return;
         }
 
         scrollBottomRef.current?.scrollIntoView({ block: 'end' });
-        markAsRead();
         const raf = requestAnimationFrame(() => {
             scrollBottomRef.current?.scrollIntoView({ block: 'end' });
         });
@@ -692,15 +752,54 @@ function Thread({
 
         setSending(true);
 
+        // Optimista: antes, mi propio mensaje sólo aparecía tras el
+        // viaje completo de ida y vuelta (POST -> redirect -> GET de
+        // messages.show), mientras que al OTRO participante le llegaba
+        // casi al instante por el broadcast de Reverb — se veía primero
+        // en su chat que en el mío. Un id negativo temporal (nunca
+        // choca con los ids reales de la BD, todos positivos) para
+        // poder identificarlo si hiciera falta; el efecto que
+        // sincroniza liveMessages con el prop `messages` ya lo
+        // reemplaza solo por el mensaje real en cuanto la respuesta del
+        // POST trae la lista fresca — no hace falta reconciliar a mano.
+        const replyTo = replyingTo;
+        const optimisticMessage: MessageData = {
+            id: -Date.now(),
+            body: trimmed,
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+            userId: authUser.id,
+            userName: authUser.name,
+            userAvatar: authUser.avatar ?? null,
+            isMine: true,
+            replyToId: replyTo?.id ?? null,
+            replyToUserName: replyTo
+                ? replyTo.isMine
+                    ? authUser.name
+                    : replyTo.userName
+                : null,
+            replyToBody: replyTo?.body ?? null,
+            status: 'sending',
+        };
+
+        setLiveMessages((previous) => [...previous, optimisticMessage]);
+        setBody('');
+        setReplyingTo(null);
+
         router.post(
             storeMessage([currentTeam.slug, conversation.id]).url,
-            { body: trimmed, reply_to_message_id: replyingTo?.id ?? null },
+            { body: trimmed, reply_to_message_id: replyTo?.id ?? null },
             {
                 preserveScroll: true,
                 preserveUrl: true,
-                onSuccess: () => {
-                    setBody('');
-                    setReplyingTo(null);
+                onError: () => {
+                    setLiveMessages((previous) =>
+                        previous.map((existing) =>
+                            existing.id === optimisticMessage.id
+                                ? { ...existing, status: 'failed' }
+                                : existing,
+                        ),
+                    );
                 },
                 onFinish: () => setSending(false),
             },
@@ -779,6 +878,7 @@ function Thread({
                                         <MessageBubble
                                             message={message}
                                             getInitials={getInitials}
+                                            authUserName={authUser.name}
                                             isFirstInGroup={
                                                 isFirstInGroup ||
                                                 showDateSeparator
@@ -820,18 +920,27 @@ function Thread({
 
                 <div className="flex flex-col gap-2 border-t p-3">
                     {replyingTo && (
-                        // rounded-3xl: mismo radio que las burbujas de
-                        // mensajes (pedido explícito) — no el rounded-lg
-                        // genérico de antes.
-                        <div className="border-border bg-foreground/5 flex items-start gap-2 rounded-3xl border-l-2 border-l-sky-500 py-2 pr-2 pl-3.5">
+                        // rounded-3xl + gris fijo (bg-[#71717a], no
+                        // bg-foreground/5): mismo fondo y texto blanco
+                        // que el badge de previsualización dentro de la
+                        // burbuja — ese ya probó tener buen contraste en
+                        // los dos temas; bg-foreground/5 (relativo al
+                        // tema) hacía que el azul oscuro del borde/texto
+                        // casi no se leyera en tema oscuro (fondo oscuro
+                        // sobre fondo oscuro). Mismo acento que el badge
+                        // de la burbuja: "respondo algo mío" = naranja,
+                        // "respondo a otro" = azul oscuro.
+                        <div
+                            className={`flex items-start gap-2 rounded-3xl border-l-[5px] bg-[#71717a] py-2 pr-2 pl-3.5 ${replyingTo.isMine ? 'border-l-[#c2410c]' : 'border-l-[#1e3a8a]'}`}
+                        >
                             <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                                <p className="text-[11px] font-bold text-white">
                                     Respondiendo a{' '}
                                     {replyingTo.isMine
                                         ? 'ti mismo'
                                         : replyingTo.userName}
                                 </p>
-                                <p className="text-muted-foreground truncate text-xs">
+                                <p className="truncate text-xs text-white/70">
                                     {replyingTo.body}
                                 </p>
                             </div>
@@ -955,17 +1064,37 @@ function BubbleActionButton({
 function MessageBubble({
     message,
     getInitials,
+    authUserName,
     isFirstInGroup,
     isLastInGroup,
     onReply,
 }: {
     message: MessageData;
     getInitials: (name: string) => string;
+    authUserName: string;
     isFirstInGroup: boolean;
     isLastInGroup: boolean;
     onReply: (message: MessageData) => void;
 }) {
     const failed = message.status === 'failed';
+    // Tono del acento del badge de respuesta según A QUIÉN se está
+    // citando, no según quién envía este mensaje — pedido explícito:
+    // distinguir "respondo a otro" / "respondo algo mío" / "él me
+    // responde" con colores bien distintos y FIJOS (hex, no tokens de
+    // tema ni shades pastel de Tailwind) — oscuros a propósito para que
+    // se vean en los dos temas, mismo criterio que el badge rojo de
+    // no-leídos (oklch fijo).
+    const replyToIsMine =
+        message.replyToId !== null && message.replyToUserName === authUserName;
+    const replyAccentColor = !message.replyToId
+        ? ''
+        : message.isMine
+          ? replyToIsMine
+              ? 'border-l-[#c2410c]' // respondo algo mío: naranja oscuro
+              : 'border-l-[#1e3a8a]' // respondo a otro: azul oscuro
+          : replyToIsMine
+            ? 'border-l-[#166534]' // él me responde a mí: verde oscuro
+            : 'border-l-[#b91c1c]'; // él responde a un tercero (grupo): rojo, más visible que el gris de antes
 
     const bubbleColor = failed
         ? 'bg-destructive/15'
@@ -998,7 +1127,12 @@ function MessageBubble({
                             alt={message.userName}
                         />
                     )}
-                    <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
+                    {/* Dos tonos fijos por quién envió el mensaje —
+                        pedido explícito, ver la nota junto a
+                        --avatar-mine en app.css. */}
+                    <AvatarFallback
+                        className={`text-[10px] text-[var(--avatar-foreground)] ${message.isMine ? 'bg-[var(--avatar-mine)]' : 'bg-[var(--avatar-received)]'}`}
+                    >
                         {getInitials(message.userName)}
                     </AvatarFallback>
                 </Avatar>
@@ -1064,30 +1198,29 @@ function MessageBubble({
                             // típico de WhatsApp.
                             //
                             // EL BUG REAL de "se sale del ancho de la
-                            // burbuja" no era el -mt negativo (ya lo
-                            // probé sin él y seguía saliéndose, medido
-                            // con getBoundingClientRect): era
+                            // burbuja" no era el -mt negativo: era
                             // `truncate` en los <p> de acá adentro —
                             // truncate = white-space:nowrap, que fuerza
                             // un ancho mínimo igual al del texto COMPLETO
-                            // sin cortar (nowrap no puede reducirse
-                            // envolviendo), así que w-fit terminaba
-                            // exigiendo ese ancho completo sin importar
-                            // cuánto espacio real hubiera. line-clamp (NO
-                            // truncate): permite que el texto SÍ envuelva
-                            // y sólo recorta por CANTIDAD de líneas, así
-                            // que el mínimo real vuelve a ser la palabra
-                            // más ancha, no la frase completa — con eso,
-                            // w-fit + max-w-[420px] (fijo en px, nunca %:
-                            // ver la razón junto al <p> del cuerpo más
-                            // abajo) ya no se sale nunca del ancho real
-                            // de la burbuja.
+                            // sin cortar. line-clamp (NO truncate):
+                            // permite que el texto SÍ envuelva y sólo
+                            // recorta por CANTIDAD de líneas.
+                            //
+                            // SIN w-fit (ancho de contenido) — pedido
+                            // explícito: "totalmente ceñido al ancho de
+                            // la burbuja", no sólo lo que el texto pida.
+                            // width:auto (el default de un div en flujo
+                            // normal, NINGUNA clase de ancho) rellena el
+                            // content-box del padre igual que ya hace el
+                            // <p> del cuerpo más abajo — mismo patrón
+                            // seguro que ese <p> (sólo max-w-[420px]
+                            // fijo en px como tope, nunca % ni w-full:
+                            // esos sí reabren la referencia circular con
+                            // el `display:table` interno de ScrollArea
+                            // (Radix), el bug crítico de antes — "no
+                            // muestra los mensajes enviados").
                             <div
-                                className={`relative z-10 -mt-6 mb-1.5 w-fit max-w-[420px] rounded-3xl border-l-[3px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${
-                                    message.isMine
-                                        ? 'border-l-amber-300'
-                                        : 'border-l-sky-300'
-                                }`}
+                                className={`relative z-10 -mt-6 mb-1.5 max-w-[420px] rounded-3xl border-l-[5px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${replyAccentColor}`}
                             >
                                 <p className="line-clamp-1 font-bold break-words text-white">
                                     {message.replyToUserName}
