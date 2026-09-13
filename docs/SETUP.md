@@ -2,14 +2,14 @@
 
 ## Estado actual (real, verificado)
 
-| Servicio            | Cómo corre hoy                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------- |
-| PHP / Laravel       | **Herd** (`http://chat-app.test`) — no hay servidor Vite/PHP manual que levantar                  |
-| PostgreSQL          | **Nativo**, instalado localmente (Postgres 18, `C:\Program Files\PostgreSQL\18`), base `chat_app` |
-| Redis               | 🔲 No instalado todavía (Reverb corre sin Redis — cola/queue usa el driver `database`)            |
+| Servicio            | Cómo corre hoy                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| PHP / Laravel       | **Herd** (`http://chat-app.test`) — no hay servidor Vite/PHP manual que levantar                    |
+| PostgreSQL          | **Nativo**, instalado localmente (Postgres 18, `C:\Program Files\PostgreSQL\18`), base `chat_app`   |
+| Redis               | 🔲 No instalado todavía (Reverb corre sin Redis — cola/queue usa el driver `database`)              |
 | Reverb (WebSockets) | 🟢 Instalado y en uso — ver "Tiempo real (Laravel Reverb)" más abajo para el setup en máquina nueva |
-| Mail                | Driver `log` (no hay Mailpit/Mailhog corriendo, los emails van al log de Laravel)                 |
-| Storage de archivos | Driver `local`, sin MinIO todavía                                                                 |
+| Mail                | Driver `log` (no hay Mailpit/Mailhog corriendo, los emails van al log de Laravel)                   |
+| Storage de archivos | Driver `local`, sin MinIO todavía                                                                   |
 
 ## Por qué nativo y no Docker Compose (por ahora)
 

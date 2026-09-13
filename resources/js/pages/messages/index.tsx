@@ -6,26 +6,18 @@ import {
     ArrowDown,
     Bell,
     BellOff,
-    Bold,
     Check,
     CheckCheck,
     ChevronDown,
     CircleAlert,
     Clock,
-    Code,
     Forward,
-    Italic,
-    List,
     MoreHorizontal,
     MoreVertical,
     Phone,
-    Quote,
     Reply,
     Search,
-    Send,
     Smile,
-    Strikethrough,
-    Underline,
     UserRound,
     Video,
     X,
@@ -44,6 +36,7 @@ import {
     store as storeMessage,
 } from '@/routes/messages';
 import { toggleArchive, toggleMute } from '@/routes/conversations';
+import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -55,7 +48,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import {
     Tooltip,
     TooltipContent,
@@ -190,11 +182,27 @@ function groupMessagesByDate(messages: MessageData[]): DateGroup[] {
 
 /** Igual que el auto-capitalize de los teclados de Android/iOS: la
  *  primera letra del mensaje siempre en mayúscula, sin importar cómo
- *  se haya escrito. */
+ *  se haya escrito — pedido explícito, "es un sí o sí". Busca la
+ *  primera letra de verdad (no el índice 0 a secas): el body ya sale
+ *  serializado a Markdown ligero del composer, así que un mensaje en
+ *  negrita empieza con "**hola**" — capitalizar el carácter 0 pondría
+ *  mayúscula sobre el asterisco (no hace nada) y la "h" real se
+ *  quedaba en minúscula. Salta cualquier delimitador/prefijo (**, _,
+ *  __, ~~, `, "> ", "- ", "1. ") hasta encontrar la letra real. */
 function capitalizeFirstLetter(text: string): string {
-    return text.length > 0
-        ? text[0].toLocaleUpperCase('es') + text.slice(1)
-        : text;
+    const match = text.match(/\p{L}/u);
+
+    if (!match || match.index === undefined) {
+        return text;
+    }
+
+    const index = match.index;
+
+    return (
+        text.slice(0, index) +
+        text[index].toLocaleUpperCase('es') +
+        text.slice(index + 1)
+    );
 }
 
 function formatBubbleTime(iso: string): string {
@@ -216,7 +224,11 @@ function formatBubbleTime(iso: string): string {
 // doble carácter.
 const INLINE_FORMAT_RE = /\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`(.+?)`|_(.+?)_/g;
 
-function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
+function renderInlineFormatting(
+    text: string,
+    keyPrefix: string,
+    isMine: boolean,
+): ReactNode[] {
     const nodes: ReactNode[] = [];
     let lastIndex = 0;
     let index = 0;
@@ -241,7 +253,12 @@ function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
             nodes.push(
                 <code
                     key={key}
-                    className="rounded bg-black/10 px-1 py-0.5 font-mono text-[0.85em]"
+                    // bg-black/10 apenas se notaba sobre la burbuja
+                    // recibida (negra sobre negro, casi sin contraste)
+                    // — pedido explícito de mejorar justo este caso.
+                    // bg-white/20 sobre esa burbuja, bg-black/10 sigue
+                    // sirviendo sobre la burbuja propia (clara).
+                    className={`rounded px-1 py-0.5 font-mono text-[0.85em] ${isMine ? 'bg-black/10' : 'bg-white/20'}`}
                 >
                     {match[4]}
                 </code>,
@@ -260,9 +277,10 @@ function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
     return nodes;
 }
 
-/** Prefijos de línea (cita "> " y lista "- ") además del formato en
- *  línea de arriba — mismo criterio de seguridad, sin HTML crudo. */
-function renderFormattedBody(body: string): ReactNode {
+/** Prefijos de línea (cita "> ", lista "- " y lista numerada "N. ")
+ *  además del formato en línea de arriba — mismo criterio de
+ *  seguridad, sin HTML crudo. */
+function renderFormattedBody(body: string, isMine: boolean): ReactNode {
     const lines = body.split('\n');
 
     return lines.map((line, lineIndex) => {
@@ -274,7 +292,7 @@ function renderFormattedBody(body: string): ReactNode {
                     key={key}
                     className="my-0.5 border-l-2 border-current/40 pl-2 opacity-90"
                 >
-                    {renderInlineFormatting(line.slice(2), key)}
+                    {renderInlineFormatting(line.slice(2), key, isMine)}
                 </blockquote>
             );
         }
@@ -283,14 +301,29 @@ function renderFormattedBody(body: string): ReactNode {
             return (
                 <div key={key} className="flex gap-1.5">
                     <span aria-hidden="true">•</span>
-                    <span>{renderInlineFormatting(line.slice(2), key)}</span>
+                    <span>
+                        {renderInlineFormatting(line.slice(2), key, isMine)}
+                    </span>
+                </div>
+            );
+        }
+
+        const orderedMatch = line.match(/^(\d+)\.\s(.*)$/);
+
+        if (orderedMatch) {
+            return (
+                <div key={key} className="flex gap-1.5">
+                    <span aria-hidden="true">{orderedMatch[1]}.</span>
+                    <span>
+                        {renderInlineFormatting(orderedMatch[2], key, isMine)}
+                    </span>
                 </div>
             );
         }
 
         return (
             <span key={key}>
-                {renderInlineFormatting(line, key)}
+                {renderInlineFormatting(line, key, isMine)}
                 {lineIndex < lines.length - 1 && <br />}
             </span>
         );
@@ -504,7 +537,6 @@ function Thread({
     const currentTeam = page.props.currentTeam;
     const authUser = page.props.auth.user;
     const getInitials = useInitials();
-    const [body, setBody] = useState('');
     const [sending, setSending] = useState(false);
     const [replyingTo, setReplyingTo] = useState<MessageData | null>(null);
     const [liveMessages, setLiveMessages] = useState<MessageData[]>(messages);
@@ -527,7 +559,6 @@ function Thread({
     const [unseenCount, setUnseenCount] = useState(0);
     const scrollBottomRef = useRef<HTMLDivElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
     const isNearBottomRef = useRef(true);
     // Distingue el primer render (mensajes ya cargados, no son
@@ -881,7 +912,10 @@ function Thread({
 
     const handleReply = (message: MessageData) => {
         setReplyingTo(message);
-        textareaRef.current?.focus();
+        // El foco del composer ahora reacciona solo al cambio de
+        // replyingTo (ver el useEffect en MessageComposer) — Tiptap no
+        // es un <textarea> al que se le pueda pedir .focus() desde
+        // acá con un ref simple.
     };
 
     const toggleDateExpanded = (key: string) => {
@@ -898,68 +932,8 @@ function Thread({
         });
     };
 
-    // Barra de formato (sección 9 del prompt v2): envuelve la selección
-    // actual del textarea con el delimitador de Markdown ligero — si no
-    // hay selección, inserta el par de delimitadores con el cursor en
-    // el medio, igual que cualquier editor tipo WYSIWYG-lite. `__` para
-    // subrayado (no estándar en Markdown real, pero el propio prompt
-    // dice "Markdown ligero" — CommonMark no tiene subrayado nativo).
-    const wrapSelection = (before: string, after: string = before) => {
-        const textarea = textareaRef.current;
-
-        if (!textarea) {
-            return;
-        }
-
-        const { selectionStart, selectionEnd, value } = textarea;
-        const selected = value.slice(selectionStart, selectionEnd);
-        const next =
-            value.slice(0, selectionStart) +
-            before +
-            selected +
-            after +
-            value.slice(selectionEnd);
-
-        setBody(next);
-
-        requestAnimationFrame(() => {
-            textarea.focus();
-            const cursor = selectionStart + before.length;
-            textarea.setSelectionRange(cursor, cursor + selected.length);
-        });
-    };
-
-    // Prefijo de línea (cita/lista): se aplica a la línea donde está el
-    // cursor, no envuelve una selección — quitar el prefijo si ya está
-    // (toggle), igual criterio que negrita/cursiva pero para bloques.
-    const toggleLinePrefix = (prefix: string) => {
-        const textarea = textareaRef.current;
-
-        if (!textarea) {
-            return;
-        }
-
-        const { selectionStart, value } = textarea;
-        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
-        const lineEndIndex = value.indexOf('\n', selectionStart);
-        const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
-        const line = value.slice(lineStart, lineEnd);
-        const hasPrefix = line.startsWith(prefix);
-        const newLine = hasPrefix ? line.slice(prefix.length) : prefix + line;
-        const next = value.slice(0, lineStart) + newLine + value.slice(lineEnd);
-        const delta = newLine.length - line.length;
-
-        setBody(next);
-
-        requestAnimationFrame(() => {
-            textarea.focus();
-            const cursor = selectionStart + delta;
-            textarea.setSelectionRange(cursor, cursor);
-        });
-    };
-
-    const handleSend = () => {
-        const trimmed = capitalizeFirstLetter(body.trim());
+    const handleSend = (markdownBody: string) => {
+        const trimmed = capitalizeFirstLetter(markdownBody.trim());
 
         if (!trimmed || !currentTeam || sending) {
             return;
@@ -998,8 +972,26 @@ function Thread({
         };
 
         setLiveMessages((previous) => [...previous, optimisticMessage]);
-        setBody('');
         setReplyingTo(null);
+
+        // Respaldo por si la confirmación tarda de más (pedido
+        // explícito: "debe haber un timer... para evitar congestiones
+        // en la red"). El mensaje ya se guardó en el servidor apenas
+        // llega el POST — lo único que puede demorarse es que ESTE
+        // cliente reciba la respuesta que lo reconcilia con el real.
+        // 8s de margen: de sobra para el viaje normal (bajo 1-2s), pero
+        // no tan largo como para que el ícono de reloj se sienta
+        // pegado si la red anda lenta.
+        setTimeout(() => {
+            setLiveMessages((previous) =>
+                previous.map((existing) =>
+                    existing.id === optimisticMessage.id &&
+                    existing.status === 'sending'
+                        ? { ...existing, status: 'sent' }
+                        : existing,
+                ),
+            );
+        }, 8000);
 
         router.post(
             storeMessage([currentTeam.slug, conversation.id]).url,
@@ -1182,154 +1174,13 @@ function Thread({
                     )}
                 </div>
 
-                <div className="flex flex-col gap-2 border-t p-3">
-                    {replyingTo && (
-                        // rounded-3xl + gris fijo (bg-[#71717a], no
-                        // bg-foreground/5): mismo fondo y texto blanco
-                        // que el badge de previsualización dentro de la
-                        // burbuja — ese ya probó tener buen contraste en
-                        // los dos temas; bg-foreground/5 (relativo al
-                        // tema) hacía que el azul oscuro del borde/texto
-                        // casi no se leyera en tema oscuro (fondo oscuro
-                        // sobre fondo oscuro). Mismo acento que el badge
-                        // de la burbuja: "respondo algo mío" = naranja,
-                        // "respondo a otro" = azul oscuro.
-                        <div
-                            className={`flex items-start gap-2 rounded-3xl border-l-[5px] bg-[#71717a] py-2 pr-2 pl-3.5 ${replyingTo.isMine ? 'border-l-[#c2410c]' : 'border-l-[#1e3a8a]'}`}
-                        >
-                            <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-bold text-white">
-                                    Respondiendo a{' '}
-                                    {replyingTo.isMine
-                                        ? 'ti mismo'
-                                        : replyingTo.userName}
-                                </p>
-                                <p className="truncate text-xs text-white/70">
-                                    {replyingTo.body}
-                                </p>
-                            </div>
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="size-6 shrink-0"
-                                aria-label="Cancelar respuesta"
-                                onClick={() => setReplyingTo(null)}
-                            >
-                                <X className="size-3.5" />
-                            </Button>
-                        </div>
-                    )}
-                    {/* Barra de formato (sección 9 del prompt v2): fija
-                        arriba del campo (no un popover al seleccionar
-                        texto — más simple y descubrible). Markdown
-                        ligero guardado tal cual en messages.body,
-                        traducido a estilos reales al renderizar la
-                        burbuja (ver renderFormattedBody). */}
-                    <div className="text-muted-foreground flex items-center gap-0.5">
-                        <FormatButton
-                            icon={Bold}
-                            label="Negrita"
-                            onClick={() => wrapSelection('**')}
-                        />
-                        <FormatButton
-                            icon={Italic}
-                            label="Cursiva"
-                            onClick={() => wrapSelection('_')}
-                        />
-                        <FormatButton
-                            icon={Underline}
-                            label="Subrayado"
-                            onClick={() => wrapSelection('__')}
-                        />
-                        <FormatButton
-                            icon={Strikethrough}
-                            label="Tachado"
-                            onClick={() => wrapSelection('~~')}
-                        />
-                        <FormatButton
-                            icon={Code}
-                            label="Código en línea"
-                            onClick={() => wrapSelection('`')}
-                        />
-                        <FormatButton
-                            icon={Quote}
-                            label="Cita en bloque"
-                            onClick={() => toggleLinePrefix('> ')}
-                        />
-                        <FormatButton
-                            icon={List}
-                            label="Lista"
-                            onClick={() => toggleLinePrefix('- ')}
-                        />
-                    </div>
-                    <div className="flex items-end gap-2">
-                        <Textarea
-                            ref={textareaRef}
-                            value={body}
-                            onChange={(event) => {
-                                // Mayúscula inicial en vivo, no sólo al
-                                // enviar — reemplaza un único carácter,
-                                // así que el cursor nunca salta de lugar.
-                                setBody(
-                                    capitalizeFirstLetter(event.target.value),
-                                );
-                                notifyTyping();
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !event.shiftKey) {
-                                    event.preventDefault();
-                                    handleSend();
-                                }
-                                if (event.key === 'Escape' && replyingTo) {
-                                    setReplyingTo(null);
-                                }
-                                // Atajos tipo cualquier editor: Ctrl/Cmd
-                                // + B/I/U/Shift+X.
-                                const modifier = event.ctrlKey || event.metaKey;
-                                if (
-                                    modifier &&
-                                    event.key.toLowerCase() === 'b'
-                                ) {
-                                    event.preventDefault();
-                                    wrapSelection('**');
-                                }
-                                if (
-                                    modifier &&
-                                    event.key.toLowerCase() === 'i'
-                                ) {
-                                    event.preventDefault();
-                                    wrapSelection('_');
-                                }
-                                if (
-                                    modifier &&
-                                    event.key.toLowerCase() === 'u'
-                                ) {
-                                    event.preventDefault();
-                                    wrapSelection('__');
-                                }
-                            }}
-                            placeholder={`Escribe un mensaje a ${conversation.name}…`}
-                            // Teclados móviles (Android/iOS): mayúscula
-                            // automática al empezar a escribir, mismo
-                            // comportamiento nativo esperado — el respaldo
-                            // real para teclado físico/desktop es
-                            // capitalizeFirstLetter() en handleSend.
-                            autoCapitalize="sentences"
-                            className="max-h-40 min-h-11 flex-1 resize-none rounded-3xl px-4 py-2.5"
-                            rows={1}
-                        />
-                        <Button
-                            type="button"
-                            size="icon"
-                            className="btn-elevated size-11 shrink-0 rounded-full"
-                            disabled={sending || body.trim() === ''}
-                            onClick={handleSend}
-                        >
-                            <Send className="size-4" />
-                        </Button>
-                    </div>
-                </div>
+                <MessageComposer
+                    placeholder={`Escribe un mensaje a ${conversation.name}…`}
+                    replyingTo={replyingTo}
+                    onCancelReply={() => setReplyingTo(null)}
+                    onSubmit={handleSend}
+                    onTyping={notifyTyping}
+                />
             </div>
         </div>
     );
@@ -1385,44 +1236,6 @@ function BubbleActionButton({
                     className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-6 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-40"
                 >
                     <Icon className="size-3.5" />
-                </button>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-    );
-}
-
-/** Botón de la barra de formato del composer — mismo lenguaje visual
- *  que BubbleActionButton (ícono + tooltip), pero un poco más grande:
- *  esta barra siempre está visible (no aparece sólo al hover), así que
- *  necesita ser un blanco de clic cómodo por sí sola. */
-function FormatButton({
-    icon: Icon,
-    label,
-    onClick,
-}: {
-    icon: typeof Bold;
-    label: string;
-    onClick: () => void;
-}) {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <button
-                    type="button"
-                    aria-label={label}
-                    // onMouseDown (no onClick) + preventDefault: si
-                    // fuera onClick, el textarea pierde el foco (y la
-                    // selección de texto) ANTES de que este handler
-                    // corra — wrapSelection ya no tendría selección
-                    // sobre la que envolver el markdown.
-                    onMouseDown={(event) => {
-                        event.preventDefault();
-                        onClick();
-                    }}
-                    className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-7 items-center justify-center rounded-full transition-colors"
-                >
-                    <Icon className="size-4" />
                 </button>
             </TooltipTrigger>
             <TooltipContent>{label}</TooltipContent>
@@ -1624,7 +1437,7 @@ function MessageBubble({
                     cierra el <p> solo, apenas encuentra un bloque
                     adentro). */}
                         <div className="max-w-[420px] break-words">
-                            {renderFormattedBody(message.body)}
+                            {renderFormattedBody(message.body, message.isMine)}
                         </div>
                     </div>
 
