@@ -3,6 +3,7 @@ import type {
     ConversationSummary,
     TeamMemberOption,
 } from '@/types/conversations';
+import type { StatusPresetOption } from '@/types/status';
 import type { Team } from '@/types/teams';
 
 declare module 'react' {
@@ -22,6 +23,7 @@ declare module '@inertiajs/core' {
             conversations: ConversationSummary[];
             archivedConversations: ConversationSummary[];
             teamMembers: TeamMemberOption[];
+            statusPresets: StatusPresetOption[];
             [key: string]: unknown;
         };
     }

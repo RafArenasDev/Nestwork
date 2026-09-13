@@ -43,20 +43,6 @@ import {
     destroy as clearStatus,
 } from '@/routes/user-status';
 
-const STATUS_PRESETS = [
-    { preset: 'available', label: 'Disponible', dotColor: 'text-emerald-500' },
-    { preset: 'away', label: 'Ausente', dotColor: 'text-amber-500' },
-    { preset: 'busy', label: 'Ocupado', dotColor: 'text-red-500' },
-    { preset: 'dnd', label: 'No molestar', dotColor: 'text-red-500' },
-] as const;
-
-const CUSTOM_STATUSES = [
-    { emoji: '🍔', text: 'Almorzando' },
-    { emoji: '🏖️', text: 'De vacaciones' },
-    { emoji: '📅', text: 'En una reunión' },
-    { emoji: '🤒', text: 'Enfermo' },
-] as const;
-
 const RAIL_MODULES = [
     {
         key: 'home',
@@ -101,7 +87,7 @@ function formatBadgeCount(count: number): string {
 }
 
 export function CurvedNavRail({ active, onChange }: Props) {
-    const { auth, conversations } = usePage().props;
+    const { auth, conversations, statusPresets } = usePage().props;
     const getInitials = useInitials();
     const { t } = useLocale();
     const cleanup = useMobileNavigation();
@@ -255,40 +241,19 @@ export function CurvedNavRail({ active, onChange }: Props) {
                                 Cambiar estado
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent>
-                                {STATUS_PRESETS.map(
-                                    ({ preset, label, dotColor }) => (
-                                        <DropdownMenuItem
-                                            key={preset}
-                                            onClick={() =>
-                                                router.patch(
-                                                    updateStatus().url,
-                                                    { preset },
-                                                    { preserveScroll: true },
-                                                )
-                                            }
-                                        >
-                                            <Circle
-                                                className={dotColor}
-                                                fill="currentColor"
-                                            />
-                                            {label}
-                                        </DropdownMenuItem>
-                                    ),
-                                )}
-                                <DropdownMenuSeparator />
-                                {CUSTOM_STATUSES.map(({ emoji, text }) => (
+                                {statusPresets.map(({ key, emoji, label }) => (
                                     <DropdownMenuItem
-                                        key={text}
+                                        key={key}
                                         onClick={() =>
                                             router.patch(
                                                 updateStatus().url,
-                                                { emoji, text },
+                                                { preset: key },
                                                 { preserveScroll: true },
                                             )
                                         }
                                     >
                                         <span>{emoji}</span>
-                                        {text}
+                                        {label}
                                     </DropdownMenuItem>
                                 ))}
                                 {(auth.user.status_preset ||

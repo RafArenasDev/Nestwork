@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\StatusPreset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -11,7 +12,9 @@ class UserStatusController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'preset' => ['nullable', Rule::in(['available', 'away', 'busy', 'dnd'])],
+            'preset' => ['nullable', Rule::in(
+                StatusPreset::query()->where('is_enabled', true)->pluck('key')->all()
+            )],
             'emoji' => ['nullable', 'string', 'max:8'],
             'text' => ['nullable', 'string', 'max:100'],
         ]);

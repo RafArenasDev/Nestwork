@@ -3,9 +3,12 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Conversations\ListConversationsForUser;
+use App\Data\StatusPresetOption;
 use App\Data\TeamMemberOption;
+use App\Models\StatusPreset;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -77,6 +80,19 @@ class HandleInertiaRequests extends Middleware
                         avatar: $member->avatar,
                     ))
                 : [],
+            // Catálogo de estados del dropdown de perfil (sección 3.2/10
+            // del prompt v2) — reemplaza los arrays que antes vivían
+            // quemados en curved-nav-rail.tsx.
+            'statusPresets' => fn () => StatusPreset::query()
+                ->where('is_enabled', true)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn (StatusPreset $preset) => new StatusPresetOption(
+                    key: $preset->key,
+                    emoji: $preset->emoji,
+                    label: App::getLocale() === 'en' ? $preset->label_en : $preset->label_es,
+                    defaultDurationMinutes: $preset->default_duration_minutes,
+                )),
         ];
     }
 }
