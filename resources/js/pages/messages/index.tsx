@@ -852,7 +852,12 @@ function Thread({
                             ref={textareaRef}
                             value={body}
                             onChange={(event) => {
-                                setBody(event.target.value);
+                                // Mayúscula inicial en vivo, no sólo al
+                                // enviar — reemplaza un único carácter,
+                                // así que el cursor nunca salta de lugar.
+                                setBody(
+                                    capitalizeFirstLetter(event.target.value),
+                                );
                                 notifyTyping();
                             }}
                             onKeyDown={(event) => {
@@ -1046,27 +1051,48 @@ function MessageBubble({
                         )}
 
                         {message.replyToId && (
-                            // Insignia flotante que se monta sobre el
-                            // borde superior de la burbuja (-mt-4, sin
-                            // overflow-hidden en la burbuja que la
-                            // recorte) — no un cuadro embebido plano tipo
-                            // WhatsApp. bg-[var(--background)] (el fondo
-                            // general de la página, NO un overlay negro
-                            // translúcido): así el tono SIEMPRE contrasta
-                            // contra la burbuja sin importar su color ni
-                            // el tema — antes, en recibidos, el overlay
-                            // apenas se distinguía en ningún tema.
-                            // max-w-[420px] fijo en px, NO w-full/%: un %
-                            // acá encadena con el `display:table` interno
-                            // de ScrollArea (Radix) y hace crecer TODO sin
-                            // límite — el mismo bug crítico de antes
-                            // ("no muestra los mensajes enviados"), ver el
-                            // comentario junto al <p> del cuerpo más abajo.
-                            <div className="relative z-10 -mt-4 mb-1.5 w-fit max-w-[420px] rounded-2xl border border-black/10 bg-[var(--background)] px-3 py-1.5 text-xs shadow-sm dark:border-white/10">
-                                <p className="text-foreground truncate font-bold">
+                            // Insignia flotante montada sobre el borde
+                            // superior de la burbuja (-mt-6: pasa la
+                            // mitad de su propia altura afuera; la
+                            // burbuja no tiene overflow-hidden que la
+                            // recorte). Gris fijo (no var(--background),
+                            // que en tema claro no leía como "gris") —
+                            // pedido explícito: SIEMPRE gris, en los dos
+                            // temas. Acento de color a la izquierda +
+                            // rounded-3xl (igual que las burbujas): el
+                            // "badge" propio, no el recuadro plano
+                            // típico de WhatsApp.
+                            //
+                            // EL BUG REAL de "se sale del ancho de la
+                            // burbuja" no era el -mt negativo (ya lo
+                            // probé sin él y seguía saliéndose, medido
+                            // con getBoundingClientRect): era
+                            // `truncate` en los <p> de acá adentro —
+                            // truncate = white-space:nowrap, que fuerza
+                            // un ancho mínimo igual al del texto COMPLETO
+                            // sin cortar (nowrap no puede reducirse
+                            // envolviendo), así que w-fit terminaba
+                            // exigiendo ese ancho completo sin importar
+                            // cuánto espacio real hubiera. line-clamp (NO
+                            // truncate): permite que el texto SÍ envuelva
+                            // y sólo recorta por CANTIDAD de líneas, así
+                            // que el mínimo real vuelve a ser la palabra
+                            // más ancha, no la frase completa — con eso,
+                            // w-fit + max-w-[420px] (fijo en px, nunca %:
+                            // ver la razón junto al <p> del cuerpo más
+                            // abajo) ya no se sale nunca del ancho real
+                            // de la burbuja.
+                            <div
+                                className={`relative z-10 -mt-6 mb-1.5 w-fit max-w-[420px] rounded-3xl border-l-[3px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${
+                                    message.isMine
+                                        ? 'border-l-amber-300'
+                                        : 'border-l-sky-300'
+                                }`}
+                            >
+                                <p className="line-clamp-1 font-bold break-words text-white">
                                     {message.replyToUserName}
                                 </p>
-                                <p className="text-muted-foreground truncate">
+                                <p className="line-clamp-1 break-words text-white/70">
                                     {message.replyToBody}
                                 </p>
                             </div>
