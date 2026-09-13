@@ -1,4 +1,4 @@
-import { createInertiaApp } from '@inertiajs/react';
+import { createInertiaApp, router } from '@inertiajs/react';
 import { RouteLoadingOverlay } from '@/components/route-loading-overlay';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -7,10 +7,25 @@ import { initializeLocale } from '@/hooks/use-locale';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
-import { configureEcho } from '@laravel/echo-react';
+import { configureEcho, echo } from '@laravel/echo-react';
 
 configureEcho({
     broadcaster: 'reverb',
+});
+
+// broadcast(...)->toOthers() en el backend depende de este header para
+// saber qué conexión excluir — Laravel lo documenta asumiendo un
+// interceptor de axios (bootstrap.js clásico de Breeze/Jetstream), pero
+// Inertia usa su propio cliente de fetch, no axios, así que sin esto
+// nunca se manda y toOthers() nunca excluye a nadie: el propio emisor
+// recibe su propio evento (y, en Thread/app-sidebar-layout, eso disparaba
+// un reload que pisaba la conversación recién abierta).
+router.on('before', (event) => {
+    const socketId = echo().socketId();
+
+    if (socketId) {
+        event.detail.visit.headers['X-Socket-Id'] = socketId;
+    }
 });
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';

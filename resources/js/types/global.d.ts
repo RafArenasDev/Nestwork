@@ -18,6 +18,7 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            appearance: 'light' | 'dark' | 'system';
             currentTeam: Team | null;
             teams: Team[];
             conversations: ConversationSummary[];

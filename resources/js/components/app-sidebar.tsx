@@ -202,7 +202,10 @@ function ConversationRow({
                 {conversation.unreadCount > 0 && (
                     <Badge
                         variant="destructive"
-                        className="ml-2 h-5 min-w-5 shrink-0 justify-center rounded-full px-1 text-[10px]"
+                        // Rojo fijo, no la variable --destructive (que
+                        // cambia de tono entre temas) — ver nota en
+                        // curved-nav-rail.tsx.
+                        className="ml-2 h-5 min-w-5 shrink-0 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[10px] dark:bg-[oklch(0.577_0.245_27.325)]"
                     >
                         {conversation.unreadCount}
                     </Badge>

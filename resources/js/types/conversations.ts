@@ -21,6 +21,9 @@ export type MessageData = {
     userName: string;
     userAvatar: string | null;
     isMine: boolean;
+    replyToId: number | null;
+    replyToUserName: string | null;
+    replyToBody: string | null;
     status: 'sending' | 'sent' | 'read' | 'failed';
 };
 

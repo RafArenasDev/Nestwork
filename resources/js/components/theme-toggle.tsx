@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 import { Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -13,16 +14,19 @@ interface ThemeToggleProps {
 export function ThemeToggle({ className }: ThemeToggleProps) {
     const { appearance, updateAppearance } = useAppearance();
     const { t } = useLocale();
+    // Prop compartida por el backend (misma cookie que ya usaba el
+    // <script> inline del blade) — a diferencia de leer
+    // `document.documentElement`, esto existe también durante el
+    // render SSR, así que el primer render del cliente coincide con lo
+    // que ya mandó el servidor (sin esto, SSR siempre asumía "oscuro" y
+    // React tiraba un hydration mismatch en cuanto el cliente corregía).
+    const serverAppearance = usePage().props.appearance;
 
-    // El switch es binario (claro/oscuro), sin "sistema" — el estado inicial
-    // se lee directo del DOM (ya resuelto por initializeTheme() al arrancar
-    // la app) para no parpadear mientras el hook resuelve 'system' desde
-    // localStorage.
-    const [isLight, setIsLight] = useState(
-        () =>
-            typeof document !== 'undefined' &&
-            !document.documentElement.classList.contains('dark'),
-    );
+    // El switch es binario (claro/oscuro), sin "sistema" — con
+    // appearance="system" no hay forma de saber el preferido del SO
+    // durante SSR, así que cae al mismo "oscuro" por defecto que ya
+    // usaba el <script> inline del blade en ese caso.
+    const [isLight, setIsLight] = useState(() => serverAppearance === 'light');
 
     useEffect(() => {
         if (appearance === 'system') return;

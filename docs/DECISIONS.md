@@ -205,17 +205,17 @@
   `busy`/`dnd`) se conservaron tal cual porque `User::presenceStatus()` los
   compara por string literal para derivar el punto de presencia — no
   renombrar sin tocar ese método también.
-  - **Adaptación respecto al spec:** el documento proponía que
-    `users.status_preset` pase a ser un FK numérico a `status_presets`.
-    Se optó por mantenerlo como el `string` que ya existía (ahora
-    validado contra `StatusPreset::where('is_enabled', true)->pluck('key')`
-    en vez de un `Rule::in([...])` quemado) en lugar de agregar
-    `status_preset_id` — logra el mismo objetivo (nada quemado, catálogo
-    editable) sin tocar el resto del código que ya lee `status_preset`
-    como string.
-  - **No se abordó en esta ronda** (queda para la Fase G — "Actividad +
-    estados de usuario"): UI de "Personalizado…" con picker de emoji libre,
-    duración configurable, historial de últimos estados usados.
+    - **Adaptación respecto al spec:** el documento proponía que
+      `users.status_preset` pase a ser un FK numérico a `status_presets`.
+      Se optó por mantenerlo como el `string` que ya existía (ahora
+      validado contra `StatusPreset::where('is_enabled', true)->pluck('key')`
+      en vez de un `Rule::in([...])` quemado) en lugar de agregar
+      `status_preset_id` — logra el mismo objetivo (nada quemado, catálogo
+      editable) sin tocar el resto del código que ya lee `status_preset`
+      como string.
+    - **No se abordó en esta ronda** (queda para la Fase G — "Actividad +
+      estados de usuario"): UI de "Personalizado…" con picker de emoji libre,
+      duración configurable, historial de últimos estados usados.
 - **Módulos del rail (Inicio/Mensajes/Actividad/Archivo) se dejaron
   hardcodeados a propósito.** Son 4 secciones estructurales de la IA de la
   app (no contenido editable por team/admin), y sus iconos son componentes

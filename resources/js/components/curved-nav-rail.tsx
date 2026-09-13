@@ -144,7 +144,14 @@ export function CurvedNavRail({ active, onChange }: Props) {
                                     {badgeCount > 0 && (
                                         <Badge
                                             variant="destructive"
-                                            className="absolute -top-2 -right-2 h-4 min-w-4 justify-center rounded-full px-1 text-[9px] leading-none"
+                                            // Rojo fijo (el mismo oklch de
+                                            // --destructive en tema claro), no la
+                                            // variable — el dark:bg-destructive/60
+                                            // de shadcn lo apaga en oscuro, y acá
+                                            // además --destructive cambia de tono
+                                            // entre temas; un contador de no
+                                            // leídos debe verse igual en los dos.
+                                            className="absolute -top-2 -right-2 h-4 min-w-4 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[9px] leading-none dark:bg-[oklch(0.577_0.245_27.325)]"
                                         >
                                             {formatBadgeCount(badgeCount)}
                                         </Badge>

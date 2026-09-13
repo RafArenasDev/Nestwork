@@ -35,10 +35,13 @@ class ConversationsSeeder extends Seeder
      */
     private const SEED_USERS = [
         // Cuentas reales del dev — las únicas 3 con acceso real para
-        // loguearse de verdad vía Google.
-        ['name' => 'Rafael Arenas', 'domain' => null, 'email' => 'rafarenas.dev@gmail.com'],
+        // loguearse de verdad vía Google. Nombres distintos a propósito
+        // (aunque las 3 son la misma persona): con las 3 llamadas
+        // "Rafael Arenas" era imposible distinguir en un chat quién es
+        // quién sólo mirando el nombre — confundía las pruebas.
+        ['name' => 'Jose Restrepo', 'domain' => null, 'email' => 'rafarenas.dev@gmail.com'],
         ['name' => 'Rafael Arenas', 'domain' => null, 'email' => 'rjar326@gmail.com'],
-        ['name' => 'Rafael Arenas', 'domain' => null, 'email' => 'rarenas5@estudiantes.areandina.edu.co'],
+        ['name' => 'Rafa Arenas R', 'domain' => null, 'email' => 'rarenas5@estudiantes.areandina.edu.co'],
 
         // "Invitados" — mayoría gmail (dominio más común a probar), con
         // un par de outlook/hotmail/yahoo para confirmar que también
