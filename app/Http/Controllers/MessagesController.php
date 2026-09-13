@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Data\MessageData;
 use App\Enums\ConversationType;
+use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -56,7 +58,7 @@ class MessagesController extends Controller
             : null;
 
         $messages = $conversation->messages()
-            ->with('user')
+            ->with(['user', 'replyTo.user'])
             ->orderBy('id')
             ->get()
             ->map(fn (Message $message) => new MessageData(
@@ -68,6 +70,9 @@ class MessagesController extends Controller
                 userName: $message->user->name,
                 userAvatar: $message->user->avatar,
                 isMine: $message->user_id === $user->id,
+                replyToId: $message->replyTo?->id,
+                replyToUserName: $message->replyTo?->user->name,
+                replyToBody: $message->replyTo?->body,
                 status: $message->user_id === $user->id
                     ? ($readThreshold !== null && $readThreshold >= $message->id ? 'read' : 'sent')
                     : 'sent',
@@ -123,17 +128,30 @@ class MessagesController extends Controller
 
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:4000'],
+            'reply_to_message_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('messages', 'id')->where('conversation_id', $conversation->id),
+            ],
         ]);
 
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
             'body' => $validated['body'],
+            'reply_to_message_id' => $validated['reply_to_message_id'] ?? null,
         ]);
 
         $conversation->participants()->updateExistingPivot($user->id, [
             'last_read_message_id' => $message->id,
         ]);
 
-        return back();
+        broadcast(new MessageSent($message))->toOthers();
+
+        // No usar back(): la sesión registra como "URL anterior" la última
+        // petición GET real, que es messages.show — pero el navegador se
+        // quedó en /messages (preserveUrl, sección "nada de IDs en la
+        // URL"). Redirigir explícito a messages.show devuelve las props
+        // correctas (conversation/messages) sin depender de ese estado.
+        return redirect()->route('messages.show', [$current_team, $conversation]);
     }
 }

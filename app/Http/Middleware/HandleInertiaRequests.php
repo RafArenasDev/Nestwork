@@ -50,6 +50,13 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // ThemeToggle necesita esto para el render inicial (SSR y
+            // cliente): antes leía `document.documentElement` directo,
+            // pero `document` no existe durante el render SSR de
+            // Inertia — el server siempre asumía "oscuro" sin importar
+            // la cookie real, y React tiraba un warning de hydration
+            // mismatch apenas el cliente corregía al valor real.
+            'appearance' => $request->cookie('appearance') ?? 'system',
             'currentTeam' => fn () => $user?->currentTeam ? $user->toUserTeam($user->currentTeam) : null,
             'teams' => fn () => $user?->toUserTeams(includeCurrent: true) ?? [],
             // Compartida en todas las páginas (no solo messages/*) para

@@ -1,11 +1,17 @@
 <?php
 
+use App\Models\Conversation;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
+});
+
+// Un hilo de mensajes en vivo — sólo sus participantes pueden escuchar.
+Broadcast::channel('conversation.{conversation}', function (User $user, Conversation $conversation) {
+    return $conversation->participants()->where('users.id', $user->id)->exists();
 });
 
 // Presencia en vivo por equipo — quién está conectado ahora mismo. Sólo

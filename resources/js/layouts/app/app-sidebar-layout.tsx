@@ -1,5 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEcho } from '@laravel/echo-react';
+import { useEffect, useState } from 'react';
 import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
@@ -10,6 +11,7 @@ import {
     RAIL_MODULES,
     type RailModuleKey,
 } from '@/components/curved-nav-rail';
+import { updateFaviconBadge } from '@/lib/favicon-badge';
 import { dashboard } from '@/routes';
 import { index as messagesIndex } from '@/routes/messages';
 import type { AppLayoutProps } from '@/types';
@@ -27,12 +29,42 @@ export default function AppSidebarLayout({
 }: AppLayoutProps) {
     const page = usePage();
     const currentTeam = page.props.currentTeam;
+    const authUserId = page.props.auth.user.id;
+    const conversations = page.props.conversations;
 
     // Módulos sin página propia todavía (activity/archived) usan este
     // estado local; en cuanto tienen ruta real, la URL manda.
     const [manualModule, setManualModule] = useState<RailModuleKey | null>(
         null,
     );
+
+    // Tiempo real (Reverb): un mensaje nuevo en cualquier conversación
+    // propia refresca sólo el contador de no-leídos del sidebar — el
+    // hilo abierto (si está viendo esa conversación) se actualiza aparte
+    // en `messages/index.tsx`, que escucha el canal específico de esa
+    // conversación.
+    useEcho(
+        `App.Models.User.${authUserId}`,
+        '.MessageSent',
+        () => {
+            router.reload({
+                only: ['conversations', 'archivedConversations'],
+            });
+        },
+        [authUserId],
+    );
+
+    // Badge de no-leídos en el favicon de la pestaña — se recalcula cada
+    // vez que la lista de conversaciones cambia (llegue un mensaje o se
+    // marque como leído).
+    useEffect(() => {
+        const totalUnread = conversations.reduce(
+            (total, conversation) => total + conversation.unreadCount,
+            0,
+        );
+
+        void updateFaviconBadge(totalUnread);
+    }, [conversations]);
 
     const urlModule: RailModuleKey = page.url.includes('/messages')
         ? 'messages'

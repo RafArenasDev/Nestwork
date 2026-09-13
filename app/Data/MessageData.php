@@ -13,6 +13,9 @@ readonly class MessageData
         public string $userName,
         public ?string $userAvatar,
         public bool $isMine,
+        public ?int $replyToId = null,
+        public ?string $replyToUserName = null,
+        public ?string $replyToBody = null,
         /** @var 'sent'|'read' */
         public string $status = 'sent',
     ) {
