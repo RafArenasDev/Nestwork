@@ -6,23 +6,37 @@ import {
     ArrowDown,
     Bell,
     BellOff,
+    Bold,
     Check,
     CheckCheck,
+    ChevronDown,
     CircleAlert,
     Clock,
+    Code,
     Forward,
+    Italic,
+    List,
     MoreHorizontal,
     MoreVertical,
     Phone,
+    Quote,
     Reply,
     Search,
     Send,
     Smile,
+    Strikethrough,
+    Underline,
     UserRound,
     Video,
     X,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type ReactNode,
+} from 'react';
 import {
     index as messagesIndex,
     read as markReadRoute,
@@ -152,6 +166,28 @@ function formatDaySeparator(iso: string): string {
     });
 }
 
+type DateGroup = { key: string; messages: MessageData[] };
+
+/** Agrupa mensajes consecutivos del mismo día — insumo del badge de
+ *  fecha "desplegable" (sección 17 punto 5 del prompt v2: Hoy/Ayer/días
+ *  anteriores como dropdown, no una simple etiqueta). */
+function groupMessagesByDate(messages: MessageData[]): DateGroup[] {
+    const groups: DateGroup[] = [];
+
+    for (const message of messages) {
+        const key = dayKey(message.createdAt);
+        const currentGroup = groups[groups.length - 1];
+
+        if (currentGroup && currentGroup.key === key) {
+            currentGroup.messages.push(message);
+        } else {
+            groups.push({ key, messages: [message] });
+        }
+    }
+
+    return groups;
+}
+
 /** Igual que el auto-capitalize de los teclados de Android/iOS: la
  *  primera letra del mensaje siempre en mayúscula, sin importar cómo
  *  se haya escrito. */
@@ -166,6 +202,98 @@ function formatBubbleTime(iso: string): string {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
+    });
+}
+
+// Markdown ligero (sección 9 del prompt v2): NO usamos una librería de
+// Markdown real ni dangerouslySetInnerHTML — el body de un mensaje es
+// contenido de OTRO usuario, insertarlo como HTML crudo sería un XSS
+// directo. Este tokenizer arma nodos de React a mano (texto siempre
+// escapado por React, nunca interpretado como marcado) — negrita,
+// cursiva, subrayado, tachado y código en línea. Orden del alternado
+// importa: **negrita** y __subrayado__ (dobles) van ANTES que _cursiva_
+// (simple) para que el motor de regex no le gane la posición al de
+// doble carácter.
+const INLINE_FORMAT_RE = /\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`(.+?)`|_(.+?)_/g;
+
+function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
+    const nodes: ReactNode[] = [];
+    let lastIndex = 0;
+    let index = 0;
+    let match: RegExpExecArray | null;
+
+    INLINE_FORMAT_RE.lastIndex = 0;
+
+    while ((match = INLINE_FORMAT_RE.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            nodes.push(text.slice(lastIndex, match.index));
+        }
+
+        const key = `${keyPrefix}-${index++}`;
+
+        if (match[1] !== undefined) {
+            nodes.push(<strong key={key}>{match[1]}</strong>);
+        } else if (match[2] !== undefined) {
+            nodes.push(<u key={key}>{match[2]}</u>);
+        } else if (match[3] !== undefined) {
+            nodes.push(<s key={key}>{match[3]}</s>);
+        } else if (match[4] !== undefined) {
+            nodes.push(
+                <code
+                    key={key}
+                    className="rounded bg-black/10 px-1 py-0.5 font-mono text-[0.85em]"
+                >
+                    {match[4]}
+                </code>,
+            );
+        } else if (match[5] !== undefined) {
+            nodes.push(<em key={key}>{match[5]}</em>);
+        }
+
+        lastIndex = INLINE_FORMAT_RE.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+        nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes;
+}
+
+/** Prefijos de línea (cita "> " y lista "- ") además del formato en
+ *  línea de arriba — mismo criterio de seguridad, sin HTML crudo. */
+function renderFormattedBody(body: string): ReactNode {
+    const lines = body.split('\n');
+
+    return lines.map((line, lineIndex) => {
+        const key = `line-${lineIndex}`;
+
+        if (line.startsWith('> ')) {
+            return (
+                <blockquote
+                    key={key}
+                    className="my-0.5 border-l-2 border-current/40 pl-2 opacity-90"
+                >
+                    {renderInlineFormatting(line.slice(2), key)}
+                </blockquote>
+            );
+        }
+
+        if (line.startsWith('- ')) {
+            return (
+                <div key={key} className="flex gap-1.5">
+                    <span aria-hidden="true">•</span>
+                    <span>{renderInlineFormatting(line.slice(2), key)}</span>
+                </div>
+            );
+        }
+
+        return (
+            <span key={key}>
+                {renderInlineFormatting(line, key)}
+                {lineIndex < lines.length - 1 && <br />}
+            </span>
+        );
     });
 }
 
@@ -380,6 +508,19 @@ function Thread({
     const [sending, setSending] = useState(false);
     const [replyingTo, setReplyingTo] = useState<MessageData | null>(null);
     const [liveMessages, setLiveMessages] = useState<MessageData[]>(messages);
+    // Badges de fecha como dropdown (sección 17.5 del prompt v2): sólo
+    // el día MÁS RECIENTE arranca desplegado (es el que se está usando
+    // ahora mismo) — el resto del historial empieza colapsado,
+    // mostrando sólo los últimos 1-2 mensajes de ese día hasta que se
+    // pulse el badge. Lazy initializer: sólo se calcula una vez, con
+    // los mensajes iniciales — abrir/cerrar días después es decisión
+    // 100% del usuario, no se recalcula solo con cada mensaje nuevo.
+    const [expandedDates, setExpandedDates] = useState<Set<string>>(() => {
+        const groups = groupMessagesByDate(messages);
+        const mostRecentKey = groups[groups.length - 1]?.key;
+
+        return new Set(mostRecentKey ? [mostRecentKey] : []);
+    });
     const [typingUserName, setTypingUserName] = useState<string | null>(null);
     const [genieClass, setGenieClass] = useState('genie-panel--opening');
     const [isNearBottom, setIsNearBottom] = useState(true);
@@ -743,6 +884,80 @@ function Thread({
         textareaRef.current?.focus();
     };
 
+    const toggleDateExpanded = (key: string) => {
+        setExpandedDates((previous) => {
+            const next = new Set(previous);
+
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+
+            return next;
+        });
+    };
+
+    // Barra de formato (sección 9 del prompt v2): envuelve la selección
+    // actual del textarea con el delimitador de Markdown ligero — si no
+    // hay selección, inserta el par de delimitadores con el cursor en
+    // el medio, igual que cualquier editor tipo WYSIWYG-lite. `__` para
+    // subrayado (no estándar en Markdown real, pero el propio prompt
+    // dice "Markdown ligero" — CommonMark no tiene subrayado nativo).
+    const wrapSelection = (before: string, after: string = before) => {
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
+            return;
+        }
+
+        const { selectionStart, selectionEnd, value } = textarea;
+        const selected = value.slice(selectionStart, selectionEnd);
+        const next =
+            value.slice(0, selectionStart) +
+            before +
+            selected +
+            after +
+            value.slice(selectionEnd);
+
+        setBody(next);
+
+        requestAnimationFrame(() => {
+            textarea.focus();
+            const cursor = selectionStart + before.length;
+            textarea.setSelectionRange(cursor, cursor + selected.length);
+        });
+    };
+
+    // Prefijo de línea (cita/lista): se aplica a la línea donde está el
+    // cursor, no envuelve una selección — quitar el prefijo si ya está
+    // (toggle), igual criterio que negrita/cursiva pero para bloques.
+    const toggleLinePrefix = (prefix: string) => {
+        const textarea = textareaRef.current;
+
+        if (!textarea) {
+            return;
+        }
+
+        const { selectionStart, value } = textarea;
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+        const lineEndIndex = value.indexOf('\n', selectionStart);
+        const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+        const line = value.slice(lineStart, lineEnd);
+        const hasPrefix = line.startsWith(prefix);
+        const newLine = hasPrefix ? line.slice(prefix.length) : prefix + line;
+        const next = value.slice(0, lineStart) + newLine + value.slice(lineEnd);
+        const delta = newLine.length - line.length;
+
+        setBody(next);
+
+        requestAnimationFrame(() => {
+            textarea.focus();
+            const cursor = selectionStart + delta;
+            textarea.setSelectionRange(cursor, cursor);
+        });
+    };
+
     const handleSend = () => {
         const trimmed = capitalizeFirstLetter(body.trim());
 
@@ -851,41 +1066,90 @@ function Thread({
                             // su avatar ya desplazado).
                             className="flex w-full min-w-0 flex-col gap-0.5 py-4 pb-10"
                         >
-                            {liveMessages.map((message, index) => {
-                                const previous = liveMessages[index - 1];
-                                const next = liveMessages[index + 1];
-                                const isFirstInGroup =
-                                    !previous ||
-                                    !isSameGroup(previous, message);
-                                const isLastInGroup =
-                                    !next || !isSameGroup(message, next);
-                                const showDateSeparator =
-                                    !previous ||
-                                    dayKey(previous.createdAt) !==
-                                        dayKey(message.createdAt);
+                            {groupMessagesByDate(liveMessages).map((group) => {
+                                const isExpanded = expandedDates.has(group.key);
+                                // Colapsado: sólo los últimos 1-2 de ese
+                                // día — el badge es un dropdown, no una
+                                // simple etiqueta (pedido explícito,
+                                // sección 17.5). El día más reciente
+                                // arranca desplegado (ver el
+                                // useState de expandedDates).
+                                const visibleMessages = isExpanded
+                                    ? group.messages
+                                    : group.messages.slice(-2);
+                                const hiddenCount =
+                                    group.messages.length -
+                                    visibleMessages.length;
 
                                 return (
-                                    <div key={message.id} className="min-w-0">
-                                        {showDateSeparator && (
-                                            <div className="my-3 flex justify-center">
-                                                <span className="bg-foreground/5 text-muted-foreground rounded-full px-3 py-1 text-xs font-medium">
-                                                    {formatDaySeparator(
-                                                        message.createdAt,
+                                    <div key={group.key} className="min-w-0">
+                                        <div className="my-3 flex justify-center">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    toggleDateExpanded(
+                                                        group.key,
+                                                    )
+                                                }
+                                                className="bg-foreground/5 text-muted-foreground hover:bg-foreground/10 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                                            >
+                                                {formatDaySeparator(
+                                                    group.messages[0].createdAt,
+                                                )}
+                                                {!isExpanded &&
+                                                    hiddenCount > 0 && (
+                                                        <span className="opacity-70">
+                                                            · {hiddenCount} más
+                                                        </span>
                                                     )}
-                                                </span>
-                                            </div>
+                                                <ChevronDown
+                                                    className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                />
+                                            </button>
+                                        </div>
+                                        {visibleMessages.map(
+                                            (message, index) => {
+                                                const previous =
+                                                    visibleMessages[index - 1];
+                                                const next =
+                                                    visibleMessages[index + 1];
+                                                const isFirstInGroup =
+                                                    !previous ||
+                                                    !isSameGroup(
+                                                        previous,
+                                                        message,
+                                                    );
+                                                const isLastInGroup =
+                                                    !next ||
+                                                    !isSameGroup(message, next);
+
+                                                return (
+                                                    <div
+                                                        key={message.id}
+                                                        className="min-w-0"
+                                                    >
+                                                        <MessageBubble
+                                                            message={message}
+                                                            getInitials={
+                                                                getInitials
+                                                            }
+                                                            authUserName={
+                                                                authUser.name
+                                                            }
+                                                            isFirstInGroup={
+                                                                isFirstInGroup
+                                                            }
+                                                            isLastInGroup={
+                                                                isLastInGroup
+                                                            }
+                                                            onReply={
+                                                                handleReply
+                                                            }
+                                                        />
+                                                    </div>
+                                                );
+                                            },
                                         )}
-                                        <MessageBubble
-                                            message={message}
-                                            getInitials={getInitials}
-                                            authUserName={authUser.name}
-                                            isFirstInGroup={
-                                                isFirstInGroup ||
-                                                showDateSeparator
-                                            }
-                                            isLastInGroup={isLastInGroup}
-                                            onReply={handleReply}
-                                        />
                                     </div>
                                 );
                             })}
@@ -956,6 +1220,49 @@ function Thread({
                             </Button>
                         </div>
                     )}
+                    {/* Barra de formato (sección 9 del prompt v2): fija
+                        arriba del campo (no un popover al seleccionar
+                        texto — más simple y descubrible). Markdown
+                        ligero guardado tal cual en messages.body,
+                        traducido a estilos reales al renderizar la
+                        burbuja (ver renderFormattedBody). */}
+                    <div className="text-muted-foreground flex items-center gap-0.5">
+                        <FormatButton
+                            icon={Bold}
+                            label="Negrita"
+                            onClick={() => wrapSelection('**')}
+                        />
+                        <FormatButton
+                            icon={Italic}
+                            label="Cursiva"
+                            onClick={() => wrapSelection('_')}
+                        />
+                        <FormatButton
+                            icon={Underline}
+                            label="Subrayado"
+                            onClick={() => wrapSelection('__')}
+                        />
+                        <FormatButton
+                            icon={Strikethrough}
+                            label="Tachado"
+                            onClick={() => wrapSelection('~~')}
+                        />
+                        <FormatButton
+                            icon={Code}
+                            label="Código en línea"
+                            onClick={() => wrapSelection('`')}
+                        />
+                        <FormatButton
+                            icon={Quote}
+                            label="Cita en bloque"
+                            onClick={() => toggleLinePrefix('> ')}
+                        />
+                        <FormatButton
+                            icon={List}
+                            label="Lista"
+                            onClick={() => toggleLinePrefix('- ')}
+                        />
+                    </div>
                     <div className="flex items-end gap-2">
                         <Textarea
                             ref={textareaRef}
@@ -977,8 +1284,32 @@ function Thread({
                                 if (event.key === 'Escape' && replyingTo) {
                                     setReplyingTo(null);
                                 }
+                                // Atajos tipo cualquier editor: Ctrl/Cmd
+                                // + B/I/U/Shift+X.
+                                const modifier = event.ctrlKey || event.metaKey;
+                                if (
+                                    modifier &&
+                                    event.key.toLowerCase() === 'b'
+                                ) {
+                                    event.preventDefault();
+                                    wrapSelection('**');
+                                }
+                                if (
+                                    modifier &&
+                                    event.key.toLowerCase() === 'i'
+                                ) {
+                                    event.preventDefault();
+                                    wrapSelection('_');
+                                }
+                                if (
+                                    modifier &&
+                                    event.key.toLowerCase() === 'u'
+                                ) {
+                                    event.preventDefault();
+                                    wrapSelection('__');
+                                }
                             }}
-                            placeholder="Escribe un mensaje…"
+                            placeholder={`Escribe un mensaje a ${conversation.name}…`}
                             // Teclados móviles (Android/iOS): mayúscula
                             // automática al empezar a escribir, mismo
                             // comportamiento nativo esperado — el respaldo
@@ -1054,6 +1385,44 @@ function BubbleActionButton({
                     className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-6 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-40"
                 >
                     <Icon className="size-3.5" />
+                </button>
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+    );
+}
+
+/** Botón de la barra de formato del composer — mismo lenguaje visual
+ *  que BubbleActionButton (ícono + tooltip), pero un poco más grande:
+ *  esta barra siempre está visible (no aparece sólo al hover), así que
+ *  necesita ser un blanco de clic cómodo por sí sola. */
+function FormatButton({
+    icon: Icon,
+    label,
+    onClick,
+}: {
+    icon: typeof Bold;
+    label: string;
+    onClick: () => void;
+}) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <button
+                    type="button"
+                    aria-label={label}
+                    // onMouseDown (no onClick) + preventDefault: si
+                    // fuera onClick, el textarea pierde el foco (y la
+                    // selección de texto) ANTES de que este handler
+                    // corra — wrapSelection ya no tendría selección
+                    // sobre la que envolver el markdown.
+                    onMouseDown={(event) => {
+                        event.preventDefault();
+                        onClick();
+                    }}
+                    className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-7 items-center justify-center rounded-full transition-colors"
+                >
+                    <Icon className="size-4" />
                 </button>
             </TooltipTrigger>
             <TooltipContent>{label}</TooltipContent>
@@ -1248,10 +1617,15 @@ function MessageBubble({
                     ScrollArea (Radix) mide contenido con un
                     `display:table`, que crece sin límite frente a texto
                     sin espacios — un % no lo frena porque la tabla no
-                    tiene ancho definido a priori, un px sí. */}
-                        <p className="max-w-[420px] break-words whitespace-pre-wrap">
-                            {message.body}
-                        </p>
+                    tiene ancho definido a priori, un px sí. div (no p):
+                    el Markdown ligero de la barra de formato puede
+                    producir hijos de bloque (cita, lista) — meterlos
+                    dentro de un <p> es HTML inválido (el navegador
+                    cierra el <p> solo, apenas encuentra un bloque
+                    adentro). */}
+                        <div className="max-w-[420px] break-words">
+                            {renderFormattedBody(message.body)}
+                        </div>
                     </div>
 
                     {/* Hora fuera de la burbuja, en TODAS (no sólo la última de
