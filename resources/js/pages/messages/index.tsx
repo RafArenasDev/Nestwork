@@ -1106,12 +1106,15 @@ function MessageBubble({
     // que ese "pegado" de antes (pensado para cuando sólo el último de
     // la racha tenía pie) quedaba muy poco aire entre la hora de un
     // mensaje y la burbuja del siguiente. Si ESTE mensaje tiene badge de
-    // respuesta (que sobresale -mt-6 = 24px por encima de su propia
-    // burbuja), mt-2/mt-2.5 no alcanzan — el badge quedaba traslapado
-    // con la hora del mensaje de arriba. mt-8 le da aire de sobra al
-    // badge sin importar si es o no el primero de la racha.
+    // respuesta (que sobresale por encima de su propia burbuja), el
+    // margen tiene que darle aire AL BADGE (que es lo que queda más
+    // arriba), no a la burbuja — mismo espaciado que la hora con
+    // cualquier burbuja normal (~8-10px), no el doble. mt-6 medido con
+    // getBoundingClientRect da esos ~8px reales hasta el badge (el
+    // resto —hasta la burbuja— es el solape a propósito del badge
+    // flotando encima de ella).
     const topMargin = message.replyToId
-        ? 'mt-8'
+        ? 'mt-6'
         : isFirstInGroup
           ? 'mt-2'
           : 'mt-2.5';
