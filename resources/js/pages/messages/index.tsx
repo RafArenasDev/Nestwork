@@ -3,6 +3,7 @@ import { useChannel, useEcho } from '@laravel/echo-react';
 import {
     Archive,
     ArchiveRestore,
+    ArrowDown,
     Bell,
     BellOff,
     Check,
@@ -363,9 +364,13 @@ function Thread({
     const [liveMessages, setLiveMessages] = useState<MessageData[]>(messages);
     const [typingUserName, setTypingUserName] = useState<string | null>(null);
     const [genieClass, setGenieClass] = useState('genie-panel--opening');
+    const [isNearBottom, setIsNearBottom] = useState(true);
+    const [unseenCount, setUnseenCount] = useState(0);
     const scrollBottomRef = useRef<HTMLDivElement>(null);
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
+    const isNearBottomRef = useRef(true);
     const typingThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(
         null,
     );
@@ -421,13 +426,55 @@ function Thread({
         setLiveMessages(messages);
     }, [messages]);
 
+    // Detecta si el usuario está viendo el fondo del chat o leyendo
+    // historial más arriba — Radix ScrollArea no expone onScroll
+    // directo, así que se busca el viewport real que arma por debajo
+    // (data-slot="scroll-area-viewport") y se escucha ahí.
+    useEffect(() => {
+        const viewport = scrollAreaRef.current?.querySelector<HTMLElement>(
+            '[data-slot="scroll-area-viewport"]',
+        );
+
+        if (!viewport) {
+            return;
+        }
+
+        const handleScroll = () => {
+            const distanceFromBottom =
+                viewport.scrollHeight -
+                viewport.scrollTop -
+                viewport.clientHeight;
+            const nearBottom = distanceFromBottom < 80;
+
+            isNearBottomRef.current = nearBottom;
+            setIsNearBottom(nearBottom);
+
+            if (nearBottom) {
+                setUnseenCount(0);
+            }
+        };
+
+        viewport.addEventListener('scroll', handleScroll, { passive: true });
+        handleScroll();
+
+        return () => viewport.removeEventListener('scroll', handleScroll);
+    }, []);
+
     // useLayoutEffect (no useEffect): corre antes de que el navegador
     // pinte el frame, así el salto al fondo ya está hecho en el primer
     // frame visible — con useEffect a veces se alcanzaba a ver medio
     // scrolleado antes de saltar. El rAF de respaldo cubre el caso en
     // que ScrollArea (Radix) todavía no terminó de medir su viewport en
-    // ese mismo tick (por ejemplo, justo al abrir un chat).
+    // ese mismo tick (por ejemplo, justo al abrir un chat). Si el
+    // usuario está leyendo historial más arriba, no lo interrumpe: en
+    // vez de saltar solo, suma al contador del botón flotante.
     useLayoutEffect(() => {
+        if (!isNearBottomRef.current) {
+            setUnseenCount((count) => count + 1);
+
+            return;
+        }
+
         scrollBottomRef.current?.scrollIntoView({ block: 'end' });
         const raf = requestAnimationFrame(() => {
             scrollBottomRef.current?.scrollIntoView({ block: 'end' });
@@ -564,7 +611,10 @@ function Thread({
                     onClose={handleClose}
                 />
 
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div
+                    ref={scrollAreaRef}
+                    className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+                >
                     <ScrollArea className="h-full flex-1 px-4">
                         <div className="flex w-full min-w-0 flex-col gap-0.5 py-4">
                             {liveMessages.map((message, index) => {
@@ -607,6 +657,24 @@ function Thread({
                             <div ref={scrollBottomRef} />
                         </div>
                     </ScrollArea>
+                    {!isNearBottom && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                scrollBottomRef.current?.scrollIntoView({
+                                    block: 'end',
+                                    behavior: 'smooth',
+                                });
+                                setUnseenCount(0);
+                            }}
+                            className="btn-elevated absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-[var(--sidebar-foreground)]"
+                        >
+                            <ArrowDown className="size-3.5" />
+                            {unseenCount > 0
+                                ? `${unseenCount} mensaje${unseenCount === 1 ? '' : 's'} nuevo${unseenCount === 1 ? '' : 's'}`
+                                : 'Ir al final'}
+                        </button>
+                    )}
                     {typingUserName && (
                         <p className="text-muted-foreground px-4 pb-1 text-xs italic">
                             {typingUserName} está escribiendo…

@@ -18,6 +18,8 @@ use Inertia\Response;
 
 class MessagesController extends Controller
 {
+    private const INITIAL_MESSAGE_LIMIT = 150;
+
     public function __construct(private readonly ListConversationsForUser $listConversations)
     {
         //
@@ -57,10 +59,20 @@ class MessagesController extends Controller
             ? $otherLastReadIds->min()
             : null;
 
+        // Tope de seguridad mientras no existe paginación por cursor
+        // (sección 4.1/Fase F del prompt v2): sin esto, una conversación
+        // de miles de mensajes (el seeder de demo ya deja algunas así)
+        // cargaba la tabla ENTERA en cada visita — lento en el backend
+        // y pesado de renderizar en el frontend. `INITIAL_MESSAGE_LIMIT`
+        // trae sólo los más recientes; "cargar más hacia arriba" queda
+        // pendiente de esa fase.
         $messages = $conversation->messages()
             ->with(['user', 'replyTo.user'])
-            ->orderBy('id')
+            ->orderByDesc('id')
+            ->limit(self::INITIAL_MESSAGE_LIMIT)
             ->get()
+            ->sortBy('id')
+            ->values()
             ->map(fn (Message $message) => new MessageData(
                 id: $message->id,
                 body: $message->body,

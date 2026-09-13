@@ -13,8 +13,11 @@ import {
 } from '@/components/curved-nav-rail';
 import { updateFaviconBadge } from '@/lib/favicon-badge';
 import { dashboard } from '@/routes';
-import { index as messagesIndex } from '@/routes/messages';
-import type { AppLayoutProps } from '@/types';
+import {
+    index as messagesIndex,
+    show as messagesShow,
+} from '@/routes/messages';
+import type { ActiveConversation, AppLayoutProps } from '@/types';
 
 /** Módulos que ya tienen una página real (el resto sigue como pestaña
  * local de solo lectura hasta que se construyan). */
@@ -43,15 +46,41 @@ export default function AppSidebarLayout({
     // hilo abierto (si está viendo esa conversación) se actualiza aparte
     // en `messages/index.tsx`, que escucha el canal específico de esa
     // conversación.
+    //
+    // OJO: `router.reload()` reusa `window.location.href` tal cual —
+    // que con `preserveUrl` se queda congelado en "/messages" (nunca
+    // "/messages/{id}", a propósito, ver closeConversation en
+    // messages/index.tsx). Si hay un chat abierto, ese endpoint
+    // "/messages" (index) devuelve `conversations` SIN el
+    // currentConversationId — el `isCurrent` de todas las filas da
+    // false y el sidebar pierde el resaltado de "seleccionado" aunque
+    // el chat siga abierto en pantalla. Por eso acá se arma la URL real
+    // (con el id) a mano en vez de usar reload().
     useEcho(
         `App.Models.User.${authUserId}`,
         '.MessageSent',
         () => {
-            router.reload({
+            if (!currentTeam) {
+                return;
+            }
+
+            const openConversation = page.props.conversation as
+                | ActiveConversation
+                | null
+                | undefined;
+
+            const url = openConversation
+                ? messagesShow([currentTeam.slug, openConversation.id]).url
+                : messagesIndex(currentTeam.slug).url;
+
+            router.visit(url, {
                 only: ['conversations', 'archivedConversations'],
+                preserveScroll: true,
+                preserveState: true,
+                preserveUrl: true,
             });
         },
-        [authUserId],
+        [authUserId, currentTeam, page.props.conversation],
     );
 
     // Badge de no-leídos en el favicon de la pestaña — se recalcula cada
