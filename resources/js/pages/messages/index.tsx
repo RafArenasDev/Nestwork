@@ -667,7 +667,7 @@ function Thread({
                                 });
                                 setUnseenCount(0);
                             }}
-                            className="btn-elevated absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-[var(--sidebar-foreground)]"
+                            className="btn-elevated absolute bottom-6 left-1/2 z-10 inline-flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-nowrap text-[var(--sidebar-foreground)]"
                         >
                             <ArrowDown className="size-3.5" />
                             {unseenCount > 0
