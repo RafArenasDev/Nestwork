@@ -6,8 +6,8 @@
 | ------------------- | ------------------------------------------------------------------------------------------------- |
 | PHP / Laravel       | **Herd** (`http://chat-app.test`) — no hay servidor Vite/PHP manual que levantar                  |
 | PostgreSQL          | **Nativo**, instalado localmente (Postgres 18, `C:\Program Files\PostgreSQL\18`), base `chat_app` |
-| Redis               | 🔲 No instalado todavía                                                                           |
-| Reverb (WebSockets) | 🔲 No instalado todavía                                                                           |
+| Redis               | 🔲 No instalado todavía (Reverb corre sin Redis — cola/queue usa el driver `database`)            |
+| Reverb (WebSockets) | 🟢 Instalado y en uso — ver "Tiempo real (Laravel Reverb)" más abajo para el setup en máquina nueva |
 | Mail                | Driver `log` (no hay Mailpit/Mailhog corriendo, los emails van al log de Laravel)                 |
 | Storage de archivos | Driver `local`, sin MinIO todavía                                                                 |
 
@@ -46,9 +46,33 @@ npm run check:fix
 php vendor/bin/pint
 ```
 
-## Pendiente para cuando arranque Fase 1 (Mensajería en tiempo real)
+## Tiempo real (Laravel Reverb)
 
-1. Instalar Redis (Windows: vía WSL, Memurai, o contenedor Docker — a decidir en ese momento).
-2. `composer require laravel/reverb` + `php artisan reverb:install`.
-3. Configurar `BROADCAST_CONNECTION=reverb` en `.env` (hoy está en `log`).
-4. Correr `php artisan reverb:start` como proceso aparte durante desarrollo.
+Reverb ya está instalado y funcionando en la máquina de desarrollo original. Para instalar el proyecto en una máquina Windows **nueva** (con Herd ya instalado y el sitio linkeado — `herd link` — y sirviendo por HTTPS), Reverb necesita dos cosas que Herd no arma solo: un puerto propio (para no chocar con otro proyecto que también use Reverb en la misma máquina) y un proxy en la config de nginx de Herd para que el navegador pueda hablarle por WebSocket a través del mismo dominio HTTPS del sitio.
+
+### Automático (recomendado)
+
+```powershell
+# Primero, si REVERB_APP_ID/KEY/SECRET no existen todavía en .env:
+php artisan reverb:install
+
+# Después, configura puerto + proxy de nginx solo:
+.\scripts\setup-reverb-windows.ps1
+```
+
+O doble clic en `setup-reverb.bat` en la raíz del proyecto (hace lo mismo, pensado para quien no quiere abrir una terminal). El script:
+
+1. Lee el dominio del sitio desde `APP_URL` en `.env`.
+2. Busca el primer puerto libre desde el 8081 en adelante (no usa el 8080 a propósito — en esta familia de proyectos, Inventory-Manager ya lo tiene tomado con una tarea programada de Windows que lo reinicia sola) y lo escribe en `.env` (`REVERB_SERVER_PORT`/`REVERB_PORT`, más `VITE_REVERB_HOST`/`PORT`/`SCHEME` apuntando al dominio HTTPS real).
+3. Agrega el bloque `location /app { proxy_pass http://127.0.0.1:<puerto>; ... }` a la config de nginx de Herd para el sitio (`~/.config/herd/config/valet/Nginx/<sitio>.conf`), dentro de su server block HTTPS.
+4. Reinicia nginx (`herd restart nginx`) para que el cambio tome efecto.
+5. Es **idempotente** — volver a correrlo no duplica el bloque de nginx ni pisa otras variables de `.env`. Hace falta correrlo de nuevo cada vez que Herd regenera esa config (reinicio del servicio, cambio de versión de PHP) y se lleva puesto el bloque `/app`.
+
+Después de correrlo: `composer run dev` (levanta `php artisan serve` + `queue:listen` + `vite` + `reverb:start` juntos, ver `composer.json`).
+
+### Manual (si el script no aplica, ej. en Mac/Linux)
+
+1. `php artisan reverb:install` (genera `REVERB_APP_ID`/`KEY`/`SECRET` y publica `config/reverb.php`).
+2. En `.env`: `REVERB_SERVER_HOST=127.0.0.1`, `REVERB_SERVER_PORT=<puerto libre>`, `REVERB_HOST=127.0.0.1`, `REVERB_PORT=<mismo puerto>`, `REVERB_SCHEME=http` (interno, PHP -> Reverb, sin TLS) y `VITE_REVERB_HOST=<dominio del sitio>`, `VITE_REVERB_PORT=443`, `VITE_REVERB_SCHEME=https` (navegador -> Reverb, vía el proxy HTTPS del sitio).
+3. Agregar el proxy WebSocket al servidor web (nginx/Herd, Caddy, etc.) — mismo bloque que arma el script arriba, apuntando al puerto elegido.
+4. `composer run dev`.
