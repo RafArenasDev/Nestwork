@@ -5,13 +5,16 @@ namespace App\Http\Controllers;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Data\MessageData;
 use App\Enums\ConversationType;
+use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -47,6 +50,36 @@ class MessagesController extends Controller
         abort_if(! $team || $conversation->team_id !== $team->id, 404);
         abort_unless($user->belongsToTeam($team) && $conversation->participants()->where('users.id', $user->id)->exists(), 403);
 
+        return Inertia::render('messages/index', [
+            // Closures: Inertia sólo las evalúa cuando el prop fue
+            // realmente pedido (visita completa o partial reload que lo
+            // incluya en `only`). CRÍTICO para 'messages': es la única
+            // que marca la conversación como leída — el refresco de
+            // fondo del sidebar (badge de no-leídos, `.MessageSent` en
+            // app-sidebar-layout.tsx) pide sólo `only:
+            // ['conversations','archivedConversations']`, así que con
+            // esto NUNCA dispara el marcado-como-leído. Antes era un
+            // array plano ya resuelto arriba, y por eso cada mensaje
+            // nuevo marcaba la conversación abierta como leída al
+            // instante (aunque el usuario estuviera desplazado leyendo
+            // historial), y el badge del chat seleccionado jamás llegaba
+            // a mostrarse.
+            'messages' => fn () => $this->loadMessagesAndMarkRead($conversation, $user),
+            'conversation' => fn () => $this->buildConversationPayload($conversation, $user),
+            'conversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id),
+            // Si la conversación abierta está archivada, no aparece en
+            // la lista de arriba (se filtra) — necesita su propio
+            // "isCurrent" acá para que la gotera también aplique en la
+            // pestaña Archivado.
+            'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true),
+        ]);
+    }
+
+    /**
+     * @return Collection<int, MessageData>
+     */
+    private function loadMessagesAndMarkRead(Conversation $conversation, User $user)
+    {
         // "Leído" real: sólo si TODOS los demás participantes ya marcaron
         // last_read_message_id — para un DM es uno solo, para un grupo
         // exige que el más rezagado también lo haya visto.
@@ -94,6 +127,14 @@ class MessagesController extends Controller
             'last_read_message_id' => $messages->last()?->id,
         ]);
 
+        return $messages;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildConversationPayload(Conversation $conversation, User $user): array
+    {
         $pivot = $conversation->participants()
             ->where('users.id', $user->id)
             ->first()
@@ -105,29 +146,20 @@ class MessagesController extends Controller
             ->where('users.id', '!=', $user->id)
             ->first();
 
-        return Inertia::render('messages/index', [
-            'conversations' => $this->listConversations->handle($user, $team, $conversation->id),
-            // Si la conversación abierta está archivada, no aparece en
-            // la lista de arriba (se filtra) — necesita su propio
-            // "isCurrent" acá para que la gotera también aplique en la
-            // pestaña Archivado.
-            'archivedConversations' => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true),
-            'conversation' => [
-                'id' => $conversation->id,
-                'name' => $conversation->displayNameFor($user),
-                'type' => $conversation->type->value,
-                'avatar' => $otherParticipant instanceof User ? $otherParticipant->avatar : null,
-                'otherUserId' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                    ? $otherParticipant->id
-                    : null,
-                'presence' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                    ? $otherParticipant->presenceStatus()
-                    : null,
-                'isArchived' => $pivot->isArchived(),
-                'isMuted' => $pivot->isMuted(),
-            ],
-            'messages' => $messages,
-        ]);
+        return [
+            'id' => $conversation->id,
+            'name' => $conversation->displayNameFor($user),
+            'type' => $conversation->type->value,
+            'avatar' => $otherParticipant instanceof User ? $otherParticipant->avatar : null,
+            'otherUserId' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->id
+                : null,
+            'presence' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->presenceStatus()
+                : null,
+            'isArchived' => $pivot->isArchived(),
+            'isMuted' => $pivot->isMuted(),
+        ];
     }
 
     public function store(Request $request, string $current_team, Conversation $conversation): RedirectResponse
@@ -165,5 +197,30 @@ class MessagesController extends Controller
         // URL"). Redirigir explícito a messages.show devuelve las props
         // correctas (conversation/messages) sin depender de ese estado.
         return redirect()->route('messages.show', [$current_team, $conversation]);
+    }
+
+    /**
+     * Ping silencioso al llegar al fondo del chat en vivo: NO es una
+     * visita Inertia (nada de props/render) — sólo actualiza
+     * last_read_message_id y dispara MessageRead para que los demás
+     * participantes vean sus checks de "leído" en tiempo real.
+     */
+    public function markRead(Request $request, string $current_team, Conversation $conversation): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+
+        $lastMessageId = $conversation->messages()->max('id');
+
+        $conversation->participants()->updateExistingPivot($user->id, [
+            'last_read_message_id' => $lastMessageId,
+        ]);
+
+        broadcast(new MessageRead($conversation, $user->id, $lastMessageId));
+
+        return response()->json(['lastReadMessageId' => $lastMessageId]);
     }
 }

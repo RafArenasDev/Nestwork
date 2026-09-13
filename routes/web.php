@@ -18,6 +18,10 @@ Route::prefix('{current_team}')
         Route::get('messages', [MessagesController::class, 'index'])->name('messages.index');
         Route::get('messages/{conversation}', [MessagesController::class, 'show'])->name('messages.show');
         Route::post('messages/{conversation}', [MessagesController::class, 'store'])->name('messages.store');
+        // Ping liviano (no navega, no props) al llegar al fondo del
+        // chat en vivo — separado de show() para no recargar toda la
+        // página sólo por marcar como leído.
+        Route::patch('messages/{conversation}/read', [MessagesController::class, 'markRead'])->name('messages.read');
 
         Route::post('conversations', [ConversationsController::class, 'store'])->name('conversations.store');
         Route::patch('conversations/{conversation}/archive', [ConversationsController::class, 'toggleArchive'])->name('conversations.toggle-archive');

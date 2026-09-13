@@ -25,6 +25,8 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
     index as messagesIndex,
+    read as markReadRoute,
+    show as messagesShow,
     store as storeMessage,
 } from '@/routes/messages';
 import { toggleArchive, toggleMute } from '@/routes/conversations';
@@ -375,6 +377,65 @@ function Thread({
         null,
     );
     const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const liveMessagesRef = useRef<MessageData[]>(messages);
+    // Último id que ya avisamos al backend como "leído" — evita mandar
+    // el mismo PATCH de nuevo en cada scroll mientras se sigue al fondo.
+    const lastReadSentRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        liveMessagesRef.current = liveMessages;
+    }, [liveMessages]);
+
+    // Ping silencioso al backend (PATCH messages.read, NO es una visita
+    // Inertia) cuando el usuario efectivamente llega al fondo del chat —
+    // dispara MessageRead, que le actualiza en vivo el check de "leído"
+    // a quien envió. Luego SÍ pide una recarga parcial de Inertia, pero
+    // sólo de `conversations`/`archivedConversations` (el badge del
+    // sidebar) — nunca de `messages`, así no se pisa a sí misma.
+    const markAsRead = (explicitLastId?: number) => {
+        if (!currentTeam) {
+            return;
+        }
+
+        const lastId =
+            explicitLastId ??
+            liveMessagesRef.current[liveMessagesRef.current.length - 1]?.id;
+
+        if (!lastId || lastReadSentRef.current === lastId) {
+            return;
+        }
+
+        lastReadSentRef.current = lastId;
+
+        const csrfToken = document.querySelector<HTMLMetaElement>(
+            'meta[name="csrf-token"]',
+        )?.content;
+
+        fetch(markReadRoute([currentTeam.slug, conversation.id]).url, {
+            method: 'PATCH',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            },
+        })
+            .then(() => {
+                router.visit(
+                    messagesShow([currentTeam.slug, conversation.id]).url,
+                    {
+                        only: ['conversations', 'archivedConversations'],
+                        preserveScroll: true,
+                        preserveState: true,
+                        preserveUrl: true,
+                    },
+                );
+            })
+            .catch(() => {
+                // Ping silencioso: si falla, el próximo evento en vivo o
+                // la próxima visita real igual va a reconciliar el
+                // estado — no hace falta reintentar ni avisar al user.
+            });
+    };
 
     // Efecto "genio" de macOS: el panel se "traga" hacia el ícono de
     // Mensajes del rail al cerrar (y emerge desde ahí al abrir) en vez
@@ -409,6 +470,11 @@ function Thread({
 
     useEffect(() => {
         applyGenieOffset();
+        // Al abrir un chat el scroll ya arranca al fondo (ver el
+        // useLayoutEffect de liveMessages más abajo), así que esto ya
+        // cuenta como "leído" — avisa al backend con el último mensaje
+        // que llegó en el prop inicial.
+        markAsRead(messages[messages.length - 1]?.id);
         // Sólo al montar (abrir este chat) — dispara la animación de
         // entrada; se limpia sola en onAnimationEnd más abajo.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -451,6 +517,7 @@ function Thread({
 
             if (nearBottom) {
                 setUnseenCount(0);
+                markAsRead();
             }
         };
 
@@ -476,6 +543,7 @@ function Thread({
         }
 
         scrollBottomRef.current?.scrollIntoView({ block: 'end' });
+        markAsRead();
         const raf = requestAnimationFrame(() => {
             scrollBottomRef.current?.scrollIntoView({ block: 'end' });
         });
@@ -509,6 +577,39 @@ function Thread({
             );
         },
         [conversation.id],
+    );
+
+    // Checks de "leído" en vivo: cuando otro participante llega al fondo
+    // del chat (markAsRead → backend dispara MessageRead), acá se
+    // actualizan a 'read' los mensajes propios hasta ese id — sin esto,
+    // el remitente sólo se enteraba de que le leyeron al recargar. Se
+    // ignora el propio readerId: este mismo evento también le llega al
+    // que acaba de leer, y sus mensajes propios (en un grupo) no deben
+    // marcarse "leídos" por su propia acción de lectura.
+    useEcho<{
+        conversationId: number;
+        readerId: number;
+        lastReadMessageId: number | null;
+    }>(
+        `conversation.${conversation.id}`,
+        '.MessageRead',
+        (payload) => {
+            if (
+                payload.readerId === authUser.id ||
+                payload.lastReadMessageId === null
+            ) {
+                return;
+            }
+
+            setLiveMessages((previous) =>
+                previous.map((message) =>
+                    message.isMine && message.id <= payload.lastReadMessageId!
+                        ? { ...message, status: 'read' }
+                        : message,
+                ),
+            );
+        },
+        [conversation.id, authUser.id],
     );
 
     // Indicador de "escribiendo…": whisper de Echo (no toca el backend,
@@ -616,7 +717,7 @@ function Thread({
                     className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
                 >
                     <ScrollArea className="h-full flex-1 px-4">
-                        <div className="flex w-full min-w-0 flex-col gap-0.5 py-4">
+                        <div className="flex w-full min-w-0 flex-col gap-0.5 py-4 pb-8">
                             {liveMessages.map((message, index) => {
                                 const previous = liveMessages[index - 1];
                                 const next = liveMessages[index + 1];
@@ -666,12 +767,13 @@ function Thread({
                                     behavior: 'smooth',
                                 });
                                 setUnseenCount(0);
+                                markAsRead();
                             }}
-                            className="btn-elevated absolute bottom-6 left-1/2 z-10 inline-flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-nowrap text-[var(--sidebar-foreground)]"
+                            className="btn-elevated absolute bottom-10 left-1/2 z-10 inline-flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-nowrap text-[var(--sidebar-foreground)]"
                         >
                             <ArrowDown className="size-3.5" />
                             {unseenCount > 0
-                                ? `${unseenCount} mensaje${unseenCount === 1 ? '' : 's'} nuevo${unseenCount === 1 ? '' : 's'}`
+                                ? `${unseenCount} mensaje${unseenCount === 1 ? '' : 's'} nuevo${unseenCount === 1 ? '' : 's'} sin leer`
                                 : 'Ir al final'}
                         </button>
                     )}
