@@ -152,6 +152,15 @@ function formatDaySeparator(iso: string): string {
     });
 }
 
+/** Igual que el auto-capitalize de los teclados de Android/iOS: la
+ *  primera letra del mensaje siempre en mayúscula, sin importar cómo
+ *  se haya escrito. */
+function capitalizeFirstLetter(text: string): string {
+    return text.length > 0
+        ? text[0].toLocaleUpperCase('es') + text.slice(1)
+        : text;
+}
+
 function formatBubbleTime(iso: string): string {
     return new Date(iso).toLocaleTimeString('es-CO', {
         hour: 'numeric',
@@ -675,7 +684,7 @@ function Thread({
     };
 
     const handleSend = () => {
-        const trimmed = body.trim();
+        const trimmed = capitalizeFirstLetter(body.trim());
 
         if (!trimmed || !currentTeam || sending) {
             return;
@@ -811,7 +820,10 @@ function Thread({
 
                 <div className="flex flex-col gap-2 border-t p-3">
                     {replyingTo && (
-                        <div className="border-border bg-foreground/5 flex items-start gap-2 rounded-lg border-l-2 border-l-sky-500 py-1.5 pr-1.5 pl-2.5">
+                        // rounded-3xl: mismo radio que las burbujas de
+                        // mensajes (pedido explícito) — no el rounded-lg
+                        // genérico de antes.
+                        <div className="border-border bg-foreground/5 flex items-start gap-2 rounded-3xl border-l-2 border-l-sky-500 py-2 pr-2 pl-3.5">
                             <div className="min-w-0 flex-1">
                                 <p className="text-[11px] font-medium text-sky-600 dark:text-sky-400">
                                     Respondiendo a{' '}
@@ -853,6 +865,12 @@ function Thread({
                                 }
                             }}
                             placeholder="Escribe un mensaje…"
+                            // Teclados móviles (Android/iOS): mayúscula
+                            // automática al empezar a escribir, mismo
+                            // comportamiento nativo esperado — el respaldo
+                            // real para teclado físico/desktop es
+                            // capitalizeFirstLetter() en handleSend.
+                            autoCapitalize="sentences"
                             className="max-h-40 min-h-11 flex-1 resize-none rounded-3xl px-4 py-2.5"
                             rows={1}
                         />
@@ -950,8 +968,12 @@ function MessageBubble({
           ? 'bg-[var(--bubble-sent)]'
           : 'bg-[var(--bubble-received)]';
 
+    // mt-2.5 (no mt-px): ahora CADA mensaje muestra su hora debajo, así
+    // que ese "pegado" de antes (pensado para cuando sólo el último de
+    // la racha tenía pie) quedaba muy poco aire entre la hora de un
+    // mensaje y la burbuja del siguiente.
     return (
-        <div className={isFirstInGroup ? 'mt-2' : 'mt-px'}>
+        <div className={isFirstInGroup ? 'mt-2' : 'mt-2.5'}>
             <div
                 className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''}`}
             >
@@ -1024,17 +1046,27 @@ function MessageBubble({
                         )}
 
                         {message.replyToId && (
-                            <div
-                                className={`mb-1 max-w-[240px] rounded-md border-l-2 px-2 py-1 text-xs opacity-80 ${
-                                    message.isMine
-                                        ? 'border-l-[var(--bubble-sent-foreground)]/40 bg-black/10'
-                                        : 'border-l-sky-400 bg-black/20'
-                                }`}
-                            >
-                                <p className="truncate font-medium">
+                            // Insignia flotante que se monta sobre el
+                            // borde superior de la burbuja (-mt-4, sin
+                            // overflow-hidden en la burbuja que la
+                            // recorte) — no un cuadro embebido plano tipo
+                            // WhatsApp. bg-[var(--background)] (el fondo
+                            // general de la página, NO un overlay negro
+                            // translúcido): así el tono SIEMPRE contrasta
+                            // contra la burbuja sin importar su color ni
+                            // el tema — antes, en recibidos, el overlay
+                            // apenas se distinguía en ningún tema.
+                            // max-w-[420px] fijo en px, NO w-full/%: un %
+                            // acá encadena con el `display:table` interno
+                            // de ScrollArea (Radix) y hace crecer TODO sin
+                            // límite — el mismo bug crítico de antes
+                            // ("no muestra los mensajes enviados"), ver el
+                            // comentario junto al <p> del cuerpo más abajo.
+                            <div className="relative z-10 -mt-4 mb-1.5 w-fit max-w-[420px] rounded-2xl border border-black/10 bg-[var(--background)] px-3 py-1.5 text-xs shadow-sm dark:border-white/10">
+                                <p className="text-foreground truncate font-bold">
                                     {message.replyToUserName}
                                 </p>
-                                <p className="truncate">
+                                <p className="text-muted-foreground truncate">
                                     {message.replyToBody}
                                 </p>
                             </div>

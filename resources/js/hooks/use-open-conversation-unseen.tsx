@@ -17,8 +17,14 @@ type OpenConversationUnseen = {
     readonly count: number;
 };
 
+// Referencia estable: useSyncExternalStore exige que getServerSnapshot
+// devuelva SIEMPRE el mismo objeto (no uno nuevo por llamada) — si no,
+// React lo detecta como snapshot "distinto" en cada render y tira
+// "getServerSnapshot should be cached to avoid an infinite loop".
+const EMPTY_STATE: OpenConversationUnseen = { conversationId: null, count: 0 };
+
 const listeners = new Set<() => void>();
-let state: OpenConversationUnseen = { conversationId: null, count: 0 };
+let state: OpenConversationUnseen = EMPTY_STATE;
 
 const subscribe = (callback: () => void) => {
     listeners.add(callback);
@@ -43,7 +49,7 @@ export function clearOpenConversationUnseen(conversationId: number): void {
         return;
     }
 
-    state = { conversationId: null, count: 0 };
+    state = EMPTY_STATE;
     notify();
 }
 
@@ -51,6 +57,6 @@ export function useOpenConversationUnseen(): OpenConversationUnseen {
     return useSyncExternalStore(
         subscribe,
         () => state,
-        () => ({ conversationId: null, count: 0 }),
+        () => EMPTY_STATE,
     );
 }
