@@ -2,7 +2,7 @@
 
 > Plataforma de chat interno para empresas — workspaces identificados por dominio de correo, mensajería en tiempo real, pensada para equipos chicos/medianos sin el costo de Slack/Teams.
 
-**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13), **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) y **Fase E** (header + burbujas + tiempo real, 2026-09-13, ver detalle abajo — falta el composer con formato) terminadas. Sigue la Fase F (paginación por cursor + búsqueda). Ver Pendientes para el detalle. Ver `docs/ROADMAP.md` para el detalle de fases originales.
+**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13), **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) y **Fase E** (header + burbujas + tiempo real + composer con formato, 2026-09-13) terminadas. Empezó la **Fase F** (badges de fecha como dropdown, ya en `main`; paginación por cursor y búsqueda global siguen pendientes). Ver Pendientes para el detalle. Ver `docs/ROADMAP.md` para el detalle de fases originales.
 
 ---
 
@@ -27,7 +27,7 @@
 - **Frontend:** React 19 + Tailwind 4 + shadcn/ui + Wayfinder
 - **Base de datos:** PostgreSQL
 - **Tiempo real:** Laravel Reverb (🟢 instalado y en uso — mensajes, "escribiendo…", recibos de lectura en vivo)
-- **Testing:** Pest + Larastan (🟢), Vitest + Playwright (🔲 pendientes — TDD en pausa por presión de tiempo, ver Pendientes)
+- **Testing:** Pest (🟢 106 tests/357 assertions sobre mensajería/conversaciones/equipos, 2026-09-13) + Larastan (🟢), Vitest + Playwright (🔲 sin frontend testing todavía)
 - **i18n:** ES/EN (diccionario propio + `laravel-lang` para mensajes del framework)
 
 ## Desarrollo local
@@ -78,7 +78,7 @@ Ver `docs/DECISIONS.md` (entradas del 2026-09-13) para el detalle técnico compl
 - **ADR: no BLOB en la BD** para adjuntos/grabaciones — object storage (MinIO en prod) + solo metadata/ruta en `attachments`. Documentado en `docs/DECISIONS.md`.
 - **Comando `php artisan nestwork:seed-demo`** (parametrizable, `--users`/`--messages`) genera volumen real: por defecto ~80 usuarios (contraseña `Nestwork2026!`, ver `SeedDemoData::DEMO_PASSWORD`) repartidos en 5 empresas falsas + el team "Invitados", con dms/groups/channels y miles de mensajes con reacciones y respuestas. No reemplaza a `ConversationsSeeder` (que sigue teniendo las 3 cuentas reales del dev) ni corre en `migrate:fresh --seed` — es opt-in.
 
-## Fase E (header + burbujas + tiempo real) — terminada 2026-09-13, salvo el composer con formato
+## Fase E (header + burbujas + tiempo real + composer con formato) — terminada 2026-09-13
 
 Ver `PROMPT-MEJORAS-NESTWORK-v2.md` sección 17 punto 4 para el spec original. Esta fase se hizo en varias rondas de ida y vuelta con pruebas en vivo en el navegador (no sólo código) — lo que quedó en `main`:
 
@@ -91,26 +91,40 @@ Ver `PROMPT-MEJORAS-NESTWORK-v2.md` sección 17 punto 4 para el spec original. E
 - **Badge de no-leídos junto al nombre de la conversación seleccionada:** se actualiza al instante (store compartido, sin esperar ida y vuelta al backend) mientras el chat está abierto pero desplazado arriba del historial.
 - **Mayúscula automática** al escribir (no sólo al enviar), igual que los teclados de Android/iOS.
 - **Resiliencia:** un tropiezo de Reverb (ej. reinicio del servidor) ya no puede bloquear el envío de un mensaje ni el marcado de leído — el mensaje se guarda igual, el broadcast es best-effort.
+- **Composer con formato:** barra fija arriba del campo (negrita/cursiva/subrayado/tachado/código en línea/cita/lista) + atajos Ctrl+B/I/U — envuelve la selección del textarea con Markdown ligero (`__texto__` para subrayado, CommonMark no tiene subrayado nativo). Las burbujas lo renderizan con un tokenizer propio que arma nodos de React a mano (nunca `dangerouslySetInnerHTML` — el body es contenido de otro usuario, insertarlo como HTML crudo sería XSS directo). Placeholder contextual (`Escribe un mensaje a {nombre}…`).
 
-**Pendiente dentro de la propia Fase E:**
+**Pendiente dentro de la propia Fase E** (sub-features del spec de composer deliberadamente no incluidas en este pase, ver sección 9 del prompt v2):
 
-- **Composer con formato** (negrita/cursiva/etc., ver spec) — no se tocó todavía.
-- Bug reportado sin confirmar aún: el usuario señaló que el espaciado de la insignia de respuesta podría no verse igual en burbujas recibidas vs enviadas — medido con `getBoundingClientRect()` en vivo, el código ya aplica el mismo margen a ambas (no hay rama condicionada a `isMine`); pendiente de que el usuario confirme con una captura si sigue viéndolo tras refrescar.
+- Bloques de código con selector de lenguaje + resaltado de sintaxis + número de línea + botón "Copiar" (hoy sólo hay código en línea).
+- Link previews estilo Slack/Jira (tabla `link_previews` ya existe desde la Fase C, sin fetch de metadata ni card todavía).
+- Picker de GIFs (Tenor/GIPHY, sin API elegida aún).
 - Reacciones a mensajes (tabla `reactions` ya existe desde la Fase C, sin UI ni Action propia — en rigor es Fase G).
+
+## Fase F (paginación por cursor + salto a fecha + búsqueda global) — arrancada 2026-09-13
+
+- **Badges de fecha como dropdown:** el día más reciente arranca desplegado, cada día anterior arranca colapsado mostrando sólo sus últimos 1-2 mensajes con un contador ("· N más") — pulsar el badge lo despliega en el lugar (chevron gira). Base del comportamiento de paginación por fecha; todavía sin cargar más historial real del backend al expandir (sigue limitado a los mismos 150 mensajes iniciales, ver Pendientes).
+
+**Resto de la Fase F sin empezar:** paginación real por cursor (cargar más historial hacia arriba más allá de los 150 iniciales), salto directo a una fecha, búsqueda global — el prompt v2 aclara que buscar es una lógica distinta a los badges de fecha, no se resuelve con lo mismo.
+
+## Investigación de librerías externas — 2026-09-13 (research, sin implementar)
+
+Evaluación pedida explícitamente de cuatro links/paquetes, ninguno adoptado todavía:
+
+- **`fluid-orb`** (ya instalado vía shadcn en `resources/js/components/ui/fluid-orb.tsx`, sin usar): es un blob animado en WebGL/canvas, puramente decorativo — no sirve como picker de reacciones (no tiene estado ni slots). Para reacciones, mejor un Popover de Radix + grilla de emoji (mismo patrón que ya usan Tooltip/DropdownMenu en el proyecto).
+- **MUI X React Chat:** su catálogo de componentes ya tiene equivalente propio construido (agrupación de mensajes, indicador de "escribiendo", separadores de fecha, badge de no-leídos) — no aporta nada nuevo que copiar.
+- **CometChat:** es SaaS/BaaS hosteado (no self-hosteable), lo que sería un segundo proveedor guardando datos de chat/llamadas — mal encaje con un proyecto que ya decidió no depender de vendors para su data. Recomendación para la Fase K (llamadas): WebRTC + señalización propia sobre la misma conexión de Reverb, usando las pantallas de CometChat (entrante/saliente/logs) sólo como referencia de UX, no como dependencia.
+- **NativePHP:** viable para **desktop** (empaqueta Chromium, la app Inertia+React actual correría sin cambios). Para **mobile** la documentación indica que renderiza vistas nativas (SwiftUI/Jetpack Compose) en vez de un WebView — el frontend React actual probablemente NO se reutiliza ahí tal cual, contradice el supuesto original de "mismo layout con ajustes menores". Hace falta un spike corto específico de NativePHP mobile antes de tratarlo como decidido (ver decisión bloqueada #5) — no es tan directo como se pensaba.
 
 ## Pendientes (explícitos, para no perderlos de vista)
 
-- **Resto del roadmap de `PROMPT-MEJORAS-NESTWORK-v2.md` (Fases F a K)** — paginación por cursor + salto a fecha + búsqueda global, Actividad/estados de usuario (UI)/roles de admin/baja de cuenta, notificaciones, personalización visual (gradientes de sidebar), chats secretos + mensajes temporales, llamadas. Fases A a E ya están (ver secciones de arriba) salvo el composer con formato.
+- **Resto del roadmap de `PROMPT-MEJORAS-NESTWORK-v2.md` (Fases F a K)** — ver sección de Fase F arriba para lo ya hecho ahí. Actividad/estados de usuario (UI)/roles de admin/baja de cuenta, notificaciones, personalización visual (gradientes de sidebar), chats secretos + mensajes temporales, llamadas siguen sin empezar.
 - **Sonidos + notificaciones de escritorio/navegador** (hoy sólo hay badge en el favicon).
 - **Vista dividida** (2-3 chats a la vez con foco automático en el que recibe mensaje) — no se abordó en la Fase E.
-- **Paginación de historial:** el chat sólo carga los últimos 150 mensajes (`MessagesController::INITIAL_MESSAGE_LIMIT`), sin "cargar más hacia arriba" — es justamente el contenido de la Fase F.
+- **Bug sin confirmar:** el usuario señaló que el espaciado de la insignia de respuesta se percibe distinto en burbujas recibidas vs enviadas (columna izquierda vs derecha) — medido en vivo con `getBoundingClientRect()`, el código ya aplica el mismo margen a ambas (no hay rama condicionada a `isMine`), así que si sigue viéndose distinto es algo más sutil (probablemente de percepción, por la cercanía al avatar del lado recibido) que no se pudo reproducir todavía porque no había ningún mensaje recibido con respuesta disponible para comparar en vivo. Pendiente de una captura del caso puntual.
 - **Módulos "Actividad" y "Archivado"** del mini-rail: hoy son pestañas placeholder, falta conectarlos a datos reales (ya existe `archived_at` en `conversation_participants` para esto).
 - **Más proveedores de login:** Microsoft/Outlook, GitHub, Yahoo, o un enlace mágico por correo para quien no tiene Google.
-- **Apps de escritorio/móvil:** en paralelo una vez la web tenga datos reales (ver decisión bloqueada #5) — mismo backend, sin duplicar lógica.
-- **Tests Pest:** este proyecto exige TDD desde el día uno (ver decisión #2); quedó en deuda por la urgencia de tener el login/chat funcionando primero.
-- **Traducciones ES/EN completas** de todo lo agregado en el rediseño de auth/equipos/chat.
+- **Apps de escritorio/móvil:** en paralelo una vez la web tenga datos reales (ver decisión bloqueada #5) — mismo backend, sin duplicar lógica. Ver la investigación de NativePHP arriba: desktop parece directo, mobile necesita un spike propio antes de comprometerse.
+- **Traducciones ES/EN completas** de todo lo agregado en el rediseño de auth/equipos/chat — deliberadamente no se tocó en la misma sesión que reescribió activamente la UI de chat (`messages/index.tsx`), para no generar un diff masivo sobre archivos que todavía estaban cambiando de un momento a otro.
 - **Confirmación al cerrar modales con datos sin guardar:** el patrón (no cerrar con click afuera, preguntar antes de descartar, botón crear deshabilitado hasta llenar campos obligatorios) solo se aplicó a `CreateTeamModal` — falta propagarlo al resto de modales del proyecto (perfil, invitaciones, etc.).
 - **`usePage().props` no trae bien los tipos compartidos:** `npx tsc --noEmit` marca `auth`/`currentTeam`/`teams`/`conversations` como `unknown`/`{}` en varios archivos aunque `types/global.d.ts` los declara — es un problema previo a esta sesión (confirmado comparando contra el commit anterior), no afecta el build real (Vite no tipa en serio, solo transpila) pero sí ensucia `tsc --noEmit`. Falta investigar por qué la augmentación de `@inertiajs/core` no está enganchando con el `usePage()` real de esta versión.
 - **Offline-first / Service Workers (PWA):** el usuario quiere investigar y validar esto más adelante — que la app siga siendo usable (al menos lectura de conversaciones ya cargadas) sin conexión. Todavía sin decisión de alcance ni de herramienta (Workbox, Vite PWA plugin, etc.) — queda como tema a investigar antes de comprometerse a una implementación.
-- **Script automatizado de setup de Reverb en Windows** (pedido explícito, todavía sin hacer): un `.bat`/script que configure puerto + proxy de nginx en Herd solo, sin pasos manuales, para instalar en otra máquina — hoy ese paso a paso vive solo en la cabeza de quien lo hizo (ver Fase E arriba, "conflicto de puerto").
-- **Investigación pendiente de componentes externos** (pedido explícito, sin evaluar todavía): `swamimalode07/rare-ui/fluid-orb` (ya instalado vía shadcn, sin usar — candidato para reacciones), MUI X React Chat, CometChat (UI kit + módulo de llamadas entrantes/salientes) como referencia para la Fase K, y NativePHP como posible camino a apps de escritorio/móvil sin duplicar backend (ver decisión bloqueada #5).
