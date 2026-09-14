@@ -1,7 +1,115 @@
-import { Download, File as FileIcon } from 'lucide-react';
-import { useState } from 'react';
+import { Download, Eye, File as FileIcon, Pause, Play } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AttachmentData } from '@/types';
+
+function formatDuration(seconds: number): string {
+    if (!Number.isFinite(seconds)) {
+        return '0:00';
+    }
+
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+/** Reproductor de audio propio — pedido explícito: el `<audio>` nativo
+ *  "se ve demasiado simple/feo". Vidrio + barra de progreso propia
+ *  (apple-design §12: materiales translúcidos), el `<audio>` real
+ *  queda oculto sólo como motor de reproducción. */
+function AudioPlayer({ url }: { url: string }) {
+    const audioRef = useRef<HTMLAudioElement>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
+
+    useEffect(() => {
+        const audio = audioRef.current;
+
+        if (!audio) {
+            return;
+        }
+
+        const onTimeUpdate = () => setCurrentTime(audio.currentTime);
+        const onLoadedMetadata = () => setDuration(audio.duration);
+        const onEnded = () => setIsPlaying(false);
+
+        audio.addEventListener('timeupdate', onTimeUpdate);
+        audio.addEventListener('loadedmetadata', onLoadedMetadata);
+        audio.addEventListener('ended', onEnded);
+
+        return () => {
+            audio.removeEventListener('timeupdate', onTimeUpdate);
+            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+            audio.removeEventListener('ended', onEnded);
+        };
+    }, []);
+
+    const togglePlay = () => {
+        const audio = audioRef.current;
+
+        if (!audio) {
+            return;
+        }
+
+        if (isPlaying) {
+            audio.pause();
+        } else {
+            void audio.play();
+        }
+
+        setIsPlaying(!isPlaying);
+    };
+
+    const seek = (event: React.MouseEvent<HTMLDivElement>) => {
+        const audio = audioRef.current;
+
+        if (!audio || !duration) {
+            return;
+        }
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        const ratio = (event.clientX - rect.left) / rect.width;
+
+        audio.currentTime = ratio * duration;
+    };
+
+    const progress = duration ? (currentTime / duration) * 100 : 0;
+
+    return (
+        <div className="border-foreground/10 bg-foreground/[0.04] flex w-full items-center gap-2.5 rounded-full border px-2 py-1.5 backdrop-blur-sm">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio ref={audioRef} src={url} className="hidden" />
+            <button
+                type="button"
+                onClick={togglePlay}
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2563eb] text-white transition-transform duration-100 active:scale-90"
+                aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+            >
+                {isPlaying ? (
+                    <Pause className="size-3.5" fill="currentColor" />
+                ) : (
+                    <Play className="ml-0.5 size-3.5" fill="currentColor" />
+                )}
+            </button>
+            <div
+                onClick={seek}
+                className="bg-foreground/15 relative h-1.5 flex-1 cursor-pointer rounded-full"
+            >
+                <div
+                    className="absolute inset-y-0 left-0 rounded-full bg-[#2563eb]"
+                    style={{ width: `${progress}%` }}
+                />
+            </div>
+            <span className="text-muted-foreground w-9 shrink-0 text-right text-[11px] tabular-nums">
+                {formatDuration(
+                    isPlaying || currentTime ? currentTime : duration,
+                )}
+            </span>
+        </div>
+    );
+}
 
 function formatSize(bytes: number): string {
     if (bytes < 1024) {
@@ -75,38 +183,41 @@ export function MessageAttachment({
     fill?: boolean;
 }) {
     const [lightboxOpen, setLightboxOpen] = useState(false);
+    // Patrón WhatsApp, pedido explícito: la media NO se muestra nítida
+    // de una — arranca borrosa con un botón de "revelar" encima; recién
+    // al tocarlo se ve nítida EN LA BURBUJA y ese botón desaparece. La
+    // descarga real al dispositivo queda para el modal/lightbox, ya con
+    // la media revelada — son dos pasos distintos, no el mismo botón.
+    const [revealed, setRevealed] = useState(false);
 
-    // Botón de descarga SIEMPRE visible encima del media — pedido
-    // explícito por seguridad: nada se descarga solo, el usuario
-    // confirma cada vez con un click a propósito (nunca automático,
-    // así un archivo malicioso adjunto no se guarda sin que se note).
-    const downloadOverlay = (
-        <a
-            href={attachment.url}
-            download={attachment.originalName}
-            onClick={(event) => event.stopPropagation()}
-            className="absolute top-2 right-2 z-10 flex size-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/60"
-            aria-label="Descargar"
-        >
-            <Download className="size-3.5" />
-        </a>
-    );
+    const mediaSizeClass = fill ? 'max-h-[360px]' : 'max-h-[280px] rounded-lg';
 
     if (attachment.type === 'image') {
         return (
             <div className="relative">
                 <button
                     type="button"
-                    onClick={() => setLightboxOpen(true)}
-                    className={`block transition-opacity hover:opacity-90 ${fill ? '' : 'overflow-hidden rounded-lg'}`}
+                    onClick={() =>
+                        revealed ? setLightboxOpen(true) : setRevealed(true)
+                    }
+                    className={`block w-full transition-opacity hover:opacity-90 ${fill ? '' : 'overflow-hidden rounded-lg'}`}
                 >
                     <img
                         src={attachment.url}
                         alt={attachment.originalName}
-                        className={`w-full object-cover ${fill ? 'max-h-[360px]' : 'max-h-[280px] rounded-lg'}`}
+                        className={`w-full object-cover transition-[filter] duration-300 ${mediaSizeClass} ${revealed ? '' : 'scale-105 blur-xl'}`}
                     />
                 </button>
-                {downloadOverlay}
+                {!revealed && (
+                    <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15"
+                    >
+                        <span className="flex size-11 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md">
+                            <Eye className="size-4" />
+                        </span>
+                    </div>
+                )}
                 {lightboxOpen && (
                     <ImageLightbox
                         url={attachment.url}
@@ -122,36 +233,44 @@ export function MessageAttachment({
     if (attachment.type === 'video') {
         return (
             <div className="relative">
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <video
-                    src={attachment.url}
-                    controls
-                    className={`w-full ${fill ? 'max-h-[360px]' : 'max-h-[280px] rounded-lg'}`}
-                />
-                {downloadOverlay}
+                {revealed ? (
+                    // eslint-disable-next-line jsx-a11y/media-has-caption
+                    <video
+                        src={attachment.url}
+                        controls
+                        autoPlay
+                        className={`w-full ${mediaSizeClass}`}
+                    />
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => setRevealed(true)}
+                        className={`relative block w-full ${fill ? '' : 'overflow-hidden rounded-lg'}`}
+                    >
+                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                        <video
+                            src={attachment.url}
+                            className={`w-full scale-105 object-cover blur-xl ${mediaSizeClass}`}
+                        />
+                        <span
+                            aria-hidden="true"
+                            className="absolute inset-0 flex items-center justify-center bg-black/15"
+                        >
+                            <span className="flex size-11 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md">
+                                <Eye className="size-4" />
+                            </span>
+                        </span>
+                    </button>
+                )}
             </div>
         );
     }
 
     if (attachment.type === 'audio') {
-        return (
-            <div className="flex items-center gap-2">
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <audio
-                    src={attachment.url}
-                    controls
-                    className="min-w-0 flex-1"
-                />
-                <a
-                    href={attachment.url}
-                    download={attachment.originalName}
-                    className="hover:bg-foreground/10 flex size-8 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:opacity-100"
-                    aria-label="Descargar audio"
-                >
-                    <Download className="size-3.5" />
-                </a>
-            </div>
-        );
+        // Reproducir en la burbuja alcanza — sin botón de descarga
+        // acá al lado (pedido explícito: esos botones son para
+        // previsualizar, no para bajar al dispositivo).
+        return <AudioPlayer url={attachment.url} />;
     }
 
     return (

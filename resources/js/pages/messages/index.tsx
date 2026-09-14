@@ -1724,15 +1724,15 @@ function MessageBubble({
                                   : 'text-[var(--bubble-received-foreground)]'
                         }`}
                     >
-                        {/* El "pico" en foto/video edge-to-edge es la
-                            esquina cortada (rounded-br/bl-none, ya
-                            aplicada arriba Y en el wrapper del media más
-                            abajo) — pedido explícito: SIN el cuadrado de
-                            color de siempre encima, porque contra la
-                            foto se ve como una mancha. En burbujas
-                            normales (texto) sigue el cuadrado sesgado de
-                            toda la vida. */}
-                        {isLastInGroup && !hasEdgeToEdgeMedia && (
+                        {/* El pico va SIEMPRE, sin excepción (pedido
+                            explícito: "no se negocia") — también en
+                            foto/video edge-to-edge. z-10 para que quede
+                            por encima del media, y el wrapper del media
+                            de más abajo comparte la MISMA esquina
+                            cortada (rounded-br/bl-none) que la burbuja,
+                            así el pico continúa esa esquina en vez de
+                            superponerse a mitad de la imagen. */}
+                        {isLastInGroup && (
                             <span
                                 aria-hidden="true"
                                 className={`pointer-events-none absolute bottom-0 z-10 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
