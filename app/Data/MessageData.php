@@ -4,6 +4,9 @@ namespace App\Data;
 
 readonly class MessageData
 {
+    /**
+     * @param  array<int, AttachmentData>  $attachments
+     */
     public function __construct(
         public int $id,
         public string $body,
@@ -18,6 +21,7 @@ readonly class MessageData
         public ?string $replyToBody = null,
         /** @var 'sent'|'read' */
         public string $status = 'sent',
+        public array $attachments = [],
     ) {
         //
     }

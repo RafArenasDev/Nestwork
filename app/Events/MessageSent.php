@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Data\AttachmentData;
 use App\Data\MessageData;
 use App\Models\Message;
 use Illuminate\Broadcasting\Channel;
@@ -72,6 +73,7 @@ class MessageSent implements ShouldBroadcastNow
                 replyToUserName: $this->message->replyTo?->user->name,
                 replyToBody: $this->message->replyTo?->body,
                 status: 'sent',
+                attachments: AttachmentData::collectionFor($this->message),
             ),
         ];
     }

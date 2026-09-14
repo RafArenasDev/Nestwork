@@ -12,6 +12,17 @@ export type ConversationSummary = {
     isCurrent: boolean;
 };
 
+export type AttachmentData = {
+    id: number;
+    type: 'image' | 'video' | 'audio' | 'document';
+    url: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    width: number | null;
+    height: number | null;
+};
+
 export type MessageData = {
     id: number;
     body: string;
@@ -25,6 +36,7 @@ export type MessageData = {
     replyToUserName: string | null;
     replyToBody: string | null;
     status: 'sending' | 'sent' | 'read' | 'failed';
+    attachments: AttachmentData[];
 };
 
 export type ActiveConversation = {
@@ -36,6 +48,7 @@ export type ActiveConversation = {
     presence: 'available' | 'away' | 'busy' | 'offline' | null;
     isArchived: boolean;
     isMuted: boolean;
+    viewerLastReadMessageId: number | null;
 };
 
 export type TeamMemberOption = {

@@ -278,6 +278,13 @@
   reacciones tardaron un par de minutos, aceptable para un comando manual
   de un solo uso.
 
+## 2026-09-14 — `apple-design` es el único skill/plugin autorizado para frontend
+
+- **Decisión:** para cualquier trabajo de diseño/estilo/interacción de frontend (botones, animaciones de apertura/cierre, transiciones entre chats, materiales/vidrio, tipografía) se usa el skill `apple-design` (guía de Apple: respuesta instantánea, springs interrumpibles, materiales translúcidos, tracking tipográfico por tamaño) traducido a CSS/JS plano — no se instalan librerías de animación/diseño nuevas (Framer Motion, GSAP, etc.) para lograrlo.
+- **Por qué:** pedido explícito del usuario tras una ronda de features de composer que sumó varias dependencias (`@tiptap/extension-*`, `lowlight`, `highlight.js`) — quiere frenar la acumulación de paquetes de frontend que "no sirven para nada" y estandarizar el lenguaje visual en un solo criterio (macOS/Apple) en vez de mezclar estilos.
+- **Qué SÍ sigue permitido:** extensiones funcionales de Tiptap (el editor que ya es la base del composer) cuando agregan una capacidad real del editor (listas, code block, links) — la restricción es sobre tooling de diseño/animación, no sobre el motor de edición en sí. Los componentes shadcn/ui ya instalados (Popover, Select, Dialog, etc.) tampoco cuentan como "plugin nuevo".
+- **Cómo aplicarlo:** botones redondos (estilo macOS/Apple, no `rounded-md`), animaciones de abrir/cerrar/cambiar de chat como springs interrumpibles (JS con `requestAnimationFrame`, no sólo `@keyframes` de CSS que no se pueden interrumpir a mitad de camino), materiales con `backdrop-filter` para capas flotantes (popovers, sheets), tracking tipográfico específico por tamaño de texto.
+
 ## Pendiente / no cubierto en esta sesión
 
 - No se escribieron tests nuevos para `HandleLocale` ni para los modales (violación puntual de la política de TDD bloqueada en 2.1 — se hizo así por la urgencia de dejar el entorno andando; hay que volver y cubrir esto antes de dar por cerrada esta porción de trabajo).

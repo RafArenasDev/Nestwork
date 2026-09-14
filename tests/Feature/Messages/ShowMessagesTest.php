@@ -165,7 +165,11 @@ test('own messages show as sent when the other participant has not read anything
     );
 });
 
-test('viewing a conversation marks it as read for the viewer', function () {
+test('viewing a conversation does NOT mark it as read for the viewer', function () {
+    // Marcado real de "leído" sólo ocurre por interacción explícita en
+    // el cliente (ver MarkReadMessageTest) — abrir el chat únicamente
+    // carga y muestra los mensajes, para que el badge/estilo de
+    // no-leído no se cierre solo con la visita.
     $team = Team::factory()->create();
     $viewer = User::factory()->create();
     $other = User::factory()->create();
@@ -175,7 +179,7 @@ test('viewing a conversation marks it as read for the viewer', function () {
 
     $conversation = makeDmConversation($team, $viewer, $other);
 
-    $message = Message::factory()->create(['conversation_id' => $conversation->id, 'user_id' => $other->id]);
+    Message::factory()->create(['conversation_id' => $conversation->id, 'user_id' => $other->id]);
 
     $this
         ->actingAs($viewer)
@@ -183,5 +187,33 @@ test('viewing a conversation marks it as read for the viewer', function () {
 
     $pivot = $conversation->participants()->where('users.id', $viewer->id)->first()?->pivot;
 
-    expect($pivot->last_read_message_id)->toBe($message->id);
+    expect($pivot->last_read_message_id)->toBeNull();
+});
+
+test('the conversation payload exposes the viewer previous last_read_message_id', function () {
+    $team = Team::factory()->create();
+    $viewer = User::factory()->create();
+    $other = User::factory()->create();
+
+    attachTeamMember($team, $viewer, TeamRole::Owner);
+    attachTeamMember($team, $other);
+
+    $conversation = makeDmConversation($team, $viewer, $other);
+
+    $firstBatch = Message::factory()->create(['conversation_id' => $conversation->id, 'user_id' => $other->id]);
+
+    $conversation->participants()->updateExistingPivot($viewer->id, [
+        'last_read_message_id' => $firstBatch->id,
+    ]);
+
+    Message::factory()->create(['conversation_id' => $conversation->id, 'user_id' => $other->id]);
+
+    $response = $this
+        ->actingAs($viewer)
+        ->get(route('messages.show', [$team, $conversation]));
+
+    $response->assertOk();
+    $response->assertInertia(fn (Assert $page) => $page
+        ->where('conversation.viewerLastReadMessageId', $firstBatch->id),
+    );
 });

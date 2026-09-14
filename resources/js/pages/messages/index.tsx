@@ -12,6 +12,7 @@ import {
     CircleAlert,
     Clock,
     Forward,
+    Link as LinkIcon,
     MoreHorizontal,
     MoreVertical,
     Phone,
@@ -36,6 +37,8 @@ import {
     store as storeMessage,
 } from '@/routes/messages';
 import { toggleArchive, toggleMute } from '@/routes/conversations';
+import { MessageAttachment } from '@/components/message-attachment';
+import { MessageCodeBlock } from '@/components/message-code-block';
 import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -58,7 +61,7 @@ import {
     clearOpenConversationUnseen,
     setOpenConversationUnseen,
 } from '@/hooks/use-open-conversation-unseen';
-import type { ActiveConversation, MessageData } from '@/types';
+import type { ActiveConversation, AttachmentData, MessageData } from '@/types';
 
 type Props = {
     conversation: ActiveConversation | null;
@@ -188,8 +191,16 @@ function groupMessagesByDate(messages: MessageData[]): DateGroup[] {
  *  negrita empieza con "**hola**" — capitalizar el carácter 0 pondría
  *  mayúscula sobre el asterisco (no hace nada) y la "h" real se
  *  quedaba en minúscula. Salta cualquier delimitador/prefijo (**, _,
- *  __, ~~, `, "> ", "- ", "1. ") hasta encontrar la letra real. */
+ *  __, ~~, `, "> ", "- ", "1. ") hasta encontrar la letra real. Red de
+ *  seguridad para lo pegado (paste no pasa por el auto-capitalize en
+ *  vivo del composer, ver handleTextInput en message-composer.tsx) —
+ *  por eso mismo repite acá la excepción de URL: un mensaje que
+ *  arranca "https://…"/"www…" nunca se toca, sea escrito o pegado. */
 function capitalizeFirstLetter(text: string): string {
+    if (/^\[?(https?:\/\/|www\.)/i.test(text)) {
+        return text;
+    }
+
     const match = text.match(/\p{L}/u);
 
     if (!match || match.index === undefined) {
@@ -218,11 +229,123 @@ function formatBubbleTime(iso: string): string {
 // contenido de OTRO usuario, insertarlo como HTML crudo sería un XSS
 // directo. Este tokenizer arma nodos de React a mano (texto siempre
 // escapado por React, nunca interpretado como marcado) — negrita,
-// cursiva, subrayado, tachado y código en línea. Orden del alternado
-// importa: **negrita** y __subrayado__ (dobles) van ANTES que _cursiva_
-// (simple) para que el motor de regex no le gane la posición al de
-// doble carácter.
-const INLINE_FORMAT_RE = /\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`(.+?)`|_(.+?)_/g;
+// cursiva, subrayado, tachado, código en línea y enlaces. Orden del
+// alternado importa: **negrita** y __subrayado__ (dobles) van ANTES
+// que _cursiva_ (simple), y el link explícito `[texto](url)` va ANTES
+// que la URL suelta para no destrizarlo en dos matches.
+const INLINE_FORMAT_RE =
+    /\*\*(?<bold>.+?)\*\*|__(?<underline>.+?)__|~~(?<strike>.+?)~~|`(?<code>.+?)`|\[(?<linkText>[^\]]+)\]\((?<linkHref>[^\s)]+)\)|(?<url>https?:\/\/[^\s<]+)|_(?<italic>.+?)_/g;
+
+/** Puntuación de cierre de frase pegada al final de una URL suelta
+ *  ("...revisá https://x.com.") no es parte del link — mismo criterio
+ *  que Slack/Gmail al autolinkear. */
+function trimTrailingPunctuation(url: string): {
+    url: string;
+    trailing: string;
+} {
+    const match = url.match(/^(.*?)([.,;:!?'")\]]+)$/);
+
+    return match
+        ? { url: match[1], trailing: match[2] }
+        : { url, trailing: '' };
+}
+
+/** El `[texto](url)` explícito viene del mismo mark de Link que ya
+ *  restringe protocolos en el composer (ver Link.configure en
+ *  message-composer.tsx), pero el body es texto plano que cualquiera
+ *  podría escribir a mano — sin este chequeo, un `[click acá](javascript:...)`
+ *  se renderizaría como un <a href> real y ejecutaría al clickear. */
+function isSafeHref(href: string): boolean {
+    return /^(https?:|mailto:)/i.test(href);
+}
+
+/** Sitio (segmento antes del TLD, saltando subdominios) capitalizado —
+ *  el fallback cuando no hay nada más específico que mostrar. */
+function siteNameFor(hostname: string): string {
+    const parts = hostname.split('.');
+    const name = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+
+    return name.charAt(0).toLocaleUpperCase('es') + name.slice(1);
+}
+
+/** "mi-articulo-de-blog" -> "Mi articulo de blog" — heurística sin
+ *  fetch para que un slug de URL lea como texto, no como URL. */
+function humanizeSlug(slug: string): string {
+    const words = slug
+        .replace(/\.[a-z0-9]+$/i, '') // .html, .php, etc. al final
+        .replace(/[-_]+/g, ' ')
+        .trim();
+
+    if (!words) {
+        return slug;
+    }
+
+    const capitalized =
+        words.charAt(0).toLocaleUpperCase('es') + words.slice(1);
+
+    return capitalized.length > 40
+        ? `${capitalized.slice(0, 40).trimEnd()}…`
+        : capitalized;
+}
+
+const GIT_HOSTS = ['github.com', 'gitlab.com', 'bitbucket.org'];
+
+/** Etiqueta de un link SIN fetch/scraping (eso es la vista previa que
+ *  se descartó a propósito) — pedido explícito: no alcanza con el
+ *  nombre del sitio, si es un repo quiere el nombre del repo, si es un
+ *  artículo/producto quiere algo parecido a un título. Todo esto sale
+ *  de la URL misma:
+ *  - github.com/duenio/repo(.git) -> "repo" (el dato que SÍ importa,
+ *    no el owner ni ".git").
+ *  - Cualquier otra URL con path -> el último segmento, humanizado
+ *    ("mi-articulo" -> "Mi articulo") — no es el título real de la
+ *    página, pero se acerca más que el dominio pelado sin pedir nada
+ *    al servidor.
+ *  - Sin path (dominio raíz) -> nombre del sitio, como antes. */
+function linkLabelFor(href: string): string {
+    let url: URL;
+
+    try {
+        url = new URL(href);
+    } catch {
+        return href;
+    }
+
+    const hostname = url.hostname.replace(/^www\./, '');
+    const segments = url.pathname.split('/').filter(Boolean);
+
+    if (GIT_HOSTS.includes(hostname) && segments.length >= 2) {
+        // "owner/repo.git" tal cual — pedido explícito: importa quién
+        // es el dueño, no sólo el repo, y el ".git" se mantiene si la
+        // URL original lo traía.
+        return `${segments[0]}/${segments[1]}`;
+    }
+
+    if (segments.length > 0) {
+        return humanizeSlug(segments[segments.length - 1]);
+    }
+
+    return siteNameFor(hostname);
+}
+
+/** Chip de enlace estilo Slack/Jira — pedido explícito: "no plano",
+ *  con relleno y un brillo sutil, no un texto subrayado azul genérico.
+ *  Color fijo (no depende de --bubble-sent/received, igual criterio
+ *  que el badge de no-leídos) para que el contraste sea consistente
+ *  sobre las dos burbujas. */
+function LinkChip({ href, label }: { href: string; label: string }) {
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+            className="chat-link-chip"
+        >
+            <LinkIcon className="size-3" />
+            <span className="max-w-52 truncate">{label}</span>
+        </a>
+    );
+}
 
 function renderInlineFormatting(
     text: string,
@@ -242,14 +365,15 @@ function renderInlineFormatting(
         }
 
         const key = `${keyPrefix}-${index++}`;
+        const groups = match.groups ?? {};
 
-        if (match[1] !== undefined) {
-            nodes.push(<strong key={key}>{match[1]}</strong>);
-        } else if (match[2] !== undefined) {
-            nodes.push(<u key={key}>{match[2]}</u>);
-        } else if (match[3] !== undefined) {
-            nodes.push(<s key={key}>{match[3]}</s>);
-        } else if (match[4] !== undefined) {
+        if (groups.bold !== undefined) {
+            nodes.push(<strong key={key}>{groups.bold}</strong>);
+        } else if (groups.underline !== undefined) {
+            nodes.push(<u key={key}>{groups.underline}</u>);
+        } else if (groups.strike !== undefined) {
+            nodes.push(<s key={key}>{groups.strike}</s>);
+        } else if (groups.code !== undefined) {
             nodes.push(
                 <code
                     key={key}
@@ -260,11 +384,48 @@ function renderInlineFormatting(
                     // sirviendo sobre la burbuja propia (clara).
                     className={`rounded px-1 py-0.5 font-mono text-[0.85em] ${isMine ? 'bg-black/10' : 'bg-white/20'}`}
                 >
-                    {match[4]}
+                    {groups.code}
                 </code>,
             );
-        } else if (match[5] !== undefined) {
-            nodes.push(<em key={key}>{match[5]}</em>);
+        } else if (groups.linkText !== undefined) {
+            // El autolink del composer (Tiptap) marca CUALQUIER URL
+            // tipeada como link automáticamente, con el texto tal cual
+            // se escribió — o sea, la inmensa mayoría de los links que
+            // llegan acá son "explícitos" sólo de forma, pero el texto
+            // ES la URL cruda. Mismo criterio que el link suelto: si el
+            // texto no es más que la URL, mostrar el nombre del sitio,
+            // no la URL completa.
+            const isRawUrlAsText =
+                groups.linkText.replace(/\/$/, '') ===
+                groups.linkHref!.replace(/\/$/, '');
+
+            nodes.push(
+                isSafeHref(groups.linkHref!) ? (
+                    <LinkChip
+                        key={key}
+                        href={groups.linkHref!}
+                        label={
+                            isRawUrlAsText
+                                ? linkLabelFor(groups.linkHref!)
+                                : groups.linkText
+                        }
+                    />
+                ) : (
+                    groups.linkText
+                ),
+            );
+        } else if (groups.url !== undefined) {
+            const { url, trailing } = trimTrailingPunctuation(groups.url);
+
+            nodes.push(
+                <LinkChip key={key} href={url} label={linkLabelFor(url)} />,
+            );
+
+            if (trailing) {
+                nodes.push(trailing);
+            }
+        } else if (groups.italic !== undefined) {
+            nodes.push(<em key={key}>{groups.italic}</em>);
         }
 
         lastIndex = INLINE_FORMAT_RE.lastIndex;
@@ -328,6 +489,59 @@ function renderFormattedBody(body: string, isMine: boolean): ReactNode {
             </span>
         );
     });
+}
+
+/** Bloque de código: ```lenguaje\ncódigo\n``` (lo que serializa el
+ *  composer, ver serializeToMarkdown en message-composer.tsx). Split a
+ *  nivel de mensaje ENTERO antes del render línea por línea de arriba
+ *  — un bloque de código nunca debe pasar por el formato en línea
+ *  (negrita/link/etc.), ni perder su indentación exacta. */
+const CODE_FENCE_RE = /```([\w-]*)\n([\s\S]*?)```/g;
+
+function renderMessageBody(body: string, isMine: boolean): ReactNode {
+    const nodes: ReactNode[] = [];
+    let lastIndex = 0;
+    let index = 0;
+    let match: RegExpExecArray | null;
+
+    CODE_FENCE_RE.lastIndex = 0;
+
+    while ((match = CODE_FENCE_RE.exec(body)) !== null) {
+        if (match.index > lastIndex) {
+            nodes.push(
+                <span key={`text-${index}`}>
+                    {renderFormattedBody(
+                        body.slice(lastIndex, match.index),
+                        isMine,
+                    )}
+                </span>,
+            );
+        }
+
+        nodes.push(
+            <MessageCodeBlock
+                key={`code-${index}`}
+                language={match[1] || 'plaintext'}
+                // El fence siempre cierra con un '\n' antes de ``` al
+                // serializar — quitarlo evita una línea en blanco
+                // fantasma al final del bloque renderizado.
+                code={match[2].replace(/\n$/, '')}
+            />,
+        );
+
+        index++;
+        lastIndex = CODE_FENCE_RE.lastIndex;
+    }
+
+    if (lastIndex < body.length) {
+        nodes.push(
+            <span key={`text-${index}`}>
+                {renderFormattedBody(body.slice(lastIndex), isMine)}
+            </span>,
+        );
+    }
+
+    return nodes;
 }
 
 /** Verde=disponible, amarillo=ausente, rojo=ocupado — sin relleno
@@ -445,7 +659,7 @@ function ConversationHeader({
                             type="button"
                             size="icon"
                             variant="ghost"
-                            className="size-8"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
                             aria-label="Más opciones"
                         >
                             <MoreVertical className="size-4" />
@@ -482,7 +696,7 @@ function ConversationHeader({
                             type="button"
                             size="icon"
                             variant="ghost"
-                            className="size-8"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
                             aria-label="Cerrar chat"
                             onClick={onClose}
                         >
@@ -511,7 +725,7 @@ function DisabledActionIcon({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        className="size-8"
+                        className="size-8 rounded-full"
                         disabled
                         aria-label={label}
                     >
@@ -556,7 +770,17 @@ function Thread({
     const [typingUserName, setTypingUserName] = useState<string | null>(null);
     const [genieClass, setGenieClass] = useState('genie-panel--opening');
     const [isNearBottom, setIsNearBottom] = useState(true);
-    const [unseenCount, setUnseenCount] = useState(0);
+    // Marca de agua de "leído" para ESTA apertura del chat: todo mensaje
+    // ajeno con id mayor a esto es "no leído" hasta que markAsRead lo
+    // mueva — arranca en lo que el backend tenía ANTES de esta visita
+    // (loadMessages ya no lo pisa), no en el último mensaje cargado.
+    const [readWatermarkId, setReadWatermarkId] = useState(
+        () => conversation.viewerLastReadMessageId ?? 0,
+    );
+    const [unseenCount, setUnseenCount] = useState(
+        () =>
+            messages.filter((m) => !m.isMine && m.id > readWatermarkId).length,
+    );
     const scrollBottomRef = useRef<HTMLDivElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -573,6 +797,22 @@ function Thread({
     // Último id que ya avisamos al backend como "leído" — evita mandar
     // el mismo PATCH de nuevo en cada scroll mientras se sigue al fondo.
     const lastReadSentRef = useRef<number | null>(null);
+    // Un scrollIntoView() programático (abrir el chat, o un mensaje
+    // nuevo que se desliza solo a la vista) dispara el mismo evento
+    // nativo 'scroll' que arrastrar el dedo o girar la rueda — el
+    // listener de scroll no puede distinguirlos por sí solo. Esta
+    // bandera marca esa ventana corta para que SÓLO un scroll genuino
+    // del usuario cuente como interacción real (ver handleScroll más
+    // abajo); sin esto, abrir un chat (que auto-scrollea al fondo)
+    // volvía a marcar todo como leído al instante, aunque el mount
+    // effect que hacía eso explícitamente ya se haya quitado.
+    const suppressScrollReadRef = useRef(false);
+    const markAutoScroll = () => {
+        suppressScrollReadRef.current = true;
+        window.setTimeout(() => {
+            suppressScrollReadRef.current = false;
+        }, 150);
+    };
 
     useEffect(() => {
         liveMessagesRef.current = liveMessages;
@@ -610,6 +850,12 @@ function Thread({
         }
 
         lastReadSentRef.current = lastId;
+        // Optimista: no hace falta esperar la vuelta del PATCH para
+        // apagar el divisor/resaltado de no-leído ni el contador — el
+        // backend igual computa el id real de punta a punta (ver
+        // markRead() en el controller).
+        setUnseenCount(0);
+        setReadWatermarkId(lastId);
 
         const csrfToken = document.querySelector<HTMLMetaElement>(
             'meta[name="csrf-token"]',
@@ -674,11 +920,14 @@ function Thread({
 
     useEffect(() => {
         applyGenieOffset();
-        // Al abrir un chat el scroll ya arranca al fondo (ver el
-        // useLayoutEffect de liveMessages más abajo), así que esto ya
-        // cuenta como "leído" — avisa al backend con el último mensaje
-        // que llegó en el prop inicial.
-        markAsRead(messages[messages.length - 1]?.id);
+        // Pedido explícito: abrir el chat (aunque el scroll arranque al
+        // fondo, ver el useLayoutEffect de liveMessages más abajo) NO
+        // cuenta como "leído" por sí solo — sólo lo hacen la interacción
+        // real, el scroll al fondo o enviar una respuesta (ver
+        // markAsRead más arriba y sus llamadas). Antes se avisaba acá
+        // mismo al backend con el último mensaje del prop inicial, y por
+        // eso la notificación de no-leído se cerraba sola con sólo
+        // abrir.
         // Sólo al montar (abrir este chat) — dispara la animación de
         // entrada; se limpia sola en onAnimationEnd más abajo.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -722,10 +971,9 @@ function Thread({
             // Desplazarse hasta el fondo SÍ cuenta como interacción real
             // (mover la rueda/arrastrar el dedo) — a diferencia de que
             // un mensaje nuevo simplemente auto-scrollee a la vista
-            // porque ya estabas ahí, ver el comentario en el
-            // useLayoutEffect de abajo.
-            if (nearBottom) {
-                setUnseenCount(0);
+            // porque ya estabas ahí (suppressScrollReadRef, ver el
+            // useLayoutEffect de abajo y su nota más arriba).
+            if (nearBottom && !suppressScrollReadRef.current) {
                 markAsRead();
             }
         };
@@ -756,7 +1004,6 @@ function Thread({
                 return;
             }
 
-            setUnseenCount(0);
             markAsRead();
         };
 
@@ -800,12 +1047,15 @@ function Thread({
             return;
         }
 
+        markAutoScroll();
         scrollBottomRef.current?.scrollIntoView({ block: 'end' });
         const raf = requestAnimationFrame(() => {
+            markAutoScroll();
             scrollBottomRef.current?.scrollIntoView({ block: 'end' });
         });
 
         return () => cancelAnimationFrame(raf);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [liveMessages.length]);
 
     const { channel } = useChannel(`conversation.${conversation.id}`);
@@ -932,10 +1182,17 @@ function Thread({
         });
     };
 
-    const handleSend = (markdownBody: string) => {
+    const handleSend = (
+        markdownBody: string,
+        attachment: File | null,
+        attachmentCategory: 'image' | 'video' | 'document' | 'audio' | null,
+    ) => {
         const trimmed = capitalizeFirstLetter(markdownBody.trim());
 
-        if (!trimmed || !currentTeam || sending) {
+        // Pedido explícito: un mensaje puede ser sólo el adjunto, sin
+        // texto — sólo se descarta el envío si NO hay ni texto ni
+        // archivo.
+        if ((!trimmed && !attachment) || !currentTeam || sending) {
             return;
         }
 
@@ -952,6 +1209,27 @@ function Thread({
         // reemplaza solo por el mensaje real en cuanto la respuesta del
         // POST trae la lista fresca — no hace falta reconciliar a mano.
         const replyTo = replyingTo;
+        // Preview local inmediata (createObjectURL) mientras el archivo
+        // real todavía viaja al servidor — mismo espíritu optimista que
+        // el mensaje: no esperar el viaje de ida y vuelta para ver algo.
+        const optimisticAttachment: AttachmentData | null = attachment
+            ? {
+                  id: -Date.now() - 1,
+                  type: attachment.type.startsWith('image/')
+                      ? 'image'
+                      : attachment.type.startsWith('video/')
+                        ? 'video'
+                        : attachment.type.startsWith('audio/')
+                          ? 'audio'
+                          : 'document',
+                  url: URL.createObjectURL(attachment),
+                  originalName: attachment.name,
+                  mimeType: attachment.type,
+                  sizeBytes: attachment.size,
+                  width: null,
+                  height: null,
+              }
+            : null;
         const optimisticMessage: MessageData = {
             id: -Date.now(),
             body: trimmed,
@@ -969,10 +1247,17 @@ function Thread({
                 : null,
             replyToBody: replyTo?.body ?? null,
             status: 'sending',
+            attachments: optimisticAttachment ? [optimisticAttachment] : [],
         };
 
         setLiveMessages((previous) => [...previous, optimisticMessage]);
         setReplyingTo(null);
+        // Pedido explícito: enviar una respuesta también cuenta como
+        // "leí todo lo anterior" — usa el mismo camino que la
+        // interacción/scroll (liveMessagesRef todavía no incluye este
+        // optimisticMessage en este mismo tick, así que marca hasta el
+        // último mensaje real, nunca hasta el id negativo temporal).
+        markAsRead();
 
         // Respaldo por si la confirmación tarda de más (pedido
         // explícito: "debe haber un timer... para evitar congestiones
@@ -995,7 +1280,12 @@ function Thread({
 
         router.post(
             storeMessage([currentTeam.slug, conversation.id]).url,
-            { body: trimmed, reply_to_message_id: replyTo?.id ?? null },
+            {
+                body: trimmed,
+                reply_to_message_id: replyTo?.id ?? null,
+                attachment,
+                attachment_category: attachmentCategory,
+            },
             {
                 preserveScroll: true,
                 preserveUrl: true,
@@ -1012,6 +1302,12 @@ function Thread({
             },
         );
     };
+
+    // Primer mensaje ajeno no leído de ESTA apertura — ahí va el
+    // divisor "N mensajes nuevos".
+    const firstUnreadId = liveMessages.find(
+        (m) => !m.isMine && m.id > readWatermarkId,
+    )?.id;
 
     return (
         <div className="flex h-full min-h-0 flex-1 flex-col p-3">
@@ -1060,15 +1356,19 @@ function Thread({
                         >
                             {groupMessagesByDate(liveMessages).map((group) => {
                                 const isExpanded = expandedDates.has(group.key);
-                                // Colapsado: sólo los últimos 1-2 de ese
-                                // día — el badge es un dropdown, no una
-                                // simple etiqueta (pedido explícito,
-                                // sección 17.5). El día más reciente
-                                // arranca desplegado (ver el
-                                // useState de expandedDates).
+                                // Colapsado: NADA visible de ese día —
+                                // pedido explícito, "ocultar todos los
+                                // mensajes y mantenerlos colapsados" para
+                                // que el historial se vea limpio y sólo
+                                // cargue al accionar el badge (que sigue
+                                // siendo un dropdown, no una etiqueta
+                                // decorativa). El día más reciente
+                                // arranca desplegado (ver el useState de
+                                // expandedDates) — sin eso el chat abre
+                                // completamente vacío.
                                 const visibleMessages = isExpanded
                                     ? group.messages
-                                    : group.messages.slice(-2);
+                                    : [];
                                 const hiddenCount =
                                     group.messages.length -
                                     visibleMessages.length;
@@ -1091,7 +1391,11 @@ function Thread({
                                                 {!isExpanded &&
                                                     hiddenCount > 0 && (
                                                         <span className="opacity-70">
-                                                            · {hiddenCount} más
+                                                            ·{' '}
+                                                            {hiddenCount > 99
+                                                                ? '99+'
+                                                                : hiddenCount}{' '}
+                                                            más
                                                         </span>
                                                     )}
                                                 <ChevronDown
@@ -1120,6 +1424,14 @@ function Thread({
                                                         key={message.id}
                                                         className="min-w-0"
                                                     >
+                                                        {message.id ===
+                                                            firstUnreadId && (
+                                                            <UnreadDivider
+                                                                count={
+                                                                    unseenCount
+                                                                }
+                                                            />
+                                                        )}
                                                         <MessageBubble
                                                             message={message}
                                                             getInitials={
@@ -1156,10 +1468,15 @@ function Thread({
                                     block: 'end',
                                     behavior: 'smooth',
                                 });
-                                setUnseenCount(0);
                                 markAsRead();
                             }}
-                            className="btn-elevated absolute bottom-10 left-1/2 z-10 inline-flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full bg-[var(--sidebar)] px-4 py-2 text-xs font-medium text-nowrap text-[var(--sidebar-foreground)]"
+                            // bg-foreground/text-background (no
+                            // --sidebar, que en oscuro daba un gris
+                            // apagado) — pedido explícito: negro sólido
+                            // en tema claro, blanco sólido en tema
+                            // oscuro, misma lógica de inversión que el
+                            // botón de Google en el login.
+                            className="btn-elevated bg-foreground text-background absolute bottom-10 left-1/2 z-10 inline-flex w-fit -translate-x-1/2 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium text-nowrap transition-transform duration-100 active:scale-95"
                         >
                             <ArrowDown className="size-3.5" />
                             {unseenCount > 0
@@ -1175,13 +1492,31 @@ function Thread({
                 </div>
 
                 <MessageComposer
-                    placeholder={`Escribe un mensaje a ${conversation.name}…`}
+                    placeholder="Escribe un mensaje…"
                     replyingTo={replyingTo}
                     onCancelReply={() => setReplyingTo(null)}
                     onSubmit={handleSend}
                     onTyping={notifyTyping}
                 />
             </div>
+        </div>
+    );
+}
+
+function UnreadDivider({ count }: { count: number }) {
+    // Tema opuesto al fondo (pedido explícito): blanco en oscuro, negro
+    // en claro — eso es exactamente lo que ya hace el token
+    // --foreground en los dos temas, no un color fijo como el rojo del
+    // badge de no-leídos.
+    return (
+        <div className="my-3 flex items-center gap-3 px-1" aria-hidden>
+            <div className="bg-foreground/25 h-px flex-1" />
+            <span className="text-foreground/70 text-[11px] font-medium text-nowrap">
+                {count > 0
+                    ? `${count} mensaje${count === 1 ? '' : 's'} nuevo${count === 1 ? '' : 's'}`
+                    : 'Mensajes nuevos'}
+            </span>
+            <div className="bg-foreground/25 h-px flex-1" />
         </div>
     );
 }
@@ -1259,6 +1594,21 @@ function MessageBubble({
     onReply: (message: MessageData) => void;
 }) {
     const failed = message.status === 'failed';
+    // Foto/video sin texto NI cita: burbuja "a lo WhatsApp nuevo" — el
+    // media llena casi toda la burbuja de punta a punta, sin
+    // fondo/padding propio ni cola (pedido explícito). Con caption,
+    // cita, o un documento/audio (que sí necesitan su propio chrome —
+    // nombre, duración, controles), sigue la burbuja normal de
+    // siempre — mezclar el recorte edge-to-edge con el badge de cita
+    // (que a propósito se sale del borde superior, ver más abajo) los
+    // haría pelear entre sí.
+    const hasEdgeToEdgeMedia =
+        !message.body &&
+        !message.replyToId &&
+        message.attachments.some(
+            (attachment) =>
+                attachment.type === 'image' || attachment.type === 'video',
+        );
     // Tono del acento del badge de respuesta según A QUIÉN se está
     // citando, no según quién envía este mensaje — pedido explícito:
     // distinguir "respondo a otro" / "respondo algo mío" / "él me
@@ -1358,7 +1708,9 @@ function MessageBubble({
                         // de la burbuja, no tocar la esquina de la cola (esa
                         // sigue -none, cuadrada a propósito, ver comentario
                         // arriba).
-                        className={`relative min-w-0 rounded-3xl px-3 py-2 text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${bubbleColor} ${
+                        className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${
+                            hasEdgeToEdgeMedia ? '' : `px-3 py-2 ${bubbleColor}`
+                        } ${
                             isLastInGroup
                                 ? message.isMine
                                     ? 'rounded-br-none'
@@ -1372,10 +1724,18 @@ function MessageBubble({
                                   : 'text-[var(--bubble-received-foreground)]'
                         }`}
                     >
-                        {isLastInGroup && (
+                        {/* El "pico" en foto/video edge-to-edge es la
+                            esquina cortada (rounded-br/bl-none, ya
+                            aplicada arriba Y en el wrapper del media más
+                            abajo) — pedido explícito: SIN el cuadrado de
+                            color de siempre encima, porque contra la
+                            foto se ve como una mancha. En burbujas
+                            normales (texto) sigue el cuadrado sesgado de
+                            toda la vida. */}
+                        {isLastInGroup && !hasEdgeToEdgeMedia && (
                             <span
                                 aria-hidden="true"
-                                className={`pointer-events-none absolute bottom-0 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
+                                className={`pointer-events-none absolute bottom-0 z-10 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
                             />
                         )}
 
@@ -1426,6 +1786,36 @@ function MessageBubble({
                             </div>
                         )}
 
+                        {message.attachments.length > 0 && (
+                            <div
+                                className={
+                                    hasEdgeToEdgeMedia
+                                        ? // Recorte propio del media (no de
+                                          // la burbuja entera) — mismas
+                                          // esquinas que la burbuja para
+                                          // que se vea como una sola
+                                          // pieza, pero SIN tapar el pico
+                                          // (ese vive fuera, con z-10).
+                                          `flex flex-col overflow-hidden rounded-3xl ${
+                                              isLastInGroup
+                                                  ? message.isMine
+                                                      ? 'rounded-br-none'
+                                                      : 'rounded-bl-none'
+                                                  : ''
+                                          }`
+                                        : 'mb-1 flex max-w-[280px] flex-col gap-1.5'
+                                }
+                            >
+                                {message.attachments.map((attachment) => (
+                                    <MessageAttachment
+                                        key={attachment.id}
+                                        attachment={attachment}
+                                        fill={hasEdgeToEdgeMedia}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
                         {/* max-w fijo en px (no %): el wrapper interno de
                     ScrollArea (Radix) mide contenido con un
                     `display:table`, que crece sin límite frente a texto
@@ -1435,13 +1825,21 @@ function MessageBubble({
                     producir hijos de bloque (cita, lista) — meterlos
                     dentro de un <p> es HTML inválido (el navegador
                     cierra el <p> solo, apenas encuentra un bloque
-                    adentro). */}
-                        <div className="max-w-[420px] break-words">
-                            {renderFormattedBody(message.body, message.isMine)}
-                        </div>
+                    adentro). Vacío (mensaje de sólo adjunto) no
+                    renderiza nada — sin este chequeo quedaba un hueco
+                    de padding fantasma debajo de la foto/archivo. */}
+                        {message.body && (
+                            <div className="max-w-[420px] break-words">
+                                {renderMessageBody(
+                                    message.body,
+                                    message.isMine,
+                                )}
+                            </div>
+                        )}
                     </div>
+                </div>
 
-                    {/* Hora fuera de la burbuja, en TODAS (no sólo la última de
+                {/* Hora fuera de la burbuja, en TODAS (no sólo la última de
                     la racha) — pedido explícito: "todas las burbujas deben
                     mostrar hora... la quiero fuera de las burbujas". Vive en
                     la MISMA columna que la burbuja (no una fila aparte) para
@@ -1452,40 +1850,39 @@ function MessageBubble({
                     pico, que justo de ese lado sobresale un poco de la
                     burbuja. mt-1.5 (no mt-0.5): más aire respecto a la
                     burbuja, no tan pegado. */}
-                    <div
-                        className={`text-muted-foreground mt-1.5 flex items-center gap-1 text-[10px] ${message.isMine ? 'justify-end pr-2' : 'justify-start pl-2'}`}
-                    >
-                        <span>{formatBubbleTime(message.createdAt)}</span>
-                        <MessageStatus message={message} />
-                    </div>
+                <div
+                    className={`text-muted-foreground mt-1.5 flex items-center gap-1 text-[10px] ${message.isMine ? 'justify-end pr-2' : 'justify-start pl-2'}`}
+                >
+                    <span>{formatBubbleTime(message.createdAt)}</span>
+                    <MessageStatus message={message} />
                 </div>
+            </div>
 
-                {/* Grupo de acciones al hover: sólo aparece con el mouse
+            {/* Grupo de acciones al hover: sólo aparece con el mouse
                 encima de la fila (no depende de clic derecho). Vive al
                 lado externo de la burbuja (lejos del avatar) gracias al
                 mismo flex-row-reverse que ya posiciona todo lo demás. */}
-                <div className="pointer-events-none flex shrink-0 items-center self-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100">
-                    <BubbleActionButton
-                        icon={Reply}
-                        label="Responder"
-                        onClick={() => onReply(message)}
-                    />
-                    <BubbleActionButton
-                        icon={Smile}
-                        label="Reaccionar (próximamente)"
-                        disabled
-                    />
-                    <BubbleActionButton
-                        icon={Forward}
-                        label="Reenviar (próximamente)"
-                        disabled
-                    />
-                    <BubbleActionButton
-                        icon={MoreHorizontal}
-                        label="Más opciones (próximamente)"
-                        disabled
-                    />
-                </div>
+            <div className="pointer-events-none flex shrink-0 items-center self-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100">
+                <BubbleActionButton
+                    icon={Reply}
+                    label="Responder"
+                    onClick={() => onReply(message)}
+                />
+                <BubbleActionButton
+                    icon={Smile}
+                    label="Reaccionar (próximamente)"
+                    disabled
+                />
+                <BubbleActionButton
+                    icon={Forward}
+                    label="Reenviar (próximamente)"
+                    disabled
+                />
+                <BubbleActionButton
+                    icon={MoreHorizontal}
+                    label="Más opciones (próximamente)"
+                    disabled
+                />
             </div>
         </div>
     );

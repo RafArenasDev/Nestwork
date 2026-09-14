@@ -244,6 +244,7 @@ Once the user approves the plan:
 - Every deviation from the recommended stack in Section 4 must be explicitly flagged and justified, not silently substituted.
 - Do not fabricate benchmarks, pricing, or library capabilities — if you're not certain about a current library/tool detail, say so plainly rather than guessing.
 - Keep the user's solo/small-scale, learning-oriented context in mind at every decision point: favor simplicity, maintainability, and things that are debuggable by one person over theoretical scalability.
+- **Frontend design/interaction work uses the `apple-design` skill exclusively** (round macOS-style buttons, interruptible spring animations, translucent materials, size-specific type tracking) — do not install new design/animation libraries (Framer Motion, GSAP, etc.) to achieve this; implement with plain CSS/JS. See `docs/DECISIONS.md` (2026-09-14 entry) for the full rationale and scope of this rule.
 
 ---
 

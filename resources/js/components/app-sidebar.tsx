@@ -46,7 +46,7 @@ function SidebarModuleHeader({ title }: { title: string }) {
                         type="button"
                         size="icon"
                         variant="ghost"
-                        className="size-7"
+                        className="size-7 rounded-full transition-transform duration-100 active:scale-90"
                         aria-label="Nuevo chat"
                     >
                         <Plus className="size-4" />

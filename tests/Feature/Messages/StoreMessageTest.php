@@ -1,11 +1,14 @@
 <?php
 
+use App\Enums\MessageType;
 use App\Enums\TeamRole;
 use App\Events\MessageSent;
 use App\Models\Message;
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 
 test('a team member can post a message to a conversation they belong to', function () {
     Event::fake([MessageSent::class]);
@@ -104,6 +107,63 @@ test('a message body over the max length fails validation', function () {
         ->post(route('messages.store', [$team, $conversation]), [
             'body' => str_repeat('a', 4001),
         ]);
+
+    $response->assertSessionHasErrors('body');
+    $this->assertDatabaseCount('messages', 0);
+});
+
+test('a message with only an attachment and no body succeeds', function () {
+    Storage::fake('public');
+    Event::fake([MessageSent::class]);
+
+    $team = Team::factory()->create();
+    $sender = User::factory()->create();
+    $other = User::factory()->create();
+
+    $team->members()->attach($sender, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($other, ['role' => TeamRole::Member->value]);
+
+    $conversation = makeDmConversation($team, $sender, $other);
+
+    $response = $this
+        ->actingAs($sender)
+        ->post(route('messages.store', [$team, $conversation]), [
+            'attachment' => UploadedFile::fake()->image('foto.jpg', 800, 600),
+        ]);
+
+    $response->assertRedirect(route('messages.show', [$team, $conversation]));
+
+    $message = Message::query()->where('conversation_id', $conversation->id)->firstOrFail();
+
+    expect($message->type)->toBe(MessageType::Image);
+
+    $this->assertDatabaseHas('attachments', [
+        'message_id' => $message->id,
+        'type' => 'image',
+        'original_name' => 'foto.jpg',
+        'width' => 800,
+        'height' => 600,
+    ]);
+
+    $attachment = $message->attachments()->firstOrFail();
+    Storage::disk('public')->assertExists($attachment->path);
+});
+
+test('a message with neither body nor attachment fails validation', function () {
+    Event::fake([MessageSent::class]);
+
+    $team = Team::factory()->create();
+    $sender = User::factory()->create();
+    $other = User::factory()->create();
+
+    $team->members()->attach($sender, ['role' => TeamRole::Owner->value]);
+    $team->members()->attach($other, ['role' => TeamRole::Member->value]);
+
+    $conversation = makeDmConversation($team, $sender, $other);
+
+    $response = $this
+        ->actingAs($sender)
+        ->post(route('messages.store', [$team, $conversation]), []);
 
     $response->assertSessionHasErrors('body');
     $this->assertDatabaseCount('messages', 0);

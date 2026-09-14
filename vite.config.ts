@@ -14,7 +14,14 @@ export default defineConfig({
             refresh: true,
             fonts: [
                 bunny('Instrument Sans', {
-                    weights: [400, 500, 600],
+                    // 700 faltaba acá — cualquier font-bold/negrita de
+                    // la app (Tailwind pide weight 700) no tenía
+                    // ninguna tipografía real que cargar, así que el
+                    // navegador caía al 600 (semibold) autoalojado,
+                    // casi indistinguible del texto normal en burbujas
+                    // chicas. Bug real, no sólo del composer: afectaba
+                    // CUALQUIER negrita de toda la app.
+                    weights: [400, 500, 600, 700],
                 }),
             ],
         }),

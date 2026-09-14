@@ -445,3 +445,186 @@ main[data-slot='sidebar-inset'],
         inset 20px 0 30px -24px rgba(0, 0, 0, 0.3),
         inset -20px 0 30px -24px rgba(0, 0, 0, 0.3);
 }
+
+/* "Materializar" el preview de adjunto al elegir archivo — escala +
+   opacidad juntas (apple-design §12: "materialize, don't just fade"),
+   no un fade plano. Un solo disparo al aparecer, no algo que el
+   usuario arrastre — @keyframes alcanza, no hace falta spring acá. */
+@keyframes attachment-in {
+    from {
+        opacity: 0;
+        transform: scale(0.94);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+.animate-attachment-in {
+    animation: attachment-in 180ms cubic-bezier(0.16, 0.9, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-attachment-in {
+        animation: none;
+    }
+}
+
+/* Placeholder del composer (@tiptap/extension-placeholder): la
+   extensión sólo agrega la clase/atributo, el ::before hay que
+   escribirlo a mano — sin esto el placeholder queda invisible aunque
+   esté bien configurado en JS (el bug real que reportó el usuario).
+   `.ProseMirror` (no `.tiptap`): lo pone SIEMPRE el core de
+   ProseMirror, sin depender de qué clases termine mezclando
+   editorProps.attributes.class. */
+.ProseMirror p.is-editor-empty:first-child::before {
+    color: var(--muted-foreground);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+
+/* Chip de enlace en las burbujas (estilo Slack/Jira, pedido explícito)
+   — material de vidrio (apple-design §12: materiales translúcidos,
+   canto superior brillante = la luz pegándole al vidrio, vibrancy para
+   que el texto no pierda contraste sobre el material). Color base fijo
+   (no depende de --bubble-sent/received) para contraste consistente en
+   las dos burbujas. Letter-spacing chico a propósito (texto pequeño =
+   tracking positivo). El brillo es craft estático (gradiente + blur),
+   no una animación — la única transición real es el feedback de
+   presión (apple-design §1: responder instantáneo al press). */
+.chat-link-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.15em 0.65em 0.15em 0.45em;
+    border-radius: 999px;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: linear-gradient(
+        160deg,
+        color-mix(in srgb, #3b82f6 75%, white 25%) 0%,
+        #2563eb 45%,
+        color-mix(in srgb, #2563eb 82%, black 18%) 100%
+    );
+    backdrop-filter: blur(6px) saturate(160%);
+    color: #f5f9ff;
+    font-size: 0.85em;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        inset 0 -6px 8px -4px rgba(0, 0, 0, 0.25),
+        0 1px 3px rgba(0, 0, 0, 0.2);
+    transition:
+        transform 100ms ease-out,
+        filter 100ms ease-out;
+}
+/* Reflejo diagonal de vidrio — la pieza que hace que "brille" en vez
+   de sólo tener relleno. Un solo pseudo-elemento estático, sin costo
+   de animación. */
+.chat-link-chip::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+        115deg,
+        rgba(255, 255, 255, 0.55) 0%,
+        rgba(255, 255, 255, 0.12) 30%,
+        transparent 55%
+    );
+}
+.chat-link-chip:hover {
+    filter: brightness(1.08);
+}
+.chat-link-chip:active {
+    transform: scale(0.97);
+}
+
+/* Resaltado de sintaxis (lowlight/highlight.js) de bloques de código en
+   el chat — paleta propia en vez de importar un tema hecho de
+   highlight.js, para que respete exactamente los dos temas del
+   proyecto en vez de imponer los suyos. Cubre sólo las clases que
+   emiten los lenguajes registrados en code-languages.ts. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+    color: #c2410c;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-addition {
+    color: #166534;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-name {
+    color: #1e3a8a;
+}
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+    color: currentcolor;
+    opacity: 0.5;
+}
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-type,
+.hljs-symbol {
+    color: #7c3aed;
+}
+.hljs-variable,
+.hljs-attribute,
+.hljs-tag,
+.hljs-regexp {
+    color: #b91c1c;
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-literal,
+.dark .hljs-section,
+.dark .hljs-link {
+    color: #fb923c;
+}
+.dark .hljs-string,
+.dark .hljs-attr,
+.dark .hljs-template-tag,
+.dark .hljs-template-variable,
+.dark .hljs-addition {
+    color: #4ade80;
+}
+.dark .hljs-title,
+.dark .hljs-title.function_,
+.dark .hljs-title.class_,
+.dark .hljs-name {
+    color: #93c5fd;
+}
+.dark .hljs-number,
+.dark .hljs-built_in,
+.dark .hljs-builtin-name,
+.dark .hljs-type,
+.dark .hljs-symbol {
+    color: #c4b5fd;
+}
+.dark .hljs-variable,
+.dark .hljs-attribute,
+.dark .hljs-tag,
+.dark .hljs-regexp {
+    color: #fca5a5;
+}
+.hljs-emphasis {
+    font-style: italic;
+}
+.hljs-strong {
+    font-weight: bold;
+}

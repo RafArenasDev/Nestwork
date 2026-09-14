@@ -72,7 +72,7 @@ export function NewConversationModal({ children }: PropsWithChildren) {
                     <Input
                         autoFocus
                         placeholder="Buscar por nombre o usuario..."
-                        className="pl-8"
+                        className="rounded-full pl-8"
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                     />
