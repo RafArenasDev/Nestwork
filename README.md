@@ -3,25 +3,25 @@
 > Plataforma de chat interno para empresas — workspaces identificados por dominio de correo, mensajería en tiempo real, pensada para equipos chicos/medianos sin el costo de Slack/Teams.
 
 **Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13), **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) y **Fase E** (header + burbujas + tiempo real + composer con formato, 2026-09-13) terminadas. **2026-09-14**: fix de mensajes no leídos, composer con links/código/adjuntos de punta a punta, pulido visual macOS. **2026-09-15**: Épica 6.3 completa (reaccionar/responder/reenviar/copiar/editar con tope de tiempo y de veces/eliminar para mí y para todos), guardar y fijar mensajes, limpiar chat, eliminar conversación, emoji picker real. Ver `docs/PENDING-WORK.md` para el detalle. Paginación por cursor y búsqueda global siguen pendientes.
->
+
 > ⚠️ **`docs/PENDING-WORK.md` es el punto de continuación real ahora mismo** — pendientes chicos sueltos de esta ronda (vista de Guardados, animación de "escribiendo…", salto a mensaje citado), y el roadmap grande según `ANALISIS-PRIORIZACION-NESTWORK.md` (separar Canales/Grupos, navegación data-driven, auth, y la visión de cifrado E2E que necesita su propia sesión de arquitectura). Leer eso antes de seguir.
 
 ---
 
 ## Documentación
 
-| Documento                                      | Contenido                                                                      |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md)   | Elevator pitch, usuarios objetivo, propuesta de valor (ES/EN)                  |
-| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Alcance MVP/V2/V3, fuera de alcance, trust & safety, ciclo de vida de mensajes |
-| [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md)     | Diagrama entidad-relación (Mermaid) + diccionario de datos                     |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Diagramas de arquitectura y secuencia, multi-tenancy, estructura de carpetas   |
-| [`docs/STACK.md`](docs/STACK.md)               | Stack técnico validado, qué está instalado de verdad y qué falta               |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md)           | Fases, Web-only en el MVP, Mobile/Desktop condicionales                        |
-| [`docs/SETUP.md`](docs/SETUP.md)               | Cómo levantar el entorno de desarrollo local                                   |
-| [`docs/TESTING.md`](docs/TESTING.md)           | Estrategia de testing, TDD, cómo testear WebSockets                            |
-| [`docs/QA.md`](docs/QA.md)                     | Checklist manual de QA por fase                                                |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md)       | Log de decisiones técnicas (ADR)                                               |
+| Documento                                      | Contenido                                                                                                      |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`docs/DESCRIPTION.md`](docs/DESCRIPTION.md)   | Elevator pitch, usuarios objetivo, propuesta de valor (ES/EN)                                                  |
+| [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) | Alcance MVP/V2/V3, fuera de alcance, trust & safety, ciclo de vida de mensajes                                 |
+| [`docs/ER_DIAGRAM.md`](docs/ER_DIAGRAM.md)     | Diagrama entidad-relación (Mermaid) + diccionario de datos                                                     |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Diagramas de arquitectura y secuencia, multi-tenancy, estructura de carpetas                                   |
+| [`docs/STACK.md`](docs/STACK.md)               | Stack técnico validado, qué está instalado de verdad y qué falta                                               |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md)           | Fases, Web-only en el MVP, Mobile/Desktop condicionales                                                        |
+| [`docs/SETUP.md`](docs/SETUP.md)               | Cómo levantar el entorno de desarrollo local                                                                   |
+| [`docs/TESTING.md`](docs/TESTING.md)           | Estrategia de testing, TDD, cómo testear WebSockets                                                            |
+| [`docs/QA.md`](docs/QA.md)                     | Checklist manual de QA por fase                                                                                |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md)       | Log de decisiones técnicas (ADR)                                                                               |
 | [`docs/PENDING-WORK.md`](docs/PENDING-WORK.md) | **Punto de continuación 2026-09-14** — qué falta, bugs visuales abiertos, visión ampliada (cifrado/privacidad) |
 
 ## Stack (resumen — ver `docs/STACK.md` para el detalle completo)
