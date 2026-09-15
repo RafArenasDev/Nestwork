@@ -196,7 +196,11 @@ class GenerateAttachmentPreview
         $finder->run();
 
         if ($finder->isSuccessful()) {
-            return trim(strtok($finder->getOutput(), "\n"));
+            // strtok() está tipado como string|false en PHPStan (sólo
+            // devuelve false si el string de entrada viene vacío, lo
+            // que no pasa acá dentro de isSuccessful()) — el cast
+            // documenta esa garantía sin cambiar el comportamiento.
+            return trim((string) strtok($finder->getOutput(), "\n"));
         }
 
         return null;
