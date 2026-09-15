@@ -469,6 +469,158 @@ main[data-slot='sidebar-inset'],
     }
 }
 
+/* Indicador "escribiendo…" — 3 puntos con rebote suave (iMessage/
+   WhatsApp), cada uno desfasado 160ms del anterior. Decorativo y en
+   loop, no gesture-driven, por eso @keyframes alcanza (spring es para
+   algo que el usuario puede agarrar/interrumpir — acá no aplica). Con
+   reduced-motion: sin rebote, sólo un pulso de opacidad bien sutil. */
+@keyframes typing-dot-bounce {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.5;
+    }
+    30% {
+        transform: translateY(-3px);
+        opacity: 1;
+    }
+}
+.animate-typing-dot {
+    animation: typing-dot-bounce 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-typing-dot {
+        animation: typing-dot-fade 1.6s ease-in-out infinite;
+        transform: none !important;
+    }
+}
+@keyframes typing-dot-fade {
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Visor de imagen/video — el panel (no el scrim completo) "materializa"
+   con escala+opacidad (apple-design §12: "materialize, don't just
+   fade"), un solo disparo, no gesture-driven. */
+@keyframes media-viewer-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+.animate-media-viewer-in {
+    animation: media-viewer-in 180ms cubic-bezier(0.16, 0.9, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .animate-media-viewer-in {
+        animation: none;
+    }
+}
+
+/* Scrubber/volumen del visor de video — <input type=range> propio,
+   no el control nativo del navegador. Estilos -webkit-/-moz- porque
+   el thumb/track de <input type=range> no tiene una propiedad CSS
+   unificada todavía. */
+.media-scrub {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+}
+.media-scrub::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.25);
+}
+.media-scrub::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.25);
+}
+.media-scrub::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    margin-top: -3.5px;
+    border-radius: 999px;
+    background: #fff;
+}
+.media-scrub::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border: none;
+    border-radius: 999px;
+    background: #fff;
+}
+
+/* Picker de emojis (emoji-picker-react) reskineado con los tokens
+   propios de la app — pedido explícito: "ese modal nativo no me gusta,
+   quiero algo lindo", no el verde/gris genérico de la librería por
+   defecto. Variables documentadas por la librería (--epr-* y --epr-dark-*,
+   consultadas según el theme LIGHT/DARK que le pasamos explícitamente
+   desde React, ver reaction-picker.tsx) — mapean 1:1 a los tokens que
+   ya usa el resto de la UI (--popover, --border, --accent, etc.), así
+   que se ve como parte de la misma app, no una librería aparte. */
+.EmojiPickerReact.EmojiPickerReact {
+    /* !important en cada variable: la librería inyecta su PROPIA hoja
+       de estilos en runtime (al montar el componente), que carga
+       DESPUÉS de este app.css — a igual especificidad, gana la que
+       carga último, así que sin !important estos valores quedaban
+       pisados por los defaults de la librería (el picker seguía
+       viéndose "de fábrica" pese a las variables de acá). */
+    --epr-emoji-size: 26px !important;
+    --epr-header-padding: 12px 14px !important;
+    --epr-horizontal-padding: 12px !important;
+    --epr-picker-border-radius: 20px !important;
+    --epr-category-label-height: 32px !important;
+    --epr-preview-height: 60px !important;
+
+    --epr-bg-color: var(--popover) !important;
+    --epr-category-label-bg-color: var(--popover) !important;
+    --epr-category-label-text-color: var(--muted-foreground) !important;
+    --epr-category-icon-active-color: var(--foreground) !important;
+    --epr-picker-border-color: var(--border) !important;
+    --epr-search-border-color: var(--border) !important;
+    --epr-search-input-bg-color: var(--muted) !important;
+    --epr-search-input-bg-color-active: var(--muted) !important;
+    --epr-hover-bg-color: var(--accent) !important;
+    --epr-focus-bg-color: var(--accent) !important;
+    --epr-highlight-color: var(--foreground) !important;
+    --epr-search-border-color-active: var(--foreground) !important;
+    --epr-text-color: var(--popover-foreground) !important;
+
+    --epr-dark-bg-color: var(--popover) !important;
+    --epr-dark-category-label-bg-color: var(--popover) !important;
+    --epr-dark-category-icon-active-color: var(--foreground) !important;
+    --epr-dark-search-input-bg-color: var(--muted) !important;
+    --epr-dark-search-input-bg-color-active: var(--muted) !important;
+    --epr-dark-hover-bg-color: var(--accent) !important;
+    --epr-dark-highlight-color: var(--foreground) !important;
+    --epr-dark-picker-border-color: var(--border) !important;
+    --epr-dark-text-color: var(--popover-foreground) !important;
+
+    border: 1px solid var(--border) !important;
+    box-shadow: none !important;
+}
+/* El anillo de foco nativo del input de búsqueda queda azul del
+   navegador si no se pisa a mano — las variables --epr-search-* sólo
+   controlan el borde, no el outline nativo. */
+.EmojiPickerReact input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--ring);
+}
+
 /* Placeholder del composer (@tiptap/extension-placeholder): la
    extensión sólo agrega la clase/atributo, el ::before hay que
    escribirlo a mano — sin esto el placeholder queda invisible aunque
