@@ -23,6 +23,11 @@ export type AttachmentData = {
     height: number | null;
 };
 
+export type ReactionData = {
+    emoji: string;
+    userId: number;
+};
+
 export type MessageData = {
     id: number;
     body: string;
@@ -37,6 +42,12 @@ export type MessageData = {
     replyToBody: string | null;
     status: 'sending' | 'sent' | 'read' | 'failed';
     attachments: AttachmentData[];
+    reactions: ReactionData[];
+    isForwarded: boolean;
+    editableUntil: string | null;
+    editsRemaining: number;
+    isDeleted: boolean;
+    isSaved: boolean;
 };
 
 export type ActiveConversation = {
@@ -49,6 +60,7 @@ export type ActiveConversation = {
     isArchived: boolean;
     isMuted: boolean;
     viewerLastReadMessageId: number | null;
+    pinnedMessageId: number | null;
 };
 
 export type TeamMemberOption = {

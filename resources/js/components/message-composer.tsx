@@ -7,6 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 // agregarlo aparte) — instalarlo también como paquete propio disparaba
 // "[tiptap warn]: Duplicate extension names found: ['underline']".
 import StarterKit from '@tiptap/starter-kit';
+import EmojiPicker, { Theme as EmojiPickerTheme } from 'emoji-picker-react';
 import {
     Bold,
     Code,
@@ -21,6 +22,7 @@ import {
     Quote,
     Redo2,
     Send,
+    SmilePlus,
     SquareCode,
     Strikethrough,
     Underline as UnderlineIcon,
@@ -42,6 +44,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { lowlight } from '@/lib/code-languages';
+import { markdownToEditorDoc } from '@/lib/markdown-to-editor';
 import type { MessageData } from '@/types';
 
 /**
@@ -231,17 +234,28 @@ export function MessageComposer({
     placeholder,
     replyingTo,
     onCancelReply,
+    editingMessage,
+    onCancelEdit,
     onSubmit,
+    onSubmitEdit,
     onTyping,
 }: {
     placeholder: string;
     replyingTo: MessageData | null;
     onCancelReply: () => void;
+    /** Distinto de `replyingTo`: mientras se edita, el composer entero
+     *  cambia de modo (ver el bloque "Editando mensaje" más abajo) en
+     *  vez de sólo mostrar una cita — no tiene sentido responder Y
+     *  editar a la vez, así que son mutuamente excluyentes en el padre
+     *  (pages/messages/index.tsx). */
+    editingMessage: MessageData | null;
+    onCancelEdit: () => void;
     onSubmit: (
         markdownBody: string,
         attachment: File | null,
         attachmentCategory: 'image' | 'video' | 'document' | 'audio' | null,
     ) => void;
+    onSubmitEdit: (markdownBody: string) => void;
     onTyping: () => void;
 }) {
     const editor = useEditor({
@@ -264,10 +278,17 @@ export function MessageComposer({
                 // Sin encabezados/regla horizontal: esto es un composer
                 // de chat, no un editor de documentos. codeBlock se
                 // reemplaza por CodeBlockLowlight más abajo (resaltado
-                // de sintaxis real, no sólo texto monoespaciado).
+                // de sintaxis real, no sólo texto monoespaciado). link:
+                // false — StarterKit v3 ahora trae su propio Link
+                // incluido (mismo caso que Underline, ver nota debajo);
+                // sin desactivarlo acá, duplica al Link configurado
+                // explícito más abajo con los protocolos/autolink
+                // restringidos ("[tiptap warn]: Duplicate extension
+                // names found: ['link']").
                 heading: false,
                 horizontalRule: false,
                 codeBlock: false,
+                link: false,
             }),
             Placeholder.configure({ placeholder }),
             Link.configure({
@@ -420,6 +441,22 @@ export function MessageComposer({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [replyingTo, editor]);
+
+    // "Editar" precarga el composer con el cuerpo del mensaje YA
+    // formateado (markdownToEditorDoc), no el markdown crudo — pedido
+    // implícito: editar debe verse igual de WYSIWYG que escribir por
+    // primera vez, no mostrar "**hola**" literal.
+    useEffect(() => {
+        if (editingMessage && editor) {
+            editor.commands.setContent(
+                markdownToEditorDoc(editingMessage.body),
+            );
+            editor.chain().focus('end').run();
+        } else if (!editingMessage && editor) {
+            editor.commands.clearContent();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingMessage, editor]);
 
     const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
     const [linkUrlDraft, setLinkUrlDraft] = useState('');
@@ -644,6 +681,18 @@ export function MessageComposer({
     };
 
     const submit = () => {
+        if (editingMessage) {
+            if (!editor || editor.isEmpty) {
+                return;
+            }
+
+            const markdown = serializeToMarkdown(editor.getJSON());
+            editor.commands.clearContent();
+            onSubmitEdit(markdown);
+
+            return;
+        }
+
         // Un adjunto ya alcanza para enviar — el mensaje puede ir sin
         // texto (sólo la foto/archivo), pedido explícito.
         if ((!editor || editor.isEmpty) && !attachment) {
@@ -658,42 +707,68 @@ export function MessageComposer({
 
     return (
         <div className="flex flex-col gap-2 border-t p-3">
-            {replyingTo && (
-                // rounded-3xl + gris fijo: mismo fondo/texto que el
-                // badge de previsualización dentro de la burbuja (ver
-                // pages/messages/index.tsx) — contraste garantizado en
-                // los dos temas. Acento de color: naranja si respondo
-                // algo mío, azul oscuro si respondo a otro.
-                <div
-                    className={`flex items-center gap-2 rounded-3xl border-l-[5px] bg-[#71717a] py-2 pr-2 pl-3.5 ${replyingTo.isMine ? 'border-l-[#c2410c]' : 'border-l-[#1e3a8a]'}`}
-                >
+            {editingMessage && (
+                // Acento violeta (ninguna otra barra del composer usa
+                // ese tono) para que "editando" se distinga de un
+                // vistazo de "respondiendo a" — mismo lenguaje visual
+                // (rounded-3xl + gris fijo), sólo cambia el acento.
+                <div className="flex items-center gap-2 rounded-3xl border-l-[5px] border-l-[#7e22ce] bg-[#71717a] py-2 pr-2 pl-3.5">
                     <div className="min-w-0 flex-1">
                         <p className="text-[11px] font-bold text-white">
-                            Respondiendo a{' '}
-                            {replyingTo.isMine
-                                ? 'ti mismo'
-                                : replyingTo.userName}
+                            Editando mensaje
                         </p>
                         <p className="truncate text-xs text-white/70">
-                            {replyingTo.body}
+                            {editingMessage.body}
                         </p>
                     </div>
-                    {/* Redondo de verdad (no rounded-md del Button base)
-                        — mismo lenguaje que el botón de cerrar de los
-                        modales (ver DialogClose en ui/dialog.tsx):
-                        rounded-full + fondo sutil sobre el color de este
-                        badge, ícono centrado por el flex del propio
-                        Button. */}
                     <button
                         type="button"
                         className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
-                        aria-label="Cancelar respuesta"
-                        onClick={onCancelReply}
+                        aria-label="Cancelar edición"
+                        onClick={onCancelEdit}
                     >
                         <X className="size-3.5" />
                     </button>
                 </div>
             )}
+
+            {!editingMessage &&
+                replyingTo && (
+                    // rounded-3xl + gris fijo: mismo fondo/texto que el
+                    // badge de previsualización dentro de la burbuja (ver
+                    // pages/messages/index.tsx) — contraste garantizado en
+                    // los dos temas. Acento de color: naranja si respondo
+                    // algo mío, azul oscuro si respondo a otro.
+                    <div
+                        className={`flex items-center gap-2 rounded-3xl border-l-[5px] bg-[#71717a] py-2 pr-2 pl-3.5 ${replyingTo.isMine ? 'border-l-[#c2410c]' : 'border-l-[#1e3a8a]'}`}
+                    >
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-bold text-white">
+                                Respondiendo a{' '}
+                                {replyingTo.isMine
+                                    ? 'ti mismo'
+                                    : replyingTo.userName}
+                            </p>
+                            <p className="truncate text-xs text-white/70">
+                                {replyingTo.body}
+                            </p>
+                        </div>
+                        {/* Redondo de verdad (no rounded-md del Button base)
+                        — mismo lenguaje que el botón de cerrar de los
+                        modales (ver DialogClose en ui/dialog.tsx):
+                        rounded-full + fondo sutil sobre el color de este
+                        badge, ícono centrado por el flex del propio
+                        Button. */}
+                        <button
+                            type="button"
+                            className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
+                            aria-label="Cancelar respuesta"
+                            onClick={onCancelReply}
+                        >
+                            <X className="size-3.5" />
+                        </button>
+                    </div>
+                )}
 
             {attachment && (
                 // animate-attachment-in: "materializar", no sólo aparecer
@@ -781,30 +856,42 @@ export function MessageComposer({
                         event.target.value = '';
                     }}
                 />
-                {/* Tres botones separados, no un único clip genérico
-                    (pedido explícito: "todo separado queda mejor, evita
-                    eso de dejar todo pegado") — mismo patrón que
-                    Teams/Slack: el ícono ya te dice qué vas a adjuntar,
-                    sin abrir nada intermedio. */}
-                <ToolbarButton
-                    icon={FileImage}
-                    label="Adjuntar foto"
-                    active={false}
-                    onClick={() => photoInputRef.current?.click()}
-                />
-                <ToolbarButton
-                    icon={FileVideo}
-                    label="Adjuntar video"
-                    active={false}
-                    onClick={() => videoInputRef.current?.click()}
-                />
-                <ToolbarButton
-                    icon={Paperclip}
-                    label="Adjuntar documento"
-                    active={attachment !== null}
-                    onClick={() => fileInputRef.current?.click()}
-                />
-                <span className="bg-border mx-1 h-4 w-px" aria-hidden="true" />
+                {/* Adjuntos no son editables en esta ronda (Épica 6.3):
+                    "Editar" sólo cambia el texto — se ocultan estos tres
+                    botones mientras se edita en vez de dejarlos ahí
+                    sugiriendo algo que el submit de abajo no soporta. */}
+                {!editingMessage && (
+                    <>
+                        {/* Tres botones separados, no un único clip
+                            genérico (pedido explícito: "todo separado
+                            queda mejor, evita eso de dejar todo
+                            pegado") — mismo patrón que Teams/Slack: el
+                            ícono ya te dice qué vas a adjuntar, sin
+                            abrir nada intermedio. */}
+                        <ToolbarButton
+                            icon={FileImage}
+                            label="Adjuntar foto"
+                            active={false}
+                            onClick={() => photoInputRef.current?.click()}
+                        />
+                        <ToolbarButton
+                            icon={FileVideo}
+                            label="Adjuntar video"
+                            active={false}
+                            onClick={() => videoInputRef.current?.click()}
+                        />
+                        <ToolbarButton
+                            icon={Paperclip}
+                            label="Adjuntar documento"
+                            active={attachment !== null}
+                            onClick={() => fileInputRef.current?.click()}
+                        />
+                        <span
+                            className="bg-border mx-1 h-4 w-px"
+                            aria-hidden="true"
+                        />
+                    </>
+                )}
                 <ToolbarButton
                     icon={Bold}
                     label="Negrita"
@@ -965,6 +1052,36 @@ export function MessageComposer({
                     </PopoverContent>
                 </Popover>
                 <span className="bg-border mx-1 h-4 w-px" aria-hidden="true" />
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            aria-label="Insertar emoji"
+                            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-7 items-center justify-center rounded-full transition-[transform,background-color,color] duration-100 active:scale-90"
+                        >
+                            <SmilePlus className="size-4" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        side="top"
+                        align="start"
+                        className="w-fit border-none bg-transparent p-0 shadow-none"
+                    >
+                        <EmojiPicker
+                            theme={EmojiPickerTheme.AUTO}
+                            onEmojiClick={(data) =>
+                                editor
+                                    ?.chain()
+                                    .focus()
+                                    .insertContent(data.emoji)
+                                    .run()
+                            }
+                            height={360}
+                            width={300}
+                        />
+                    </PopoverContent>
+                </Popover>
+                <span className="bg-border mx-1 h-4 w-px" aria-hidden="true" />
                 <ToolbarButton
                     icon={Undo2}
                     label="Deshacer"
@@ -1014,33 +1131,36 @@ export function MessageComposer({
                     (no auto-envía al soltar). Tamaño a mitad de camino
                     entre los íconos chicos de la toolbar (size-7) y el
                     botón de enviar (size-11) — vive en esta fila, no en
-                    la toolbar de arriba. */}
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            aria-label={
-                                isRecording
-                                    ? 'Detener grabación'
-                                    : 'Grabar audio'
-                            }
-                            aria-pressed={isRecording}
-                            onClick={
-                                isRecording ? stopRecording : startRecording
-                            }
-                            className={`flex size-10 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color] duration-100 active:scale-90 ${
-                                isRecording
-                                    ? 'bg-destructive animate-pulse text-white'
-                                    : 'text-muted-foreground hover:bg-foreground/10 hover:text-foreground'
-                            }`}
-                        >
-                            <Mic className="size-4" />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {isRecording ? 'Detener grabación' : 'Grabar audio'}
-                    </TooltipContent>
-                </Tooltip>
+                    la toolbar de arriba. Oculto en modo edición (ver
+                    nota de los botones de adjuntar más arriba). */}
+                {!editingMessage && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={
+                                    isRecording
+                                        ? 'Detener grabación'
+                                        : 'Grabar audio'
+                                }
+                                aria-pressed={isRecording}
+                                onClick={
+                                    isRecording ? stopRecording : startRecording
+                                }
+                                className={`flex size-10 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color] duration-100 active:scale-90 ${
+                                    isRecording
+                                        ? 'bg-destructive animate-pulse text-white'
+                                        : 'text-muted-foreground hover:bg-foreground/10 hover:text-foreground'
+                                }`}
+                            >
+                                <Mic className="size-4" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {isRecording ? 'Detener grabación' : 'Grabar audio'}
+                        </TooltipContent>
+                    </Tooltip>
+                )}
                 <Button
                     type="button"
                     size="icon"

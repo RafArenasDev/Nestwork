@@ -111,6 +111,37 @@ function AudioPlayer({ url }: { url: string }) {
     );
 }
 
+/** Persistir qué fotos/videos ya se revelaron — pedido explícito: "no
+ *  es un tap to show, es un [revelar] hacia el chat", no debería pedir
+ *  tocar de nuevo cada vez que se reabre la conversación. localStorage
+ *  (no cookies/BD): es puramente cosmético por dispositivo, no hace
+ *  falta sincronizarlo entre pestañas ni con el servidor. */
+const REVEALED_STORAGE_KEY = 'nestwork:revealed-attachments';
+
+function readRevealedIds(): Set<number> {
+    try {
+        const raw = localStorage.getItem(REVEALED_STORAGE_KEY);
+
+        return raw ? new Set(JSON.parse(raw) as number[]) : new Set();
+    } catch {
+        return new Set();
+    }
+}
+
+function markRevealed(attachmentId: number): void {
+    try {
+        const ids = readRevealedIds();
+        ids.add(attachmentId);
+        localStorage.setItem(
+            REVEALED_STORAGE_KEY,
+            JSON.stringify(Array.from(ids)),
+        );
+    } catch {
+        // Sin localStorage (privado/bloqueado): simplemente vuelve a
+        // pedir "revelar" cada vez — no rompe nada más.
+    }
+}
+
 function formatSize(bytes: number): string {
     if (bytes < 1024) {
         return `${bytes} B`;
@@ -188,7 +219,16 @@ export function MessageAttachment({
     // al tocarlo se ve nítida EN LA BURBUJA y ese botón desaparece. La
     // descarga real al dispositivo queda para el modal/lightbox, ya con
     // la media revelada — son dos pasos distintos, no el mismo botón.
-    const [revealed, setRevealed] = useState(false);
+    // Arranca ya revelada si este adjunto ya se reveló antes en este
+    // dispositivo (ver readRevealedIds) — no vuelve a pedir el tap.
+    const [revealed, setRevealed] = useState(() =>
+        readRevealedIds().has(attachment.id),
+    );
+
+    const reveal = () => {
+        setRevealed(true);
+        markRevealed(attachment.id);
+    };
 
     const mediaSizeClass = fill ? 'max-h-[360px]' : 'max-h-[280px] rounded-lg';
 
@@ -198,7 +238,7 @@ export function MessageAttachment({
                 <button
                     type="button"
                     onClick={() =>
-                        revealed ? setLightboxOpen(true) : setRevealed(true)
+                        revealed ? setLightboxOpen(true) : reveal()
                     }
                     className={`block w-full transition-opacity hover:opacity-90 ${fill ? '' : 'overflow-hidden rounded-lg'}`}
                 >
@@ -244,7 +284,7 @@ export function MessageAttachment({
                 ) : (
                     <button
                         type="button"
-                        onClick={() => setRevealed(true)}
+                        onClick={reveal}
                         className={`relative block w-full ${fill ? '' : 'overflow-hidden rounded-lg'}`}
                     >
                         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
