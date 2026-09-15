@@ -24,8 +24,8 @@ ya se ejecutó. Se arranca limpio desde acá, sin deuda pendiente de esas dos
 
 El documento lo plantea como si hubiera equipo. Con un dev solo (+ Claude
 Code, con créditos limitados) no hay paralelismo real, solo orden.
-Interpretación correcta: *"Fase 3 no bloquea a Fase 2, se puede intercalar"*,
-no *"corren a la vez"*.
+Interpretación correcta: _"Fase 3 no bloquea a Fase 2, se puede intercalar"_,
+no _"corren a la vez"_.
 
 ### b) Separar 6.5 de 6.6 más de lo que ya las separa el documento
 
@@ -48,9 +48,9 @@ en reposo es una función a medias.
 
 ## 3. Cuadrante de priorización (esfuerzo vs. prioridad)
 
-| | Esfuerzo bajo | Esfuerzo alto |
-|---|---|---|
-| **Prioridad alta** | 6.1 Navegación desde BD · 6.3 Acciones de mensaje + 6.5 eliminación cifrada | 6.2 Canales/Grupos/Hilos · 6.7 Autenticación y tipos de cuenta |
+|                          | Esfuerzo bajo                                                                                         | Esfuerzo alto                                                                                    |
+| ------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Prioridad alta**       | 6.1 Navegación desde BD · 6.3 Acciones de mensaje + 6.5 eliminación cifrada                           | 6.2 Canales/Grupos/Hilos · 6.7 Autenticación y tipos de cuenta                                   |
 | **Prioridad media/baja** | 6.4 Guardados · 6.8 Baja de cuenta · 6.10 Favoritos · 6.12 Especificación de sidebar · 6.17 Skeletons | 6.6 Cifrado E2E · 6.9 Presencia y estados · 6.13 Temas · 6.14 Animaciones · 6.15 Multiplataforma |
 
 La esquina **superior-izquierda** es donde se genera avance visible rápido y
@@ -62,12 +62,12 @@ cerrara bien.
 
 ## 4. Propuesta concreta: próximas 4 ramas, cada una cerrable en una sesión
 
-| # | Rama | Contenido | Por qué en ese orden |
-|---|---|---|---|
-| 1 | `feature/message-actions-core` | Épica 6.3 sin la parte de eliminar: reaccionar, copiar, reenviar, editar (ventana de 15 min) | Ya estaba marcada como "siguiente prioridad" desde la ronda anterior — mantiene continuidad |
-| 2 | `feature/message-delete-encrypted` | "Eliminar" de 6.3 + Épica 6.5 completa: papelera propia, cifrado en reposo (`encrypted` cast), política de retención | Separada a propósito de la rama 1: si algo falla acá, no arrastra reacciones/reenvío que ya funcionan |
-| 3 | `feature/nav-from-database` | Épica 6.1 completa: tablas `nav_sections`/`nav_items`, `NavigationService`, prop compartido de Inertia | Deuda que no bloquea nada funcional, pero cuanto más tarde se resuelve, más pantallas nuevas hay que migrar después — conviene ahora, no al final de la Fase 1 |
-| 4 | `feature/saved-messages-jump-to-original` | Épica 6.4 completa | Depende directamente del menú contextual construido en la rama 1 (el ícono de guardar vive ahí) |
+| #   | Rama                                      | Contenido                                                                                                            | Por qué en ese orden                                                                                                                                           |
+| --- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `feature/message-actions-core`            | Épica 6.3 sin la parte de eliminar: reaccionar, copiar, reenviar, editar (ventana de 15 min)                         | Ya estaba marcada como "siguiente prioridad" desde la ronda anterior — mantiene continuidad                                                                    |
+| 2   | `feature/message-delete-encrypted`        | "Eliminar" de 6.3 + Épica 6.5 completa: papelera propia, cifrado en reposo (`encrypted` cast), política de retención | Separada a propósito de la rama 1: si algo falla acá, no arrastra reacciones/reenvío que ya funcionan                                                          |
+| 3   | `feature/nav-from-database`               | Épica 6.1 completa: tablas `nav_sections`/`nav_items`, `NavigationService`, prop compartido de Inertia               | Deuda que no bloquea nada funcional, pero cuanto más tarde se resuelve, más pantallas nuevas hay que migrar después — conviene ahora, no al final de la Fase 1 |
+| 4   | `feature/saved-messages-jump-to-original` | Épica 6.4 completa                                                                                                   | Depende directamente del menú contextual construido en la rama 1 (el ícono de guardar vive ahí)                                                                |
 
 Con estas 4 ramas se cierra toda la Fase 1 del documento sin repetir una
 sesión "gigante" como la del composer.

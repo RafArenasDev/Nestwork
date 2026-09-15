@@ -31,13 +31,13 @@ pedido explícito durante la sesión):
   intacto (parser markdown→Tiptap en `lib/markdown-to-editor.ts`).
   Muestra "Editado" en gris junto a la hora.
 - **Eliminar, dividido en dos** (pedido explícito a mitad de sesión):
-  - *Para mí*: cualquier participante, cualquier mensaje — reutiliza
-    `message_deletions` (ya migrada, sin usar hasta ahora). Desaparece
-    sólo de mi lista.
-  - *Para todos*: sólo el autor — el cuerpo se mueve cifrado
-    (`Message::original_body`, cast `encrypted`) y queda "Mensaje
-    eliminado" visible para todos. Sin botón de restaurar en la UI (se
-    consideró innecesario — el dato sigue en BD por si se retoma).
+    - _Para mí_: cualquier participante, cualquier mensaje — reutiliza
+      `message_deletions` (ya migrada, sin usar hasta ahora). Desaparece
+      sólo de mi lista.
+    - _Para todos_: sólo el autor — el cuerpo se mueve cifrado
+      (`Message::original_body`, cast `encrypted`) y queda "Mensaje
+      eliminado" visible para todos. Sin botón de restaurar en la UI (se
+      consideró innecesario — el dato sigue en BD por si se retoma).
 - **Guardar mensaje**: toggle privado del viewer (`saved_messages`,
   tabla nueva). **Falta la vista "Guardados" en sí** — el toggle
   funciona pero no hay dónde listarlos todavía (ver pendientes).
