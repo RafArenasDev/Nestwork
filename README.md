@@ -2,7 +2,9 @@
 
 > Plataforma de chat interno para empresas — workspaces identificados por dominio de correo, mensajería en tiempo real, pensada para equipos chicos/medianos sin el costo de Slack/Teams.
 
-**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13), **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) y **Fase E** (header + burbujas + tiempo real + composer con formato, 2026-09-13) terminadas. Empezó la **Fase F** (badges de fecha como dropdown, ya en `main`; paginación por cursor y búsqueda global siguen pendientes). Ver Pendientes para el detalle. Ver `docs/ROADMAP.md` para el detalle de fases originales.
+**Estado:** 🚧 En desarrollo — Fase 0 (setup) completa. Del roadmap ampliado en `PROMPT-MEJORAS-NESTWORK-v2.md`: **Fase A** (auth dual + pantalla split, 2026-09-12/13), **Fases B/C/D** (nav data-driven + schema extendido + seeder de volumen, 2026-09-13) y **Fase E** (header + burbujas + tiempo real + composer con formato, 2026-09-13) terminadas. **2026-09-14**: fix de mensajes no leídos, composer con links/código/adjuntos (foto/video/audio/documento/nota de voz) de punta a punta, y una ronda grande de pulido visual estilo macOS (ver `docs/DECISIONS.md`). Paginación por cursor y búsqueda global siguen pendientes.
+>
+> ⚠️ **`docs/PENDING-WORK.md` es el punto de continuación real ahora mismo** — bugs visuales reportados sin resolver, próxima feature ya elegida (acciones por mensaje), y una visión ampliada de producto (cifrado E2E, modo privado tipo "hackers", análisis competitivo de Meet/Teams/Slack/WhatsApp/etc.) que todavía no pasó por diseño. Leer eso antes de seguir.
 
 ---
 
@@ -20,6 +22,7 @@
 | [`docs/TESTING.md`](docs/TESTING.md)           | Estrategia de testing, TDD, cómo testear WebSockets                            |
 | [`docs/QA.md`](docs/QA.md)                     | Checklist manual de QA por fase                                                |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md)       | Log de decisiones técnicas (ADR)                                               |
+| [`docs/PENDING-WORK.md`](docs/PENDING-WORK.md) | **Punto de continuación 2026-09-14** — qué falta, bugs visuales abiertos, visión ampliada (cifrado/privacidad) |
 
 ## Stack (resumen — ver `docs/STACK.md` para el detalle completo)
 
