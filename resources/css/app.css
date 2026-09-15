@@ -124,20 +124,20 @@
     );
     --sidebar-ring: #3a4356;
 
-    /* Burbujas de chat: fijas entre tema claro/oscuro, igual criterio
-       que el "chrome" de arriba (pedido explícito: nada de gris neutro
-       ni de blanco/negro genérico del theme — deben distinguirse del
-       fondo de la card de contenido en cualquier tema). Reusa la misma
-       pareja navy-slate del sidebar para "recibido", así queda como un
-       material de marca, no un gris de sistema. */
-    --bubble-sent: #f5f1e8;
-    --bubble-sent-foreground: #141824;
-    /* Negro puro (no #141824/navy-slate) — pedido explícito: "negra el
-       bg", igual en los dos temas, sin el matiz azulado que #141824 sí
-       tiene. Ya era fija entre temas (no se redefine en .dark más
-       abajo); lo que cambió acá es el tono en sí, no la fijeza. */
-    --bubble-received: #000;
-    --bubble-received-foreground: #eef0f4;
+    /* Burbujas de chat — reskin Aurora (2026-09-15, reemplaza el
+       cream/negro fijo de antes): "mío" usa el degradé de marca
+       (mismo --accent-gradient que el resto del chrome nuevo, ver
+       más abajo), "recibido" es un material neutro que SÍ sigue el
+       tema (a diferencia de antes) — un negro puro fijo se volvía
+       invisible/sin contraste contra un fondo también oscuro en modo
+       oscuro tras este rediseño. bg-[image:...] en vez de bg-[...] es
+       lo que hace que --bubble-sent (un gradiente) se pinte —
+       background-color ignora un gradiente en silencio. */
+    --bubble-sent: var(--accent-gradient);
+    --bubble-sent-tail: var(--accent-2);
+    --bubble-sent-foreground: #fff;
+    --bubble-received: #eef1f7;
+    --bubble-received-foreground: #171a21;
 
     /* Avatares (título del chat + burbujas): dos tonos fijos, iguales
        en los dos temas — "mío" (lo que yo envío) un negro más claro,
@@ -147,6 +147,212 @@
     --avatar-mine: #33383f;
     --avatar-received: #000;
     --avatar-foreground: #eef0f4;
+}
+
+/* ============================================================
+   Sistema "Aurora" (rediseño liquid-glass, 2026-09-15) — chrome de
+   la app: mini-sidebar, sidebar, header/composer flotantes, menús,
+   modales. Paleta azul-violeta específica (coherente con el logo
+   hexagonal de Nestwork), evitando a propósito los dos defaults más
+   reconocibles de diseño generado por IA (crema+terracota, negro con
+   un acento ácido).
+
+   `--glass-alpha`/`--glass-border-alpha` son la pieza clave para que
+   el glass se vea bien en LOS DOS temas: en claro son altos (vidrio
+   escarchado blanco sobre fondo claro), en oscuro son bajísimos (un
+   tinte blanco apenas perceptible sobre fondo oscuro + el blur hace
+   el resto) — la misma fórmula `rgba(255,255,255,alpha)` funciona en
+   ambos casos, solo cambia el alpha. Antes de esto, el blur en oscuro
+   se aplicaba sobre `--popover` (casi negro) en vez de un tinte
+   blanco, por eso se veía "sucio"/sin vida en oscuro. */
+:root {
+    --accent-1: #5b7fff;
+    --accent-2: #8b6cff;
+    --accent-gradient: linear-gradient(
+        135deg,
+        var(--accent-1),
+        var(--accent-2)
+    );
+
+    /* --glass-intensity (0-1) es la ÚNICA variable que toca JS (ver
+       use-customization.tsx, slider "Intensidad del glass") — blur y
+       alpha se derivan acá con una fórmula por tema, así "subir la
+       intensidad" de verdad vuelve el vidrio más opaco Y más
+       desenfocado a la vez, no sólo el blur suelto de antes. Rango
+       distinto por tema a propósito: oscuro necesita mucho menos
+       alpha para el mismo efecto (un tinte blanco satura rápido sobre
+       fondo oscuro). */
+    --glass-intensity: 0.5;
+    --glass-blur: calc(6px + var(--glass-intensity) * 34px);
+    --glass-alpha: calc(0.22 + var(--glass-intensity) * 0.62);
+    --glass-border-alpha: calc(0.22 + var(--glass-intensity) * 0.5);
+    /* Tier "popover": para superficies con contenido denso (menús,
+       modales, drawers) que necesitan legibilidad garantizada — NO
+       depende de --glass-intensity (apple-design §12: nunca apilar
+       vidrio translúcido sobre vidrio translúcido, y las superficies
+       con texto denso piden cuerpo garantizado, no una preferencia
+       estética que pueda bajarse a casi-transparente). */
+    --glass-popover-bg: rgba(255, 255, 255, 0.92);
+    --glass-popover-border: rgba(15, 23, 42, 0.08);
+
+    /* Todo el "chrome" (mini-sidebar Y sidebar expandida) es SIEMPRE
+       oscuro, fijo entre temas — pedido explícito 2026-09-15: sólo el
+       CONTENIDO (--background/--card/etc. de más arriba) sigue el
+       tema claro/oscuro, igual criterio que ya regía --sidebar antes
+       de esta ronda. --bg-elevated NO se redefine en .dark por eso —
+       un único tono para las dos superficies del chrome, apenas más
+       claro que la mini para dar jerarquía (mini = fondo, sidebar =
+       "panel" sobre ese fondo). El tinte de color (--sidebar-tint) es
+       lo único que varía — incluso en "Ninguno" hay un tono (este de
+       acá), nunca queda "sin tema". */
+    --mini-sidebar-bg: #05070c;
+    --bg-elevated: #10141d;
+    --sidebar-fg: #eef0f4;
+    --sidebar-fg-muted: #9aa1b0;
+    --sidebar-hairline: rgba(255, 255, 255, 0.07);
+
+    /* Tamaño de interfaz (modal de ajustes) — un único multiplicador
+       en el font-size raíz: como casi todo el sizing de Tailwind es
+       rem, texto E íconos (size-4, size-5…) escalan juntos con una
+       sola variable, sin tocar cada componente. */
+    --ui-scale: 1;
+}
+.dark {
+    --glass-alpha: calc(0.02 + var(--glass-intensity) * 0.26);
+    --glass-border-alpha: calc(0.05 + var(--glass-intensity) * 0.28);
+    --glass-popover-bg: rgba(22, 26, 36, 0.92);
+    --glass-popover-border: rgba(255, 255, 255, 0.1);
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, var(--glass-alpha));
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, var(--glass-border-alpha));
+}
+/* Variante para chrome estructural pegado al borde (header/composer
+   del chat) — el resto de la app (mini-sidebar, sidebar, contenido)
+   va a todo el ancho del viewport sin flotar ni redondear (ver
+   app-sidebar-layout.tsx), así que estas piezas dejaron de necesitar
+   la tarjeta flotante con margen: sólo el borde que las separa del
+   contenido, igual criterio que el resto del chrome. */
+.glass-panel-edge-b,
+.glass-panel-edge-t {
+    background: rgba(255, 255, 255, var(--glass-alpha));
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+}
+.glass-panel-edge-b {
+    border-bottom: 1px solid rgba(255, 255, 255, var(--glass-border-alpha));
+}
+.glass-panel-edge-t {
+    border-top: 1px solid rgba(255, 255, 255, var(--glass-border-alpha));
+}
+/* Densidad de mensajes (drawer de ajustes, 3 niveles reales) — clases
+   propias en vez de pisar mt-2/px-3/text-sm/shadow-* de Tailwind a
+   secas (también usadas por el resto de la app para otra cosa).
+   [data-density] + .clase tiene más especificidad que la utilidad
+   sola, así que gana sin necesitar !important. */
+.msg-spacing-normal {
+    margin-top: 0.625rem;
+}
+.msg-spacing-group {
+    margin-top: 0.5rem;
+}
+.msg-spacing-reply {
+    margin-top: 1.5rem;
+}
+
+[data-density='compact'] .msg-spacing-normal {
+    margin-top: 0.375rem;
+}
+[data-density='compact'] .msg-spacing-group {
+    margin-top: 0.1875rem;
+}
+[data-density='compact'] .msg-spacing-reply {
+    margin-top: 1.125rem;
+}
+[data-density='compact'] .msg-bubble {
+    padding-inline: 0.625rem;
+    padding-block: 0.375rem;
+    font-size: 0.8125rem;
+}
+[data-density='compact'] .msg-avatar {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+[data-density='minimal'] .msg-spacing-normal {
+    margin-top: 0.125rem;
+}
+[data-density='minimal'] .msg-spacing-group {
+    margin-top: 0.0625rem;
+}
+[data-density='minimal'] .msg-spacing-reply {
+    margin-top: 0.75rem;
+}
+[data-density='minimal'] .msg-bubble {
+    padding-inline: 0.5rem;
+    padding-block: 0.25rem;
+    font-size: 0.75rem;
+    box-shadow: none !important;
+    transform: none !important;
+}
+[data-density='minimal'] .msg-avatar {
+    width: 1.125rem;
+    height: 1.125rem;
+}
+
+/* Slider propio (input[type=range]) — el control nativo del navegador
+   se ve distinto en cada SO/navegador y rompe el lenguaje visual del
+   resto de la app ("no quiero nada nativo", pedido explícito). Relleno
+   hasta el valor actual vía --slider-fill (0-100), que se setea desde
+   JS en cada input. */
+.glass-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--accent-1) var(--slider-fill, 50%),
+        rgba(127, 127, 127, 0.22) var(--slider-fill, 50%)
+    );
+    outline: none;
+    cursor: pointer;
+}
+.glass-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+.glass-slider::-webkit-slider-thumb:active {
+    transform: scale(1.15);
+}
+.glass-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.35),
+        0 0 0 1px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+}
+.glass-popover {
+    background: var(--glass-popover-bg);
+    backdrop-filter: blur(26px) saturate(160%);
+    -webkit-backdrop-filter: blur(26px) saturate(160%);
+    border: 1px solid var(--glass-popover-border);
 }
 
 .dark {
@@ -180,11 +386,24 @@
     --chart-4: oklch(0.627 0.265 303.9);
     --chart-5: oklch(0.645 0.246 16.439);
     /* --sidebar-* fijos en :root — ver comentario ahí arriba. */
+
+    /* Burbuja "recibido" en oscuro: tinte blanco muy sutil (mismo
+       lenguaje que el glass) en vez del blanco/negro genérico —
+       --bubble-sent no se redefine acá porque el degradé de marca no
+       cambia entre temas. */
+    --bubble-received: rgba(255, 255, 255, 0.08);
+    --bubble-received-foreground: #f3f5f9;
 }
 
 @layer base {
     * {
         @apply border-border;
+    }
+
+    html {
+        /* Único punto de escalado de interfaz (drawer de ajustes) —
+           ver --ui-scale arriba. */
+        font-size: calc(1rem * var(--ui-scale, 1));
     }
 
     body {
@@ -232,32 +451,12 @@
    background-attachment:fixed + el mismo background-size en todas,
    todas leen el mismo punto del degradé según su posición real en
    pantalla, sin importar en qué elemento del DOM estén. */
-.bg-sidebar,
-[data-slot='sidebar-wrapper'],
-[data-slot='sidebar-header'],
-.curved-rail-item--active .curved-rail-link,
-.curved-rail-notch,
-.sidebar-row-notch::before {
+/* Sólo el login usa esta gotera de degradé ya — la sidebar/mini-rail
+   reales pasaron al sistema Aurora (--bg-elevated/--mini-sidebar-bg,
+   ver curved-nav-rail.css/sidebar-list.css), sin el truco de
+   background-attachment:fixed. */
+.bg-sidebar {
     background-image: var(--chrome-gradient);
-    background-attachment: fixed;
-    background-size: 100% 100vh;
-}
-
-/* Mismo mecanismo, ahora para el lado "panel": el item seleccionado del
-   sidebar y el área de contenido son DOS elementos DOM distintos —
-   igual que pasaba con el chrome antes de este truco, un
-   `background-color` plano en cada uno puede leerse con una tonalidad
-   levemente distinta entre sí según cómo el navegador componga cada
-   capa (ej. la fila seleccionada tiene un hijo con `transform`, lo que
-   la promueve a su propia capa). Anclando ambos al mismo
-   background-attachment:fixed se leen del mismo punto real de pantalla
-   sin importar la capa, igual que ya hacíamos con --chrome-gradient. */
-:root {
-    --content-tone: linear-gradient(var(--background), var(--background));
-}
-main[data-slot='sidebar-inset'],
-.sidebar-row--active {
-    background-image: var(--content-tone);
     background-attachment: fixed;
     background-size: 100% 100vh;
 }

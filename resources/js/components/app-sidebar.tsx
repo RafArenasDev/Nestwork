@@ -1,9 +1,8 @@
 import { router, usePage } from '@inertiajs/react';
-import { ArchiveRestore, Bookmark, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArchiveRestore, Bookmark, Plus, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
 import { PresenceDot } from '@/components/presence-dot';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { show as showMessage } from '@/routes/messages';
 import { toggle as toggleSaveRoute } from '@/routes/messages/save';
 import { toggleArchive } from '@/routes/conversations';
@@ -14,7 +13,6 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
     Tooltip,
     TooltipContent,
@@ -35,32 +33,126 @@ type Props = {
     activeModuleLabel: string;
 };
 
+/** Panel base compartido por las 5 listas (Inicio/Mensajes/Archivo/
+ *  Guardados/Actividad): fondo --bg-elevated — chrome fijo oscuro,
+ *  igual en los dos temas (sólo el contenido sigue el tema), separado
+ *  del contenido con un hairline en vez del truco de gotera de antes. */
+const SIDEBAR_PANEL_CLASS = 'bg-[var(--bg-elevated)] sidebar-panel';
+
+/** Capa de tinte de color (personalización, ver settings-modal) —
+ *  siempre presente, transparente ("Ninguno") si no hay preset
+ *  elegido — la sidebar igual conserva su tono base fijo. */
+function SidebarTintLayer() {
+    return <div className="sidebar-tint-layer" aria-hidden="true" />;
+}
+
 /**
- * Fila de título de cada módulo de la sidebar expandida. Sólo el título
- * cambia según el módulo activo — el toggle de tema y el botón de nuevo
- * chat están SIEMPRE acá, sin importar en qué módulo estés, para poder
- * arrancar una conversación al toque desde cualquier parte.
+ * Header de cada módulo de la sidebar expandida: título + buscador
+ * (SIEMPRE visible, no condicional por módulo — pedido explícito) +
+ * botón de nuevo chat. El toggle de tema vive SOLO en el modal de
+ * Ajustes (dropdown del avatar) — dos controles para lo mismo era
+ * redundante.
  */
-function SidebarModuleHeader({ title }: { title: string }) {
+function SidebarModuleHeader({
+    title,
+    searchValue,
+    onSearchChange,
+    searchPlaceholder,
+}: {
+    title: string;
+    searchValue: string;
+    onSearchChange: (value: string) => void;
+    searchPlaceholder?: string;
+}) {
     return (
-        <div className="relative z-10 flex h-8 items-center justify-between gap-2 px-2">
-            <span className="truncate text-base font-semibold">{title}</span>
-            <div className="flex shrink-0 items-center gap-1">
-                <ThemeToggle />
+        <div className="relative z-10 flex flex-col gap-2 pt-1 pb-2">
+            <div className="flex h-8 items-center justify-between gap-2 px-3">
+                <span className="truncate text-lg font-semibold tracking-tight">
+                    {title}
+                </span>
                 <NewConversationModal>
-                    <Button
+                    <button
                         type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-7 rounded-full transition-transform duration-100 active:scale-90"
                         aria-label="Nuevo chat"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-[10px] border border-[var(--sidebar-hairline)] bg-white/5 text-[var(--sidebar-fg-muted)] transition-[background-color,color,transform] duration-150 hover:bg-white/10 hover:text-[var(--sidebar-fg)] active:scale-90"
                     >
                         <Plus className="size-4" />
-                    </Button>
+                    </button>
                 </NewConversationModal>
             </div>
+            <SidebarSearch
+                value={searchValue}
+                onChange={onSearchChange}
+                placeholder={searchPlaceholder}
+            />
         </div>
     );
+}
+
+/** Buscador rápido por nombre — sólo filtra client-side lo que ya está
+ *  cargado (sin ida y vuelta al backend); alcanza porque la lista de
+ *  conversaciones de un team es chica. */
+function SidebarSearch({
+    value,
+    onChange,
+    placeholder = 'Buscar conversaciones…',
+}: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+}) {
+    return (
+        <div className="sidebar-search">
+            <Search aria-hidden="true" />
+            <input
+                type="search"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                placeholder={placeholder}
+                aria-label={placeholder}
+            />
+        </div>
+    );
+}
+
+/** Hora si es hoy, "Ayer", o fecha corta — mismo criterio que
+ *  WhatsApp/Telegram para la hora de la fila de una conversación. */
+function formatSidebarTime(iso: string): string {
+    const date = new Date(iso);
+    const now = new Date();
+
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('es-CO', {
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+
+    if (date.toDateString() === yesterday.toDateString()) {
+        return 'Ayer';
+    }
+
+    return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+}
+
+function useFilteredConversations(
+    conversations: ConversationSummary[],
+    query: string,
+): ConversationSummary[] {
+    return useMemo(() => {
+        const normalized = query.trim().toLocaleLowerCase('es');
+
+        if (!normalized) {
+            return conversations;
+        }
+
+        return conversations.filter((conversation) =>
+            conversation.name.toLocaleLowerCase('es').includes(normalized),
+        );
+    }, [conversations, query]);
 }
 
 export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
@@ -89,18 +181,29 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
     const page = usePage();
     const conversations = page.props.conversations ?? [];
     const currentTeam = page.props.currentTeam;
+    const [query, setQuery] = useState('');
+    const filtered = useFilteredConversations(conversations, query).slice(0, 8);
 
     // "Inicio" = acceso rápido a tus chats recientes, mismo dato real
     // que Mensajes (nada quemado en pantalla) — de acá saltás directo a
     // la conversación.
     return (
-        <Sidebar collapsible="none" variant="sidebar">
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
             <SidebarHeader>
-                <SidebarModuleHeader title={activeModuleLabel} />
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                />
             </SidebarHeader>
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {conversations.slice(0, 8).map((conversation) => (
+                    {filtered.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -108,9 +211,11 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                         />
                     ))}
 
-                    {conversations.length === 0 && (
-                        <p className="text-muted-foreground px-2 text-sm">
-                            No tienes conversaciones todavía.
+                    {filtered.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            {conversations.length === 0
+                                ? 'No tienes conversaciones todavía.'
+                                : 'Sin resultados.'}
                         </p>
                     )}
                 </ul>
@@ -167,14 +272,6 @@ function ConversationRow({
         <li
             className={`sidebar-row${conversation.isCurrent ? ' sidebar-row--active' : ''}`}
         >
-            <span
-                className="sidebar-row-notch sidebar-row-notch--top"
-                aria-hidden="true"
-            />
-            <span
-                className="sidebar-row-notch sidebar-row-notch--bottom"
-                aria-hidden="true"
-            />
             <button
                 type="button"
                 onClick={() => {
@@ -203,36 +300,53 @@ function ConversationRow({
                 }}
                 className={`sidebar-row-link${showUnarchive ? ' sidebar-row-link--actionable' : ''}`}
             >
-                <span className="relative mr-3 inline-flex shrink-0">
-                    <Avatar className="size-7">
+                <span className="relative inline-flex shrink-0">
+                    <Avatar className="size-9">
                         {conversation.avatar && (
                             <AvatarImage
                                 src={conversation.avatar}
                                 alt={conversation.name}
                             />
                         )}
-                        <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
+                        <AvatarFallback className="bg-[var(--sidebar-accent)] text-[11px] text-[var(--sidebar-accent-foreground)]">
                             {getInitials(conversation.name)}
                         </AvatarFallback>
                     </Avatar>
                     {conversation.presence && (
-                        <PresenceDot presence={conversation.presence} />
+                        <PresenceDot
+                            presence={conversation.presence}
+                            surfaceTone="var(--bg-elevated)"
+                        />
                     )}
                 </span>
-                <span className="sidebar-row-label flex-1 truncate">
-                    {conversation.name}
+                <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                        <span className="sidebar-row-label">
+                            {conversation.name}
+                        </span>
+                        {conversation.lastMessageAt && (
+                            <span className="sidebar-row-time">
+                                {formatSidebarTime(conversation.lastMessageAt)}
+                            </span>
+                        )}
+                    </span>
+                    <span className="flex items-center justify-between gap-2">
+                        <span className="sidebar-row-preview">
+                            {conversation.lastMessageBody ?? ' '}
+                        </span>
+                        {unreadCount > 0 && (
+                            <Badge
+                                variant="destructive"
+                                // Rojo fijo, no la variable --destructive
+                                // (que cambia de tono entre temas) — ver
+                                // nota en curved-nav-rail.tsx.
+                                className="h-4.5 min-w-4.5 shrink-0 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[10px] dark:bg-[oklch(0.577_0.245_27.325)]"
+                            >
+                                {unreadCount}
+                            </Badge>
+                        )}
+                    </span>
                 </span>
-                {unreadCount > 0 && (
-                    <Badge
-                        variant="destructive"
-                        // Rojo fijo, no la variable --destructive (que
-                        // cambia de tono entre temas) — ver nota en
-                        // curved-nav-rail.tsx.
-                        className="ml-2 h-5 min-w-5 shrink-0 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[10px] dark:bg-[oklch(0.577_0.245_27.325)]"
-                    >
-                        {unreadCount}
-                    </Badge>
-                )}
             </button>
             {showUnarchive && currentTeamSlug && (
                 <Tooltip>
@@ -240,17 +354,10 @@ function ConversationRow({
                         <button
                             type="button"
                             aria-label="Desarchivar"
-                            // Blanco fijo, no --muted-foreground/--foreground
-                            // (que cambian con el tema global) — este botón
-                            // vive sobre el sidebar de conversaciones, que
-                            // siempre es oscuro sin importar el tema; con
-                            // los tokens de tema, el hover en tema claro
-                            // pintaba el ícono casi negro sobre ese fondo
-                            // oscuro, prácticamente invisible. El hover es
-                            // un relleno blanco (mismo lenguaje que el
-                            // ícono activo del mini-rail), no un cambio de
-                            // color de ícono.
-                            className="sidebar-row-action rounded-full p-1 text-white/60 transition-colors hover:bg-white hover:text-[#141824]"
+                            // Tokens de tema (no blanco fijo): la sidebar de
+                            // conversaciones ahora sigue el tema (--bg-elevated,
+                            // ver sidebar-list.css), ya no es oscura fija.
+                            className="sidebar-row-action rounded-full p-1 text-[var(--sidebar-fg-muted)] transition-colors hover:bg-white/10 hover:text-[var(--sidebar-fg)]"
                             onClick={() =>
                                 router.patch(
                                     toggleArchive([
@@ -291,16 +398,27 @@ function MessagesSidebarList({
     const page = usePage();
     const conversations = page.props.conversations ?? [];
     const currentTeam = page.props.currentTeam;
+    const [query, setQuery] = useState('');
+    const filtered = useFilteredConversations(conversations, query);
 
     return (
-        <Sidebar collapsible="none" variant="sidebar">
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
             <SidebarHeader>
-                <SidebarModuleHeader title={activeModuleLabel} />
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                />
             </SidebarHeader>
 
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {conversations.map((conversation) => (
+                    {filtered.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -308,9 +426,11 @@ function MessagesSidebarList({
                         />
                     ))}
 
-                    {conversations.length === 0 && (
-                        <p className="text-muted-foreground px-2 text-sm">
-                            No tienes conversaciones todavía.
+                    {filtered.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            {conversations.length === 0
+                                ? 'No tienes conversaciones todavía.'
+                                : 'Sin resultados.'}
                         </p>
                     )}
                 </ul>
@@ -327,16 +447,28 @@ function ArchivedSidebarList({
     const page = usePage();
     const archivedConversations = page.props.archivedConversations ?? [];
     const currentTeam = page.props.currentTeam;
+    const [query, setQuery] = useState('');
+    const filtered = useFilteredConversations(archivedConversations, query);
 
     return (
-        <Sidebar collapsible="none" variant="sidebar">
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
             <SidebarHeader>
-                <SidebarModuleHeader title={activeModuleLabel} />
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    searchPlaceholder="Buscar en archivados…"
+                />
             </SidebarHeader>
 
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {archivedConversations.map((conversation) => (
+                    {filtered.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -345,9 +477,11 @@ function ArchivedSidebarList({
                         />
                     ))}
 
-                    {archivedConversations.length === 0 && (
-                        <p className="text-muted-foreground px-2 text-sm">
-                            No tienes conversaciones archivadas.
+                    {filtered.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            {archivedConversations.length === 0
+                                ? 'No tienes conversaciones archivadas.'
+                                : 'Sin resultados.'}
                         </p>
                     )}
                 </ul>
@@ -394,14 +528,6 @@ function SavedMessageRow({
 
     return (
         <li className="sidebar-row">
-            <span
-                className="sidebar-row-notch sidebar-row-notch--top"
-                aria-hidden="true"
-            />
-            <span
-                className="sidebar-row-notch sidebar-row-notch--bottom"
-                aria-hidden="true"
-            />
             <Tooltip>
                 <TooltipTrigger asChild>
                     <button
@@ -436,7 +562,7 @@ function SavedMessageRow({
                         }}
                         className="sidebar-row-link sidebar-row-link--actionable"
                     >
-                        <Avatar className="mr-3 size-7 shrink-0">
+                        <Avatar className="size-8 shrink-0">
                             {saved.senderAvatar && (
                                 <AvatarImage
                                     src={saved.senderAvatar}
@@ -458,7 +584,7 @@ function SavedMessageRow({
                             <span className="font-medium">
                                 {saved.senderName}
                             </span>
-                            <span className="text-white/60">
+                            <span className="text-[var(--sidebar-fg-muted)]">
                                 : {saved.excerpt || '📎 Adjunto'}
                             </span>
                         </span>
@@ -474,7 +600,7 @@ function SavedMessageRow({
                     <button
                         type="button"
                         aria-label="Quitar de guardados"
-                        className="sidebar-row-action rounded-full p-1 text-white/60 transition-colors hover:bg-white hover:text-[#141824]"
+                        className="sidebar-row-action rounded-full p-1 text-[var(--sidebar-fg-muted)] transition-colors hover:bg-white/10 hover:text-[var(--sidebar-fg)]"
                         onClick={(event) => {
                             event.stopPropagation();
                             onUnsave(saved);
@@ -501,10 +627,27 @@ function SavedMessagesSidebarList({
     const [savedMessages, setSavedMessages] = useState(
         page.props.savedMessages,
     );
+    const [query, setQuery] = useState('');
 
     useEffect(() => {
         setSavedMessages(page.props.savedMessages);
     }, [page.props.savedMessages]);
+
+    const filtered = useMemo(() => {
+        const normalized = query.trim().toLocaleLowerCase('es');
+
+        if (!normalized) {
+            return savedMessages;
+        }
+
+        return savedMessages.filter(
+            (saved) =>
+                saved.senderName.toLocaleLowerCase('es').includes(normalized) ||
+                (saved.excerpt ?? '')
+                    .toLocaleLowerCase('es')
+                    .includes(normalized),
+        );
+    }, [savedMessages, query]);
 
     const handleUnsave = (saved: SavedMessageSummary) => {
         if (!currentTeam) {
@@ -528,14 +671,24 @@ function SavedMessagesSidebarList({
     };
 
     return (
-        <Sidebar collapsible="none" variant="sidebar">
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
             <SidebarHeader>
-                <SidebarModuleHeader title={activeModuleLabel} />
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    searchPlaceholder="Buscar en guardados…"
+                />
             </SidebarHeader>
 
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {savedMessages.map((saved) => (
+                    {filtered.map((saved) => (
                         <SavedMessageRow
                             key={saved.messageId}
                             saved={saved}
@@ -544,9 +697,11 @@ function SavedMessagesSidebarList({
                         />
                     ))}
 
-                    {savedMessages.length === 0 && (
-                        <p className="text-muted-foreground px-2 text-sm">
-                            No has guardado ningún mensaje todavía.
+                    {filtered.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            {savedMessages.length === 0
+                                ? 'No has guardado ningún mensaje todavía.'
+                                : 'Sin resultados.'}
                         </p>
                     )}
                 </ul>
@@ -562,6 +717,7 @@ function ActivitySidebarList({
 }) {
     const page = usePage();
     const currentTeam = page.props.currentTeam;
+    const [query, setQuery] = useState('');
 
     // "Actividad" = todas las conversaciones con al menos un mensaje,
     // más recientes primero (mismo orden que ya trae `conversations`) —
@@ -570,16 +726,27 @@ function ActivitySidebarList({
     const recentActivity = (page.props.conversations ?? []).filter(
         (conversation) => conversation.lastMessageAt !== null,
     );
+    const filtered = useFilteredConversations(recentActivity, query);
 
     return (
-        <Sidebar collapsible="none" variant="sidebar">
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
             <SidebarHeader>
-                <SidebarModuleHeader title={activeModuleLabel} />
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    searchValue={query}
+                    onSearchChange={setQuery}
+                    searchPlaceholder="Buscar en actividad…"
+                />
             </SidebarHeader>
 
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {recentActivity.map((conversation) => (
+                    {filtered.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -588,9 +755,11 @@ function ActivitySidebarList({
                         />
                     ))}
 
-                    {recentActivity.length === 0 && (
-                        <p className="text-muted-foreground px-2 text-sm">
-                            Sin actividad reciente.
+                    {filtered.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            {recentActivity.length === 0
+                                ? 'Sin actividad reciente.'
+                                : 'Sin resultados.'}
                         </p>
                     )}
                 </ul>

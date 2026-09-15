@@ -1,242 +1,163 @@
-# Pendiente — punto de continuación (2026-09-15, sesión 2)
+# Pendiente — punto de continuación (2026-09-15, sesión 3 — rediseño "liquid glass")
 
 > **Regla de frontend que sigue vigente:** todo diseño/interacción de UI
-> usa el skill `apple-design` (ver `docs/DECISIONS.md`) — nada de
-> librerías de diseño/animación nuevas. Excepciones concretas:
-> `emoji-picker-react` (utilidad funcional, reskineada por completo con
-> variables `--epr-*` en `app.css`) y extensiones de Tiptap ya
-> instaladas.
+> usa el skill `apple-design` — nada de librerías de diseño/animación
+> nuevas. Excepciones concretas: `emoji-picker-react` (utilidad
+> funcional, reskineada), extensiones de Tiptap ya instaladas, y el
+> Combobox de shadcn/ui (ya existía en el proyecto, se empezó a usar
+> también para selects de una sola opción como la duración del estado).
 >
-> Esta sesión continuó sobre la rama `main` (la sesión anterior,
-> `feat/message-actions-and-fixes`, ya está mergeada). Todo lo de abajo
-> se hizo directo sobre una rama nueva por tema y se mergeó al cierre —
-> ver "Cómo retomar" para los nombres reales de rama/commit.
+> Esta sesión se hizo completa en la rama `feat/liquid-glass-visual-polish`
+> (4 rondas de feedback iterativo), commiteada/pusheada/mergeada a
+> `main` al cierre — ver "Cómo retomar" para el commit real.
 
-## Qué quedó terminado esta sesión
+## Qué quedó terminado esta sesión — reconstrucción visual completa
 
-**Dos bugs críticos de raíz, arrastrados desde antes de esta sesión:**
+Reemplazo del chrome de toda la app (mini-sidebar, sidebar, header y
+composer del chat, menús, modales, burbujas, Home, Settings/Teams) por
+un sistema de diseño nuevo ("Aurora" / liquid glass), a partir de un
+mockup de referencia del usuario, adaptado con criterio propio (no
+copiado literal — ver decisiones de abajo).
 
-1. **`Message::is_hidden` null en memoria** (`app/Models/Message.php`):
-   `Message::create()` no reflejaba el default de BD (`is_hidden =
-false`) en la instancia recién creada, así que
-   `MessageData::fromMessage()` reventaba con `TypeError` en el
-   argumento `$isDeleted` en **cada** creación/actualización de mensaje
-   — capturado en silencio por el try/catch alrededor de
-   `broadcast(new MessageSent(...))`. Esto rompía TODO broadcast en
-   vivo (reacciones, ediciones, mensajes nuevos) para cualquier otro
-   participante, en todo el histórico del proyecto, no sólo en
-   funcionalidad nueva. Fix: `protected $attributes = ['is_hidden' =>
-false];` en el modelo.
-2. **Preview de PDF en blanco con LibreOffice**: `soffice --convert-to
-png` directo sobre un PDF real producía una imagen totalmente en
-   blanco (reproducido con un PDF real del usuario). Fix: pipeline en
-   dos pasos — LibreOffice sólo convierte Office/texto → PDF; el
-   render de la página a PNG lo hace **Poppler** (`pdftoppm`, instalado
-   vía `winget install oschwartz10612.Poppler`), mucho más confiable
-   para esa tarea puntual. Ver `app/Actions/Attachments/GenerateAttachmentPreview.php`.
+**Primitivos compartidos con "glass" real** (`ui/dropdown-menu.tsx`,
+`ui/popover.tsx`, `ui/dialog.tsx`, `ui/alert-dialog.tsx`, `ui/sheet.tsx`):
+blur + opacidad correctos en los DOS temas — el bug de fondo era que el
+blur en oscuro se pintaba sobre `--popover` (casi negro) en vez de un
+tinte blanco; con la fórmula `rgba(255,255,255,alpha)` (alpha bajo en
+oscuro, alto en claro) se resuelve para cualquier superficie. Dos
+tiers: `.glass-panel`/`.glass-panel-edge-*` (sutil, para chrome
+ambiental como header/composer) y `.glass-popover` (opacidad fija
+garantizada, para menús/modales con texto denso).
 
-**Reacciones — una sola por usuario:**
+**Mini-sidebar** (`curved-nav-rail.css`/`.tsx`): la técnica vieja de
+"gotera"/curve-outside (muescas cóncavas, `background-attachment:fixed`
+compartido) se BORRÓ por completo — reemplazada por un dock simple
+(ítems redondeados, barra de acento a la izquierda del activo). Mucho
+menos CSS fràgil que antes.
 
-- Backend (`toggleReaction`) borra cualquier otra reacción del mismo
-  usuario en ese mensaje antes de crear la nueva (antes se podían
-  acumular varias).
-- La burbuja muestra un badge de esquina (no una fila lateral) con
-  overlay tipo Popover: tocarlo lista "Nombre — emoji" de cada
-  reactor, con "(Tú)" si es el propio usuario. Ya no es un toggle al
-  tocar el badge (sólo informativo); reaccionar sigue siendo desde el
-  picker.
+**Sidebar expandida** (`sidebar-list.css`/`app-sidebar.tsx`): decisión
+de arquitectura clave (confirmada explícitamente por el usuario tras
+un primer intento equivocado) — la sidebar es chrome, **siempre
+oscura, con el MISMO tono en claro y oscuro** (igual que la mini);
+sólo el CONTENIDO (Home/chat/Settings) sigue el tema. La
+personalización de color (`data-sidebar` reemplazado por variables
+puestas directo desde JS, ver `use-customization.tsx`) es un TINTE
+sobre ese tono fijo, nunca lo reemplaza — "Ninguno" conserva el tono
+base, nunca queda "sin tema". Buscador SIEMPRE visible en el header de
+la sidebar (antes sólo en algunos módulos). Filas de conversación sin
+"card" (sin borde/sombra por fila) — selección = relleno sólido, no
+borde+tinte.
 
-**Selector de emoji reskineado (`resources/js/components/reaction-picker.tsx`, nuevo):**
+**Header y composer del chat**: dejaron de ser tarjetas flotantes con
+margen — ahora son barras a todo el ancho con blur y un solo borde
+(`.glass-panel-edge-b`/`.glass-panel-edge-t`), mismo criterio "chrome
+a todo el ancho, sin redondear" que el resto.
 
-- Un solo componente (`ReactionPickerButton`) reusado en 3 lugares:
-  burbuja de mensaje, composer y el modal de imagen/video — antes cada
-  uno tenía su propia versión.
-- Categorías en español, tema explícito claro/oscuro (`useAppearance()`,
-  ya no `AUTO`), buscador en español, sin la vista previa nativa de la
-  librería. Estilos vía variables `--epr-*`/`--epr-dark-*` en
-  `app.css` (no queda otra forma de tocar esa librería sin CSS
-  arbitrario — no expone props de estilo).
+**Burbujas de mensaje** (`pages/messages/index.tsx`): recoloreadas al
+sistema nuevo, con color de "burbuja propia" personalizable (antes
+fijo). **Bug real resuelto**: el pico se veía de un color distinto a
+la burbuja — dos elementos pintando el mismo degradé 135deg cada uno
+sobre su propia caja (300px vs 12px) calculan extremos de color
+distintos. Fix: el pico usa un sólido (el stop final del degradé,
+`--bubble-sent-tail`), no el degradé repetido.
 
-**Rediseño completo del modal de imagen/video (`media-viewer.tsx`, reescrito):**
+**Modal de Ajustes** (`components/settings-modal.tsx`, nuevo — dentro
+del dropdown del avatar, ya no un ícono de engranaje aparte ni un
+drawer lateral): layout tipo macOS System Settings (rail de tabs
+Estado/Apariencia + panel ancho, sin scroll). Incluye:
+- **Estado**: texto + emoji personalizado (reusa `ReactionPickerButton`),
+  duración real vía Combobox (15 min / 30 min / 1 h / 2 h / 4 h / hoy /
+  1 día / 1 semana / fecha y hora exacta con `datetime-local`) — el
+  backend ya tenía la columna `status_expires_at` sin usar desde
+  2026-09-11 y `User::activeStatusPreset()` ya sabía leerla; sólo se
+  tocó `UserStatusController::update` para aceptar `duration_minutes`
+  (no fue necesaria una migración nueva).
+- **Apariencia**: selector de tema tipo iOS (3 miniaturas con preview
+  real, no texto), paleta de 12 colores (gradiente+sólido, nombres
+  "tech" — Cobalt/Graphite/Obsidian/Titanium/etc., a propósito nada
+  floral) compartida entre sidebar y burbujas, intensidad de glass con
+  slider propio (`.glass-slider` en `app.css`, ya no el control nativo
+  del navegador) que de verdad cambia blur+opacidad juntos, densidad de
+  mensajes en 3 niveles reales (Minimalista/Cómoda/Compacta — cambian
+  padding/tamaño de avatar/sombra, no sólo el margen), tamaño de
+  interfaz (chico/mediano/grande, escala texto e íconos vía un único
+  `font-size` en `html`).
 
-- Panel acotado (`85vh`/`1000px` máx.), esquinas redondeadas, fondo con
-  blur — ya no es la superposición transparente de antes.
-- Reaccionar desde dentro del modal (antes sólo se podía desde la
-  burbuja) — panel con z-index superior al scrim.
-- Video: sin panel de acciones fijo (pedido explícito, "sólo quiero
-  reproducirlo") — un popover de opciones colgado de la barra de
-  controles en su lugar. Imagen/documento sí conservan el panel de
-  acciones (reaccionar, responder, reenviar, fijar, más…).
-- Zoom (1×–3×) sin estirar imágenes pequeñas; expandir a pantalla
-  completa dentro del propio modal (independiente del fullscreen nativo
-  de video).
+**Home y Settings/Teams**: stat tiles con material real (antes
+`rounded-xl border` plano), filas de "chats recientes"/equipos/
+miembros pasadas de tarjetas con sombra a listas planas tipo Apple
+Settings (`divide-y`, hover, sin borde por fila). Toggle de tema
+duplicado (sidebar + settings) eliminado — vive sólo en Ajustes, con
+detección de tema del sistema por defecto ya existente desde antes
+(`use-appearance.tsx`).
 
-**Adjuntos — paridad imagen/video/documento (`message-attachment.tsx`, reescrito):**
+**Decisión de arquitectura deliberada**: NO se copió el mockup literal
+(tarjeta centrada de tamaño fijo flotando sobre fondo ambiental) — se
+mantuvo el layout a todo el viewport (como Slack/Discord/Teams) porque
+habrá apps desktop/Android/iOS/tablet, donde una tarjeta de tamaño fijo
+no sirve.
 
-- Mismo patrón de blur + revelar con un tap en los tres tipos; ícono
-  cambiado de "ojo" a "descargar" (más preciso: revela **y** guarda al
-  chat).
-- Video ya no autoreproduce al revelar — muestra poster estático,
-  reproduce recién al segundo tap (mismo modal que imagen).
-- Documentos con preview real (ver pipeline abajo) usan el MISMO
-  componente/patrón que imagen — ya no es una tarjeta aparte con ícono
-  genérico.
+Verificado en verde antes del cierre de sesión: Pint, PHPStan
+(`types:check`), `vp check` (lint+format), `tsc --noEmit`, build de
+producción, suite Pest completa (125 tests / 441 aserciones).
 
-**Preview real de la primera página de documentos (PDF/Word/Excel/txt) — SÍNCRONO:**
+## ⚠️ Pendiente crítico heredado — bug real, causa raíz encontrada, sin fix
 
-- `app/Actions/Attachments/GenerateAttachmentPreview.php` (nuevo):
-  Office/texto → PDF (LibreOffice) → PNG de la página 1 (Poppler).
-  Corre dentro del mismo request que sube el adjunto — pedido explícito
-  del usuario ("la preview... la quiero desde la miniatura que se
-  carga, no al rato").
-- **Ambos binarios van en el servidor de despliegue** (Docker/imagen de
-  build: `apt-get install -y libreoffice poppler-utils` o equivalente),
-  nunca algo que el usuario final necesite instalar — el código busca
-  primero rutas típicas de instalación y cae a `where`/`which` en
-  PATH, así que funciona igual en Windows (dev) y Linux (prod) sin
-  cambios.
-- Burbuja: cuando el adjunto es documento con preview real
-  (`thumbnailUrl !== null`), se ve edge-to-edge igual que imagen/video,
-  con una franja de info (nombre, tipo, peso) entre la imagen y el pie
-  de mensaje. Sin preview (zip, sql, exe…) sigue la tarjeta con ícono a
-  color (`lib/file-type-style.ts`, nuevo) — a propósito, no tiene
-  sentido intentar previsualizar esos.
+**No se tocó esta sesión** (era explícitamente visual). Resumen: al
+enviar un mensaje con adjunto, el remitente ve para siempre la vista
+previa local (`blob:`) en vez de la real — el POST devuelve 503
+(probable timeout del proxy de Herd/prod durante la conversión síncrona
+de preview), así que Inertia nunca recibe el redirect que reconcilia
+el mensaje optimista. Diagnóstico completo y 3 caminos de fix evaluados
+en el historial de git de este archivo (commit de la sesión 2 de ese
+mismo día, "sesión 2 — 2026-09-15" antes de este rediseño). Sigue
+siendo lo primero a resolver cuando retome trabajo de backend/tiempo
+real.
 
-**⚠️ Hallazgo importante — NO resuelto, ver sección de pendientes:**
-el mensaje con adjunto que uno mismo envía se queda mostrando la
-preview local (`blob:`) para siempre en vez de actualizarse con la
-real del servidor. Diagnosticado a fondo, causa raíz identificada, sin
-fix todavía — detalle completo abajo.
+## Pendientes nuevos de esta sesión (rediseño)
 
-**Guardados — vista real (cerraba un pendiente de la sesión anterior):**
+1. **Responsive real / navegación tipo bottom-tabs para apps nativas**:
+   pedido explícito del usuario (habrá desktop/Android/iOS/tablet) —
+   discutido pero deliberadamente fuera de alcance de esta ronda (era
+   visual de escritorio). El layout a todo el viewport elegido en vez
+   del mockup centrado ya lo tiene en cuenta, pero falta el trabajo real
+   de breakpoints + navegación alternativa en pantalla angosta.
+2. **Formularios de Perfil/Team name** (`settings/profile.tsx`,
+   `teams/edit.tsx` — el input, no las filas que sí se tocaron):
+   siguen con el Input default de shadcn (radio chico), no se
+   uniformaron al lenguaje más redondeado del resto del rediseño — bajo
+   impacto, pendiente menor.
+3. **`status_expires_at` es de vencimiento "perezoso"**: `User::activeStatusPreset()`
+   ya lo trata como vencido al leerlo, pero no hay job que limpie
+   `status_text`/`status_emoji` de la fila cuando vence sin que el
+   usuario vuelva a tocar nada — cosmético (el badge visual ya no lo
+   muestra), pero la fila queda con datos viejos en la base.
+4. **Paleta de color no se probó con daltonismo/contraste WCAG** —
+   los 12 presets se eligieron a ojo, no se corrió ningún check de
+   contraste automático (texto blanco sobre cada preset, sobre todo
+   los más claros como Titanium/Ocean).
 
-- `app/Actions/Messages/ListSavedMessagesForUser.php` +
-  `app/Data/SavedMessageSummary.php` (nuevos): lista guardados del
-  usuario, con excerpt ("Mensaje eliminado" / cuerpo / "📎 Adjunto").
-- Prop compartido `savedMessages` (`HandleInertiaRequests`), entrada
-  "Guardados" en el mini-rail y sidebar dedicado
-  (`SavedMessagesSidebarList`) — clic salta al mensaje real en su
-  conversación (`jumpToMessageId`, mismo mecanismo que el badge de
-  fijado).
+## Pendientes menores heredados de sesiones anteriores (sin tocar)
 
-**Pulido menor:**
-
-- Indicador de "escribiendo…" con 3 puntos animados (antes texto
-  plano) — cierra un pendiente de la sesión anterior.
-- Saltar al mensaje citado al tocar el badge de "respondiendo a" dentro
-  de la burbuja (mismo `jumpToMessage()` que el badge de fijado) —
-  cierra otro pendiente de la sesión anterior.
-- Forma del pico y sombra de burbuja ajustadas; título "Reenviado" se
-  reubica dentro del pie cuando el adjunto es edge-to-edge; bloque de
-  mensaje más angosto cuando está vacío (sólo adjunto, sin texto) y más
-  amplio cuando trae texto.
-- Corrección de hidratación SSR: `revealed` (si ya se tocó "revelar" un
-  adjunto) leía `localStorage` en el initializer de `useState`, lo cual
-  no existe durante SSR — ahora arranca en `false` y se corrige en un
-  `useEffect` posterior al montaje.
-
-Verificado en verde antes del cierre de sesión: `tsc --noEmit`, Pint,
-`vp check` (lint+format), build de producción, suite Pest completa
-(125 tests / 441 aserciones).
-
-## ⚠️ Pendiente crítico — bug real, causa raíz encontrada, sin fix
-
-**Síntoma:** al enviar un mensaje con adjunto (probado con PDF), el
-remitente ve para siempre la vista previa local (con ícono/tarjeta
-genérica, usando una URL `blob:` del propio navegador) en vez de
-actualizarse con la preview real ya generada en el servidor — ni
-esperando 10+ segundos sin recargar. **Recargar la página sí la
-muestra bien** (ahí el HTML sale del SSR con datos frescos de BD).
-
-**Se descartó la hipótesis inicial** ("es sólo que el SSR de Inertia en
-dev tarda ~4.7s y no esperé lo suficiente") — se confirmó con
-`read_page` del navegador que el nodo del DOM sigue usando literalmente
-`href="blob:https://chat-app.test/...`, la URL de
-`URL.createObjectURL()` generada del lado del cliente ANTES de
-enviar. Eso sólo es posible si el mensaje optimista nunca fue
-reemplazado por el real — no es un tema de qué tan rápido carga el
-render, es que la reconciliación nunca llega a ejecutarse para este
-mensaje.
-
-**Causa raíz encontrada:** el POST de `messages.store` con un adjunto
-PDF devolvió **503** en la pestaña de Network del navegador — pese a
-que el servidor sí completó el trabajo (el `Attachment` y su
-`thumbnail_path` quedan bien guardados en BD, confirmado con
-`php artisan tinker` de sólo lectura). La hipótesis más probable: el
-pipeline sync de conversión (LibreOffice arranca en frío + Poppler)
-puede tardar varios segundos, y el proxy de Herd (o el servidor de
-desarrollo) tiene un timeout de lectura más corto que eso — el
-navegador recibe un 503 de gateway/timeout mientras PHP-FPM sigue
-procesando en background hasta terminar. Inertia entonces nunca recibe
-el redirect+props frescos que reconciliarían el mensaje optimista, así
-que éste se queda con el `status: 'failed'` (o sin reconciliar) para
-siempre, con la preview `blob:` local.
-
-**No se intentó ningún fix todavía** — quedó pendiente por pedido
-explícito del usuario de cerrar la sesión (documentar + commit/push/
-merge). Caminos a evaluar la próxima sesión, de más a menos simple:
-
-1. Medir cuánto tarda realmente `GenerateAttachmentPreview::handle()`
-   en caliente vs. en frío (primer `soffice` de la sesión suele ser el
-   lento) y comparar contra el timeout real del proxy de Herd/del
-   servidor de producción — puede que sólo haga falta subir ese
-   timeout.
-2. Si el timeout no es ajustable o el pipeline sigue siendo lento:
-   mantener el guardado del `Attachment` síncrono (rápido — sólo mover
-   el archivo), pero mover **sólo la conversión a preview** a que
-   corra igual dentro del request pero con un límite de tiempo más
-   corto y agresivo, devolviendo la respuesta al cliente ANTES de que
-   el proxy corte, y que el cliente haga un pequeño polling (2-3
-   intentos, unos segundos) para recoger el `thumbnail_path` si no
-   llegó a tiempo — sigue siendo "casi síncrono" sin violar el pedido
-   original tan literalmente.
-3. Investigar por separado por qué la reconciliación (`useEffect(() =>
-setLiveMessages(messages), [messages])` en
-   `resources/js/pages/messages/index.tsx`) deja el mensaje pegado en
-   optimista ante CUALQUIER error de red, no sólo timeouts de
-   preview — hoy `onError` sólo marca `status: 'failed'`, nunca
-   reintenta ni recarga; vale la pena revisar si eso es aceptable o
-   si debería reintentar el POST o al menos forzar un `router.reload()`
-   para traer el estado real aunque el mensaje haya fallado del todo.
-
-## Otros pendientes menores, quedaron a medio camino
-
-1. **Multi-adjunto por mensaje**: explícitamente diferido por el
-   usuario a una rama/sesión aparte (decisión tomada esta sesión, no
-   es un olvido).
-2. **"Editar" visible sólo mientras corre el tiempo permitido,
-   independiente del estado de envío** (enviando/enviado/leído): pedido
-   explícito, no implementado todavía.
-3. **Reacciones y ediciones deberían reflejarse en "Actividad"**: pedido
-   dos veces por el usuario, es un gap real — la vista de Actividad no
-   se tocó esta sesión.
-4. **Probar el pipeline de preview con un .docx/.xlsx real** (no sólo
-   PDF) — el código está escrito para ambos casos pero no se verificó
-   end-to-end con un archivo Office real todavía.
-5. **Curva del pico**: el usuario pidió verificarla de nuevo una vez
-   terminado el trabajo de preview ("puede lograrlo cuando termines lo
-   que haces de preview") — ajustada (`skew-y-32deg`,
-   `rounded-tr-[4px]`/`rounded-bl-[9px]`) pero no reconfirmada con el
-   usuario en esta sesión.
+1. Multi-adjunto por mensaje (diferido a propósito).
+2. "Editar" visible sólo mientras corre el tiempo permitido,
+   independiente del estado de envío.
+3. Reacciones y ediciones reflejadas en "Actividad" (pedido dos veces).
+4. Probar el pipeline de preview de documentos con un `.docx`/`.xlsx`
+   real (sólo se verificó con PDF).
 
 ## Qué NO se tocó a propósito
 
-- Igual que la sesión anterior: cifrado E2E/conversación secreta
-  (Épica 6.6, espera brainstorming aparte), separar Canales/Grupos/DMs
-  (Épica 6.2), autenticación alternativa (Épica 6.7), menciones/
-  búsqueda global — nada de esto se tocó.
-- Multi-adjunto (ver pendientes arriba) — diferido a propósito, no un
-  olvido.
+- Cifrado E2E/conversación secreta (Épica 6.6, espera brainstorming
+  aparte), separar Canales/Grupos/DMs (Épica 6.2), autenticación
+  alternativa (Épica 6.7), menciones/búsqueda global.
+- La pantalla de login/registro — ya estaba bien, confirmado por el
+  usuario, no se tocó salvo lo que ya tenía el material glass de antes.
 
 ## Cómo retomar
 
-1. Resolver primero el bug crítico de arriba (mensaje con adjunto
-   pegado en optimista) — es el más visible/confuso para un usuario
-   real, y ya tiene causa raíz diagnosticada, sólo falta decidir el
-   camino de fix (ver las 3 opciones arriba) e implementarlo.
-2. Verificar el pipeline de preview con un .docx/.xlsx real de
-   `Downloads` del usuario.
-3. Seguir con los pendientes menores de la lista de arriba en el orden
-   que el usuario priorice.
-4. La vista de Actividad reflejando reacciones/ediciones es la próxima
-   pieza de alcance mediano razonable después de cerrar lo anterior.
+1. Bug crítico del adjunto/503 (ver sección de arriba) sigue siendo lo
+   más visible para un usuario real — recomendado antes que nada nuevo.
+2. Responsive/bottom-nav para móvil es el siguiente bloque grande de
+   diseño, ya con la base (chrome a todo el viewport) puesta para eso.
+3. Pendientes menores en el orden que priorice el usuario.

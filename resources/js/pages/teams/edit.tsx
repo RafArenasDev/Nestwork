@@ -166,12 +166,12 @@ export default function TeamEdit({
                         ) : null}
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="border-border/60 divide-border/60 divide-y overflow-hidden rounded-xl border">
                         {members.map((member) => (
                             <div
                                 key={member.id}
                                 data-test="member-row"
-                                className="flex items-center justify-between rounded-lg border p-4"
+                                className="hover:bg-foreground/[0.03] flex items-center justify-between p-4 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
                                     <Avatar className="h-10 w-10">
@@ -270,12 +270,12 @@ export default function TeamEdit({
                             description="Invitations that haven't been accepted yet"
                         />
 
-                        <div className="space-y-3">
+                        <div className="border-border/60 divide-border/60 divide-y overflow-hidden rounded-xl border">
                             {invitations.map((invitation) => (
                                 <div
                                     key={invitation.code}
                                     data-test="invitation-row"
-                                    className="flex items-center justify-between rounded-lg border p-4"
+                                    className="hover:bg-foreground/[0.03] flex items-center justify-between p-4 transition-colors"
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-full">
@@ -327,8 +327,8 @@ export default function TeamEdit({
                             title="Delete team"
                             description="Permanently delete your team"
                         />
-                        <div className="space-y-4 rounded-lg border border-red-100 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10">
-                            <div className="relative space-y-0.5 text-red-600 dark:text-red-100">
+                        <div className="border-destructive/20 bg-destructive/10 space-y-4 rounded-2xl border p-4">
+                            <div className="text-destructive relative space-y-0.5">
                                 <p className="font-medium">Warning</p>
                                 <p className="text-sm">
                                     Please proceed with caution, this cannot be

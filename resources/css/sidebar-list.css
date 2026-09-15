@@ -1,213 +1,107 @@
 /*
- * Misma técnica "curve outside" que curved-nav-rail.css, aplicada un
- * nivel más adentro: acá el sidebar (navy) hace de "rail" y el
- * contenido del dashboard (--background) hace de "panel" — el item
- * seleccionado "chorrea" hacia el dashboard, igual que el ícono activo
- * de la mini-sidebar chorrea hacia el sidebar.
+ * Lista de conversaciones (Mensajes/Inicio/Archivo/Guardados/Actividad)
+ * — la sidebar expandida es chrome, no contenido: SIEMPRE oscura fija
+ * entre temas (igual que la mini), así que todo acá usa los tonos
+ * fijos --sidebar-fg/--sidebar-fg-muted/--sidebar-hairline (ver
+ * app.css) en vez de --foreground/--muted-foreground (esos SÍ cambian
+ * con el tema, son para el contenido). Filas sin card: sin borde ni
+ * sombra propia, sólo relleno — el estado seleccionado es un relleno
+ * sólido, no un borde+tinte (eso se leía como "tarjeta").
  */
 
-/* El sidebar "abraza" a la mini en sus esquinas izquierdas — mismo
-   truco que usa AppContent contra este mismo sidebar (rounded en el
-   FONDO, cero border, cero shadow, cero gap): sólo UN lado redondea
-   (acá el sidebar, allá el contenido), nunca los dos lados de forma
-   independiente — eso último sí deja un hueco visible en la unión
-   porque mini y sidebar son colores distintos. */
-[data-slot='sidebar'] {
+.sidebar-panel {
     position: relative;
-    z-index: 1;
-    border-top-left-radius: 20px;
-    border-bottom-left-radius: 20px;
-    /* Sin esto, el contenido de adentro (el header, la lista) sigue
-       pintando cuadrado hasta la esquina y tapa la curva del radio. */
-    overflow: hidden;
+    isolation: isolate;
+    color: var(--sidebar-fg);
+    border-right: 1px solid var(--sidebar-hairline);
 }
 
-/* Cuadrado negro fijo (mismo negro de la mini) DETRÁS de la sidebar
-   (z-index más bajo que el de arriba) — la sidebar lo tapa por
-   completo excepto justo en el huequito que su propio border-radius +
-   overflow:hidden recorta en la esquina. No necesita forma especial:
-   al estar detrás, sólo se ve donde la sidebar decide no pintar. */
-.rail-sidebar-corner-patch {
-    position: fixed;
-    left: 72px;
+/* Tinte de color personalizable — capa detrás del contenido, nunca
+   reemplaza --bg-elevated (así el tinte queda como una capa de color
+   sobre la superficie base, no como un fondo sólido que compita con
+   el texto). "Ninguno" en el modal de ajustes deja esta variable sin
+   definir — la sidebar igual tiene tono (--bg-elevated), nunca queda
+   "sin tema". */
+.sidebar-tint-layer {
+    position: absolute;
+    inset: 0;
     z-index: 0;
-    width: 20px;
-    height: 20px;
-    background: #000;
-}
-.rail-sidebar-corner-patch--top {
-    top: 0;
-}
-.rail-sidebar-corner-patch--bottom {
-    bottom: 0;
+    pointer-events: none;
+    background: var(--sidebar-tint, transparent);
 }
 
 .sidebar-list {
+    position: relative;
+    z-index: 1;
     list-style: none;
     margin: 0;
-    /* padding-top:16px, el mínimo posible: menos que eso (la altura de
-       la muesca) y la muesca del primer item invade el header de
-       arriba ("Inicio"), pintando encima del título — eso era el bug.
-       El header del sidebar mide 48px (mismo que siempre) + este
-       padding = 64px, igual a la altura total de .curved-rail-brand en
-       la mini (16+32+16, márgenes parejos en los 4 lados) — así el
-       primer item de cada lista arranca exactamente a la misma altura,
-       y "Inicio" seleccionado queda alineado con "Bienvenida"
-       seleccionado. Si cambia el total de .curved-rail-brand, este
-       valor tiene que moverse junto (48 + X = ese total, nunca menos
-       de 16).
-       Más separación del lado de la mini-sidebar (izquierda) y CERO a
-       la derecha: el seleccionado tiene que llegar justo al borde
-       real del sidebar para que la muesca conecte. */
-    padding: 16px 0 8px 16px;
+    padding: 4px 10px 12px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
 }
 
 .sidebar-row {
     position: relative;
     width: 100%;
-    border-radius: 999px 0 0 999px;
-}
-
-.sidebar-row--active {
-    /* Se corre un poco hacia "end" (el dashboard) — mucho más sutil
-       que en la mini, porque acá son textos largos, no un ícono.
-       El background-image (mismo tono anclado al viewport que el área
-       de contenido) va en app.css junto a --content-tone — no un
-       `background` plano acá, para no pisar esa regla. */
-    width: calc(100% - 10px);
-    margin-left: 10px;
-}
-
-.sidebar-row-notch {
-    position: absolute;
-    width: 100%;
-    /* 16px, igual que .curved-rail-notch: si difieren, la "gotera"
-       completa (curva+pill+curva) mide distinto en la mini y en el
-       sidebar y no se leen alineadas aunque el pill mismo sí lo esté. */
-    height: 16px;
-    display: none;
-    background: var(--background);
-    /* Mismo motivo que en curved-nav-rail.css: sin z-index, la muesca
-       del item activo pinta encima del texto/ícono del item vecino
-       cuando ese vecino aparece antes en el DOM. */
-    z-index: 1;
-}
-.sidebar-row-notch--top {
-    top: -16px;
-}
-.sidebar-row-notch--bottom {
-    bottom: -16px;
-}
-.sidebar-row--active .sidebar-row-notch {
-    display: block;
-}
-/* Igual que en curved-nav-rail.css: el ::before representa "el color
-   del sidebar de afuera". El degradé (image/size/attachment:fixed) se
-   define una sola vez en app.css, compartido con el panel real del
-   sidebar — así coincide exacto, sin costura, sin importar dónde caiga
-   esta muesca en la pantalla. */
-.sidebar-row-notch::before {
-    content: '';
-    position: absolute;
-    left: -1px;
-    right: 0;
-}
-/* 1px de solape hacia afuera (no inset: 0 exacto) en el lado que NO
-   toca el pill: dos curvas independientes (esta máscara y el propio
-   borde redondeado del pill) que deben coincidir pixel a pixel casi
-   nunca lo hacen del todo — queda un hairline con el color de adentro
-   asomando. Sobrepintar 1px de más ahí lo tapa sin tocar el borde que
-   sí tiene que quedar exacto (el que toca al pill). */
-.sidebar-row-notch--top::before {
-    top: -1px;
-    bottom: 0;
-    border-bottom-right-radius: 16px;
-}
-.sidebar-row-notch--bottom::before {
-    top: 0;
-    bottom: -1px;
-    border-top-right-radius: 16px;
 }
 
 .sidebar-row-link {
     position: relative;
-    z-index: 2;
     display: flex;
     align-items: center;
     width: 100%;
-    /* Misma altura que .curved-rail-link — ver comentario ahí. */
-    height: 42px;
-    padding: 0 14px;
-    border: 0;
-    border-radius: 999px 0 0 999px;
+    gap: 12px;
+    padding: 9px 10px;
+    border-radius: 12px;
     background: transparent;
-    /* El botón NUNCA se transforma (ver .sidebar-row-label) — solo
-       recorta. Un elemento no puede clipear su propio ink overflow
-       cuando es ÉL MISMO el que tiene el transform: el transform lo
-       escala como unidad ya recortada, y esa unidad entera sigue
-       creciendo más allá de su posición de layout, filtrándose al
-       padre igual (medido con scrollWidth). Separar "qué se escala"
-       (el span de texto) de "quién recorta" (este botón, quieto) es
-       lo que realmente contiene el overflow con textos largos. */
-    overflow: hidden;
-    color: var(--sidebar-foreground);
-    font-size: 0.875rem;
+    color: inherit;
     text-align: left;
     cursor: pointer;
-    transition: padding-left 0.15s ease;
+    transition: background-color 0.15s ease;
 }
+.sidebar-row-link:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+.sidebar-row--active .sidebar-row-link {
+    background: var(--accent-1);
+}
+.sidebar-row--active .sidebar-row-link:hover {
+    background: var(--accent-1);
+}
+.sidebar-row--active .sidebar-row-preview,
+.sidebar-row--active .sidebar-row-time {
+    color: rgba(255, 255, 255, 0.75);
+}
+
 .sidebar-row-label {
     display: block;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    transition: transform 0.15s ease;
-}
-/* Hover: SOLO lupa, sin desplazamiento — origin a la izquierda (donde
-   arranca el texto) para que el punto de lectura quede fijo y el
-   texto crezca hacia la derecha "en el lugar", en vez de crecer desde
-   la derecha (lo que hace que el arranque del texto salte hacia la
-   izquierda y se lea como si el item se hubiera movido). Sin fondo de
-   hover — el único feedback es el tamaño, mismo lenguaje que la mini. */
-.sidebar-row:not(.sidebar-row--active)
-    .sidebar-row-link:hover
-    .sidebar-row-label {
-    transform-origin: left center;
-    transform: scale(1.06);
-}
-.sidebar-row--active .sidebar-row-link {
-    /* Más aire respecto al borde curvo (izquierda) que en reposo, pero
-       poco: con conversaciones (avatar + nombre) demasiado padding acá
-       empuja el avatar muy lejos del borde — antes 26px, antes pensado
-       solo para texto plano (Inicio/Actividad). */
-    padding-left: 18px;
-}
-.sidebar-row--active .sidebar-row-label {
-    color: var(--foreground);
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    transform-origin: right center;
-    transform: scale(1.08);
 }
-/* Filas con avatar (conversaciones): si el label sigue creciendo desde
-   la derecha, el 8% de más se come el margen hacia el avatar y quedan
-   pegados. Estas SÍ crecen desde la izquierda — mismo efecto lupa, pero
-   alejándose del avatar en vez de invadirlo. */
-.sidebar-row--active
-    .sidebar-row-link:has([data-slot='avatar'])
-    .sidebar-row-label {
-    transform-origin: left center;
+.sidebar-row-preview {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.78rem;
+    color: var(--sidebar-fg-muted);
+    margin-top: 1px;
+}
+.sidebar-row-time {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--sidebar-fg-muted);
+    font-weight: 400;
 }
 
-/* Fila con una acción extra (desarchivar, en Archivado): el botón
-   flota SOBRE el pill en vez de ser hijo del flex del link — el link
-   sigue siendo el mismo 100%/overflow:hidden que arma la curva, así
-   que agregar la acción nunca puede afectar esa geometría ni la altura
-   fija de la fila. Solo se le reserva aire a la derecha. */
+/* Fila con una acción extra (desarchivar, en Archivado): flota SOBRE
+   la fila en vez de empujar el layout — mismo criterio que antes. */
 .sidebar-row-link--actionable {
     padding-right: 34px;
 }
@@ -217,4 +111,42 @@
     right: 10px;
     z-index: 3;
     transform: translateY(-50%);
+}
+
+/* Buscador — siempre visible en el header de la sidebar, mismo criterio
+   fijo-oscuro que el resto del chrome. */
+.sidebar-search {
+    position: relative;
+    z-index: 1;
+    margin: 0 12px 8px;
+}
+.sidebar-search input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    border-radius: 999px;
+    border: 1px solid var(--sidebar-hairline);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--sidebar-fg);
+    font-size: 0.8125rem;
+    outline: none;
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+.sidebar-search input:focus {
+    border-color: var(--accent-1);
+    background: rgba(255, 255, 255, 0.08);
+}
+.sidebar-search input::placeholder {
+    color: var(--sidebar-fg-muted);
+}
+.sidebar-search svg {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 14px;
+    height: 14px;
+    color: var(--sidebar-fg-muted);
+    pointer-events: none;
 }

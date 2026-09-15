@@ -49,7 +49,7 @@ export default function TeamsIndex({ teams }: Props) {
                     </CreateTeamModal>
                 </div>
 
-                <div className="space-y-3">
+                <div className="border-border/60 divide-border/60 divide-y overflow-hidden rounded-xl border">
                     {teams.map((team) => {
                         const canLeaveTeam =
                             !team.isPersonal && team.role !== 'owner';
@@ -58,7 +58,7 @@ export default function TeamsIndex({ teams }: Props) {
                             <div
                                 key={team.id}
                                 data-test="team-row"
-                                className="flex items-center justify-between gap-4 rounded-lg border p-4"
+                                className="hover:bg-foreground/[0.03] flex items-center justify-between gap-4 p-4 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
                                     <div>
