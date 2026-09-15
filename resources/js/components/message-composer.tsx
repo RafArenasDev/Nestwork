@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ComposerCodeBlock } from '@/components/composer-code-block';
+import { EMOJI_CATEGORIES } from '@/components/reaction-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -43,8 +44,11 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useAppearance } from '@/hooks/use-appearance';
 import { lowlight } from '@/lib/code-languages';
+import { documentStyleFor } from '@/lib/file-type-style';
 import { markdownToEditorDoc } from '@/lib/markdown-to-editor';
+import { formatFileSize } from '@/lib/utils';
 import type { MessageData } from '@/types';
 
 /**
@@ -258,6 +262,7 @@ export function MessageComposer({
     onSubmitEdit: (markdownBody: string) => void;
     onTyping: () => void;
 }) {
+    const { resolvedAppearance } = useAppearance();
     const editor = useEditor({
         // Evita el doble-render de React 19/StrictMode intentando
         // montar el editor durante el SSR de Inertia — Tiptap no es
@@ -330,7 +335,12 @@ export function MessageComposer({
                 // flujo de bloque normal, no se centra solo). Con
                 // varias líneas, crece hacia abajo/arriba como
                 // cualquier columna flex hasta el tope de max-h-40.
-                class: 'max-h-40 overflow-y-auto px-4 py-2.5 text-sm focus:outline-none [&_strong]:font-bold [&_em]:italic [&_u]:underline [&_s]:line-through [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-current/40 [&_blockquote]:pl-2 [&_blockquote]:opacity-90 [&_p_code]:rounded [&_p_code]:bg-foreground/10 [&_p_code]:px-1 [&_p_code]:py-0.5 [&_p_code]:font-mono [&_p_code]:text-[0.85em] [&_a]:underline [&_a]:decoration-current/40 [&_a]:underline-offset-2',
+                // px-4 vive en el wrapper de la fila (ver
+                // EditorContent más abajo), no acá — así el padding
+                // horizontal del texto es fijo tenga o no adjunto al
+                // lado, en vez de duplicarse cuando la miniatura
+                // agrega su propio wrapper.
+                class: 'max-h-40 overflow-y-auto py-2.5 text-sm focus:outline-none [&_strong]:font-bold [&_em]:italic [&_u]:underline [&_s]:line-through [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_blockquote]:border-l-2 [&_blockquote]:border-current/40 [&_blockquote]:pl-2 [&_blockquote]:opacity-90 [&_p_code]:rounded [&_p_code]:bg-foreground/10 [&_p_code]:px-1 [&_p_code]:py-0.5 [&_p_code]:font-mono [&_p_code]:text-[0.85em] [&_a]:underline [&_a]:decoration-current/40 [&_a]:underline-offset-2',
                 // Pedido explícito: corrección ortográfica del
                 // navegador — sin esto queda a merced del default de
                 // cada navegador sobre un contenteditable armado a
@@ -770,55 +780,6 @@ export function MessageComposer({
                     </div>
                 )}
 
-            {attachment && (
-                // animate-attachment-in: "materializar", no sólo aparecer
-                // de golpe (apple-design §12) — un solo keyframe estático,
-                // esto no es algo que el usuario arrastre/interrumpa, así
-                // que no hace falta un spring interruptible acá.
-                <div className="animate-attachment-in flex items-center gap-3 rounded-3xl border-l-[5px] border-l-[#166534] bg-[#71717a] py-2 pr-2 pl-3">
-                    {attachmentPreviewUrl ? (
-                        attachmentCategory === 'video' ? (
-                            // eslint-disable-next-line jsx-a11y/media-has-caption
-                            <video
-                                src={attachmentPreviewUrl}
-                                muted
-                                className="size-10 shrink-0 rounded-lg object-cover"
-                            />
-                        ) : (
-                            <img
-                                src={attachmentPreviewUrl}
-                                alt=""
-                                className="size-10 shrink-0 rounded-lg object-cover"
-                            />
-                        )
-                    ) : (
-                        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/15">
-                            {attachmentCategory === 'audio' ? (
-                                <Mic className="size-4 text-white" />
-                            ) : (
-                                <Paperclip className="size-4 text-white" />
-                            )}
-                        </div>
-                    )}
-                    {/* Sin badge/etiqueta encima — pedido explícito: con
-                        la miniatura ya alcanza, un rótulo "Adjunto"
-                        arriba del nombre sobra. */}
-                    <p className="min-w-0 flex-1 truncate text-xs font-medium text-white">
-                        {attachmentCategory === 'audio'
-                            ? 'Nota de voz'
-                            : attachment.name}
-                    </p>
-                    <button
-                        type="button"
-                        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
-                        aria-label="Quitar adjunto"
-                        onClick={clearAttachment}
-                    >
-                        <X className="size-3.5" />
-                    </button>
-                </div>
-            )}
-
             {attachmentError && (
                 <p className="text-destructive px-1 text-xs">
                     {attachmentError}
@@ -1052,36 +1013,6 @@ export function MessageComposer({
                     </PopoverContent>
                 </Popover>
                 <span className="bg-border mx-1 h-4 w-px" aria-hidden="true" />
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button
-                            type="button"
-                            aria-label="Insertar emoji"
-                            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-7 items-center justify-center rounded-full transition-[transform,background-color,color] duration-100 active:scale-90"
-                        >
-                            <SmilePlus className="size-4" />
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                        side="top"
-                        align="start"
-                        className="w-fit border-none bg-transparent p-0 shadow-none"
-                    >
-                        <EmojiPicker
-                            theme={EmojiPickerTheme.AUTO}
-                            onEmojiClick={(data) =>
-                                editor
-                                    ?.chain()
-                                    .focus()
-                                    .insertContent(data.emoji)
-                                    .run()
-                            }
-                            height={360}
-                            width={300}
-                        />
-                    </PopoverContent>
-                </Popover>
-                <span className="bg-border mx-1 h-4 w-px" aria-hidden="true" />
                 <ToolbarButton
                     icon={Undo2}
                     label="Deshacer"
@@ -1097,6 +1028,48 @@ export function MessageComposer({
             </div>
 
             <div className="flex items-end gap-2">
+                {/* Emoji: pedido explícito, "no en el composer [la
+                    barra de formato de arriba], antes del input, así el
+                    user puede escribir y tener siempre visible este
+                    botón" — vive en esta fila (mismo tamaño/lenguaje
+                    visual que el micrófono y enviar), no en la toolbar
+                    que sólo aparece con el editor enfocado. */}
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            aria-label="Insertar emoji"
+                            className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-10 shrink-0 items-center justify-center rounded-full transition-[transform,background-color,color] duration-100 active:scale-90"
+                        >
+                            <SmilePlus className="size-4" />
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        side="top"
+                        align="start"
+                        className="w-fit border-none bg-transparent p-0 shadow-none"
+                    >
+                        <EmojiPicker
+                            theme={
+                                resolvedAppearance === 'dark'
+                                    ? EmojiPickerTheme.DARK
+                                    : EmojiPickerTheme.LIGHT
+                            }
+                            onEmojiClick={(data) =>
+                                editor
+                                    ?.chain()
+                                    .focus()
+                                    .insertContent(data.emoji)
+                                    .run()
+                            }
+                            height={360}
+                            width={300}
+                            searchPlaceHolder="Buscar emoji"
+                            categories={EMOJI_CATEGORIES}
+                            previewConfig={{ showPreview: false }}
+                        />
+                    </PopoverContent>
+                </Popover>
                 {/* Mismo lenguaje visual que cualquier input del
                     design system: borde sutil + fondo transparente +
                     anillo de foco — antes lo daba el Textarea de
@@ -1122,7 +1095,102 @@ export function MessageComposer({
                     // no necesita centrarse (llena el espacio solo).
                     className="focus-within:border-ring focus-within:ring-ring/50 dark:bg-input/30 border-input flex min-h-11 flex-1 flex-col justify-center rounded-3xl border bg-transparent shadow-xs transition-[color,box-shadow] focus-within:ring-[3px]"
                 >
-                    <EditorContent editor={editor} />
+                    {/* px-4 acá (no en .ProseMirror, ver editorProps
+                        más arriba): con adjunto, la miniatura vive
+                        DENTRO del mismo recuadro del input — pedido
+                        explícito, "no como barra separada" — con la
+                        "X" montada en su esquina (mismo patrón que
+                        WhatsApp Web/Telegram). Sin adjunto, esta fila
+                        tiene un solo hijo y el resultado es idéntico
+                        al de antes. */}
+                    <div className="flex items-center gap-2 px-4">
+                        {attachment &&
+                            attachmentPreviewUrl && (
+                                // size-14 (no size-10): pedido explícito, "un
+                                // poco más grande" — sigue siendo una miniatura,
+                                // no una barra, pero se ve la foto de verdad.
+                                <div className="animate-attachment-in relative my-1.5 size-14 shrink-0">
+                                    {attachmentCategory === 'video' ? (
+                                        // eslint-disable-next-line jsx-a11y/media-has-caption
+                                        <video
+                                            src={attachmentPreviewUrl}
+                                            muted
+                                            className="size-14 rounded-lg object-cover"
+                                        />
+                                    ) : (
+                                        <img
+                                            src={attachmentPreviewUrl}
+                                            alt=""
+                                            className="size-14 rounded-lg object-cover"
+                                        />
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={clearAttachment}
+                                        aria-label="Quitar adjunto"
+                                        className="bg-foreground text-background absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border-2 border-[var(--background)] transition-transform duration-100 active:scale-90"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </div>
+                            )}
+                        {attachment &&
+                            !attachmentPreviewUrl && (
+                                // Documento/audio: sin preview visual real
+                                // posible, así que el chip usa ícono + color
+                                // según el TIPO real de archivo (PDF rojo,
+                                // Word azul, Excel verde, etc. — nunca negro/
+                                // blanco genérico, pedido explícito) + nombre y
+                                // tamaño.
+                                <div className="animate-attachment-in bg-foreground/5 relative my-1.5 flex h-14 max-w-[240px] shrink-0 items-center gap-2.5 rounded-lg py-1.5 pr-5 pl-2.5">
+                                    {attachmentCategory === 'audio' ? (
+                                        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-[#7c3aed]/15 text-[#7c3aed]">
+                                            <Mic className="size-5" />
+                                        </div>
+                                    ) : (
+                                        (() => {
+                                            const { icon: DocIcon, color } =
+                                                documentStyleFor(
+                                                    attachment.name,
+                                                );
+
+                                            return (
+                                                <div
+                                                    className="flex size-10 shrink-0 items-center justify-center rounded-md"
+                                                    style={{
+                                                        backgroundColor: `${color}26`,
+                                                        color,
+                                                    }}
+                                                >
+                                                    <DocIcon className="size-5" />
+                                                </div>
+                                            );
+                                        })()
+                                    )}
+                                    <div className="min-w-0 leading-tight">
+                                        <p className="truncate text-xs font-medium">
+                                            {attachmentCategory === 'audio'
+                                                ? 'Nota de voz'
+                                                : attachment.name}
+                                        </p>
+                                        <p className="text-muted-foreground text-[10px]">
+                                            {formatFileSize(attachment.size)}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={clearAttachment}
+                                        aria-label="Quitar adjunto"
+                                        className="bg-foreground text-background absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full border-2 border-[var(--background)] transition-transform duration-100 active:scale-90"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </div>
+                            )}
+                        <div className="min-w-0 flex-1">
+                            <EditorContent editor={editor} />
+                        </div>
+                    </div>
                 </div>
                 {/* Grabar nota de voz — pedido explícito, antes del
                     botón de enviar. Mismo pipeline de adjuntos que

@@ -2,12 +2,14 @@ import { Link, router, usePage } from '@inertiajs/react';
 import {
     ArchiveBoxIcon,
     BellIcon,
+    BookmarkIcon,
     ChatBubbleLeftRightIcon,
     HomeIcon,
 } from '@heroicons/react/24/outline';
 import {
     ArchiveBoxIcon as ArchiveBoxIconSolid,
     BellIcon as BellIconSolid,
+    BookmarkIcon as BookmarkIconSolid,
     ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
     HomeIcon as HomeIconSolid,
 } from '@heroicons/react/24/solid';
@@ -67,6 +69,12 @@ const RAIL_MODULES = [
         label: 'Archivo',
         icon: ArchiveBoxIcon,
         iconActive: ArchiveBoxIconSolid,
+    },
+    {
+        key: 'saved',
+        label: 'Guardados',
+        icon: BookmarkIcon,
+        iconActive: BookmarkIconSolid,
     },
 ] as const;
 

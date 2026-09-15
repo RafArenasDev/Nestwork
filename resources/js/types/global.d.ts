@@ -1,6 +1,7 @@
 import type { Auth } from '@/types/auth';
 import type {
     ConversationSummary,
+    SavedMessageSummary,
     TeamMemberOption,
 } from '@/types/conversations';
 import type { StatusPresetOption } from '@/types/status';
@@ -23,6 +24,7 @@ declare module '@inertiajs/core' {
             teams: Team[];
             conversations: ConversationSummary[];
             archivedConversations: ConversationSummary[];
+            savedMessages: SavedMessageSummary[];
             teamMembers: TeamMemberOption[];
             statusPresets: StatusPresetOption[];
             [key: string]: unknown;

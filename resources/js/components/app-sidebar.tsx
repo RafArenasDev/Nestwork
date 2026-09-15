@@ -1,9 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
-import { ArchiveRestore, Plus } from 'lucide-react';
+import { ArchiveRestore, Bookmark, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
 import { PresenceDot } from '@/components/presence-dot';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { show as showMessage } from '@/routes/messages';
+import { toggle as toggleSaveRoute } from '@/routes/messages/save';
 import { toggleArchive } from '@/routes/conversations';
 import {
     Sidebar,
@@ -20,8 +22,12 @@ import {
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
 import { useOpenConversationUnseen } from '@/hooks/use-open-conversation-unseen';
+import { csrfHeaders } from '@/lib/csrf';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
-import type { ConversationSummary } from '@/types/conversations';
+import type {
+    ConversationSummary,
+    SavedMessageSummary,
+} from '@/types/conversations';
 
 type Props = {
     activeModule: RailModuleKey;
@@ -68,6 +74,12 @@ export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
 
     if (activeModule === 'archived') {
         return <ArchivedSidebarList activeModuleLabel={activeModuleLabel} />;
+    }
+
+    if (activeModule === 'saved') {
+        return (
+            <SavedMessagesSidebarList activeModuleLabel={activeModuleLabel} />
+        );
     }
 
     return <HomeSidebarList activeModuleLabel={activeModuleLabel} />;
@@ -336,6 +348,205 @@ function ArchivedSidebarList({
                     {archivedConversations.length === 0 && (
                         <p className="text-muted-foreground px-2 text-sm">
                             No tienes conversaciones archivadas.
+                        </p>
+                    )}
+                </ul>
+            </SidebarContent>
+        </Sidebar>
+    );
+}
+
+function relativeSavedLabel(iso: string): string {
+    const date = new Date(iso);
+    const now = new Date();
+    const isSameDay = date.toDateString() === now.toDateString();
+
+    if (isSameDay) {
+        return date.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+
+    if (date.toDateString() === yesterday.toDateString()) {
+        return 'ayer';
+    }
+
+    return date.toLocaleDateString(undefined, {
+        day: 'numeric',
+        month: 'short',
+    });
+}
+
+function SavedMessageRow({
+    saved,
+    currentTeamSlug,
+    onUnsave,
+}: {
+    saved: SavedMessageSummary;
+    currentTeamSlug: string | undefined;
+    onUnsave: (saved: SavedMessageSummary) => void;
+}) {
+    const getInitials = useInitials();
+
+    return (
+        <li className="sidebar-row">
+            <span
+                className="sidebar-row-notch sidebar-row-notch--top"
+                aria-hidden="true"
+            />
+            <span
+                className="sidebar-row-notch sidebar-row-notch--bottom"
+                aria-hidden="true"
+            />
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (!currentTeamSlug) {
+                                return;
+                            }
+
+                            // Mismo mecanismo que abrir cualquier chat
+                            // (preserveUrl, ver ConversationRow) + `message`
+                            // en la query para que el backend arme
+                            // `jumpToMessageId` y Thread salte al mensaje
+                            // puntual en vez de al fondo del historial.
+                            router.visit(
+                                showMessage(
+                                    [currentTeamSlug, saved.conversationId],
+                                    { query: { message: saved.messageId } },
+                                ).url,
+                                {
+                                    preserveUrl: true,
+                                    preserveScroll: true,
+                                    only: [
+                                        'conversation',
+                                        'messages',
+                                        'conversations',
+                                        'archivedConversations',
+                                        'jumpToMessageId',
+                                    ],
+                                },
+                            );
+                        }}
+                        className="sidebar-row-link sidebar-row-link--actionable"
+                    >
+                        <Avatar className="mr-3 size-7 shrink-0">
+                            {saved.senderAvatar && (
+                                <AvatarImage
+                                    src={saved.senderAvatar}
+                                    alt={saved.senderName}
+                                />
+                            )}
+                            <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
+                                {getInitials(saved.senderName)}
+                            </AvatarFallback>
+                        </Avatar>
+                        {/* Una sola línea (misma altura fija de 42px que
+                            cualquier fila del sidebar) — pedido implícito
+                            por el propio sistema (ver comentarios de
+                            sidebar-row-link en sidebar-list.css): "quién
+                            dijo qué" cabe junto, el resto (conversación +
+                            cuándo) va al tooltip, mismo criterio que ya
+                            usa Actividad. */}
+                        <span className="sidebar-row-label min-w-0 flex-1 truncate">
+                            <span className="font-medium">
+                                {saved.senderName}
+                            </span>
+                            <span className="text-white/60">
+                                : {saved.excerpt || '📎 Adjunto'}
+                            </span>
+                        </span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                    {saved.conversationName} ·{' '}
+                    {relativeSavedLabel(saved.savedAt)}
+                </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label="Quitar de guardados"
+                        className="sidebar-row-action rounded-full p-1 text-white/60 transition-colors hover:bg-white hover:text-[#141824]"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onUnsave(saved);
+                        }}
+                    >
+                        <Bookmark className="size-3.5 fill-current" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                    Quitar de guardados
+                </TooltipContent>
+            </Tooltip>
+        </li>
+    );
+}
+
+function SavedMessagesSidebarList({
+    activeModuleLabel,
+}: {
+    activeModuleLabel: string;
+}) {
+    const page = usePage();
+    const currentTeam = page.props.currentTeam;
+    const [savedMessages, setSavedMessages] = useState(
+        page.props.savedMessages,
+    );
+
+    useEffect(() => {
+        setSavedMessages(page.props.savedMessages);
+    }, [page.props.savedMessages]);
+
+    const handleUnsave = (saved: SavedMessageSummary) => {
+        if (!currentTeam) {
+            return;
+        }
+
+        setSavedMessages((previous) =>
+            previous.filter((item) => item.messageId !== saved.messageId),
+        );
+
+        fetch(
+            toggleSaveRoute([
+                currentTeam.slug,
+                saved.conversationId,
+                saved.messageId,
+            ]).url,
+            { method: 'POST', headers: csrfHeaders() },
+        ).catch(() => {
+            // Silencioso — reintentar tocando el botón de nuevo alcanza.
+        });
+    };
+
+    return (
+        <Sidebar collapsible="none" variant="sidebar">
+            <SidebarHeader>
+                <SidebarModuleHeader title={activeModuleLabel} />
+            </SidebarHeader>
+
+            <SidebarContent>
+                <ul className="sidebar-list">
+                    {savedMessages.map((saved) => (
+                        <SavedMessageRow
+                            key={saved.messageId}
+                            saved={saved}
+                            currentTeamSlug={currentTeam?.slug}
+                            onUnsave={handleUnsave}
+                        />
+                    ))}
+
+                    {savedMessages.length === 0 && (
+                        <p className="text-muted-foreground px-2 text-sm">
+                            No has guardado ningún mensaje todavía.
                         </p>
                     )}
                 </ul>

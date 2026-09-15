@@ -47,6 +47,20 @@ class Message extends Model
     /** @use HasFactory<MessageFactory> */
     use HasFactory, SoftDeletes;
 
+    /** `is_hidden` tiene default(false) en la migración, pero
+     *  `Message::create()` NO vuelve a leer la BD tras el insert — el
+     *  objeto en memoria que usa `store()` para el broadcast inmediato
+     *  (MessageSent) se queda con `is_hidden` directamente ausente
+     *  (null), no `false`. `MessageData::fromMessage()` exige un bool
+     *  real ahí, así que CADA mensaje nuevo tiraba un TypeError al
+     *  armar el payload del socket — silencioso porque `store()`
+     *  envuelve el broadcast en try/catch (ver ahí). Este default en
+     *  memoria es el fix real: ningún Message nuevo, se cree donde se
+     *  cree, arranca sin este atributo. */
+    protected $attributes = [
+        'is_hidden' => false,
+    ];
+
     protected function casts(): array
     {
         return [

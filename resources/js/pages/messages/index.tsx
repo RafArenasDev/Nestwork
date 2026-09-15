@@ -23,7 +23,6 @@ import {
     Phone,
     Pin,
     PinOff,
-    Plus,
     Reply,
     Search,
     Smile,
@@ -32,7 +31,6 @@ import {
     Video,
     X,
 } from 'lucide-react';
-import EmojiPicker, { Theme as EmojiPickerTheme } from 'emoji-picker-react';
 import {
     useEffect,
     useLayoutEffect,
@@ -63,6 +61,7 @@ import { MessageAttachment } from '@/components/message-attachment';
 import { MessageCodeBlock } from '@/components/message-code-block';
 import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
+import { ReactionPickerButton } from '@/components/reaction-picker';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -106,6 +105,9 @@ import {
     clearOpenConversationUnseen,
     setOpenConversationUnseen,
 } from '@/hooks/use-open-conversation-unseen';
+import { csrfHeaders } from '@/lib/csrf';
+import { documentStyleFor } from '@/lib/file-type-style';
+import { formatFileSize } from '@/lib/utils';
 import type {
     ActiveConversation,
     AttachmentData,
@@ -117,27 +119,8 @@ import type {
 type Props = {
     conversation: ActiveConversation | null;
     messages: MessageData[];
+    jumpToMessageId: number | null;
 };
-
-/** Mismo header que ya usaba markRead() (ver más abajo) — se extrae
- *  acá porque las acciones de mensaje (reaccionar, editar, reenviar)
- *  también son pings livianos por fetch, no visitas Inertia. */
-function csrfHeaders(): HeadersInit {
-    const csrfToken = document.querySelector<HTMLMetaElement>(
-        'meta[name="csrf-token"]',
-    )?.content;
-
-    return {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-    };
-}
-
-/** Barra rápida de reacciones — mismo puñado corto que WhatsApp/Slack
- *  muestran antes de "ver más emojis" (que no se implementa en esta
- *  ronda, YAGNI: un picker completo es una épica en sí misma). */
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 /** "Copiar" copia el texto LEGIBLE, no el markdown-ligero crudo — pegar
  *  "**hola**" en otra app sería peor que no ofrecer copiar. Bloques de
@@ -158,7 +141,11 @@ function stripMarkdownForCopy(body: string): string {
         .replace(/_(.+?)_/g, '$1');
 }
 
-export default function MessagesIndex({ conversation, messages }: Props) {
+export default function MessagesIndex({
+    conversation,
+    messages,
+    jumpToMessageId,
+}: Props) {
     const page = usePage();
     const currentTeam = page.props.currentTeam;
 
@@ -191,6 +178,7 @@ export default function MessagesIndex({ conversation, messages }: Props) {
                     key={conversation.id}
                     conversation={conversation}
                     messages={messages}
+                    jumpToMessageId={jumpToMessageId}
                     onClose={closeConversation}
                 />
             ) : (
@@ -212,6 +200,18 @@ function EmptyState() {
  *  y dentro del mismo día — así no se repite avatar/hora en cada burbuja,
  *  igual que Slack/Telegram/iMessage. */
 const GROUP_GAP_MS = 5 * 60 * 1000;
+
+/** Mismo mecanismo que ya usa el badge de fijado (ver pinnedMessage más
+ *  abajo) — saltar a un mensaje por id, si está cargado en el DOM. */
+function jumpToMessage(messageId: number | null): void {
+    if (!messageId) {
+        return;
+    }
+
+    document
+        .getElementById(`message-${messageId}`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
 
 function dayKey(iso: string): string {
     const date = new Date(iso);
@@ -921,10 +921,12 @@ function DisabledActionIcon({
 function Thread({
     conversation,
     messages,
+    jumpToMessageId,
     onClose,
 }: {
     conversation: ActiveConversation;
     messages: MessageData[];
+    jumpToMessageId: number | null;
     onClose: () => void;
 }) {
     const page = usePage();
@@ -1251,6 +1253,33 @@ function Thread({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [liveMessages.length]);
 
+    // Llegar acá desde "Guardados" (?message=id en la URL): pisa el
+    // auto-scroll al fondo de arriba con un salto al mensaje puntual.
+    // Sólo una vez por apertura de chat (el `key={conversation.id}` en
+    // el padre ya fuerza un remount completo de Thread por cada chat
+    // distinto, así que un ref simple alcanza sin depender de
+    // jumpToMessageId cambiando). Sólo funciona si el mensaje cayó
+    // dentro de la ventana inicial cargada — misma limitación que el
+    // salto del badge de fijado hasta que exista paginación (Fase F).
+    const jumpHandledRef = useRef(false);
+    useEffect(() => {
+        if (jumpHandledRef.current || !jumpToMessageId) {
+            return;
+        }
+
+        jumpHandledRef.current = true;
+
+        const raf = requestAnimationFrame(() => {
+            markAutoScroll();
+            document
+                .getElementById(`message-${jumpToMessageId}`)
+                ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        });
+
+        return () => cancelAnimationFrame(raf);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [jumpToMessageId]);
+
     const { channel } = useChannel(`conversation.${conversation.id}`);
 
     // El punto inicial importa: MessageSent::broadcastAs() manda el
@@ -1457,17 +1486,26 @@ function Thread({
                 m.id === message.id
                     ? {
                           ...m,
+                          // Un solo emoji por persona: elegir otro
+                          // reemplaza el propio, nunca se acumulan dos
+                          // — se saca cualquier reacción previa de este
+                          // usuario antes de sumar la nueva (si la nueva
+                          // es la misma de antes, esto la deja en cero
+                          // hasta el próximo `if`, que sólo la vuelve a
+                          // poner cuando NO era la que ya tenía).
                           reactions: alreadyMine
                               ? m.reactions.filter(
-                                    (r) =>
-                                        !(
-                                            r.userId === authUser.id &&
-                                            r.emoji === emoji
-                                        ),
+                                    (r) => r.userId !== authUser.id,
                                 )
                               : [
-                                    ...m.reactions,
-                                    { emoji, userId: authUser.id },
+                                    ...m.reactions.filter(
+                                        (r) => r.userId !== authUser.id,
+                                    ),
+                                    {
+                                        emoji,
+                                        userId: authUser.id,
+                                        userName: authUser.name,
+                                    },
                                 ],
                       }
                     : m,
@@ -1544,9 +1582,19 @@ function Thread({
             toggleSaveRoute([currentTeam.slug, conversation.id, message.id])
                 .url,
             { method: 'POST', headers: csrfHeaders() },
-        ).catch(() => {
-            // Silencioso — reintentar tocando el botón de nuevo alcanza.
-        });
+        )
+            .then(() => {
+                // savedMessages es un prop compartido (ver
+                // HandleInertiaRequests) que sólo se recalcula en una
+                // visita real de Inertia — este fetch de acá arriba no
+                // cuenta como una — así que sin este reload puntual el
+                // módulo "Guardados" del mini-rail seguiría mostrando
+                // la lista vieja hasta la próxima navegación real.
+                router.reload({ only: ['savedMessages'] });
+            })
+            .catch(() => {
+                // Silencioso — reintentar tocando el botón de nuevo alcanza.
+            });
     };
 
     const handleTogglePin = (message: MessageData) => {
@@ -1678,6 +1726,7 @@ function Thread({
                   sizeBytes: attachment.size,
                   width: null,
                   height: null,
+                  thumbnailUrl: null,
               }
             : null;
         const optimisticMessage: MessageData = {
@@ -1796,18 +1845,11 @@ function Thread({
                 {pinnedMessage && (
                     // Badge debajo del título, NO dentro de la burbuja
                     // — pedido explícito. Clic salta al mensaje real en
-                    // el historial (mismo mecanismo que usará "saltar a
-                    // la cita" más adelante).
+                    // el historial (mismo mecanismo que usa "saltar a
+                    // la cita" dentro de la burbuja, ver jumpToMessage).
                     <button
                         type="button"
-                        onClick={() =>
-                            document
-                                .getElementById(`message-${pinnedMessage.id}`)
-                                ?.scrollIntoView({
-                                    block: 'center',
-                                    behavior: 'smooth',
-                                })
-                        }
+                        onClick={() => jumpToMessage(pinnedMessage.id)}
                         className="border-border/60 flex w-full items-center gap-2 border-b bg-[color-mix(in_srgb,var(--background)_94%,var(--foreground)_6%)] px-4 py-2 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--background)_88%,var(--foreground)_12%)]"
                     >
                         <Pin className="text-muted-foreground size-3.5 shrink-0 fill-current" />
@@ -1858,7 +1900,15 @@ function Thread({
                             className="flex w-full min-w-0 flex-col gap-0.5 py-4 pb-10"
                         >
                             {groupMessagesByDate(liveMessages).map((group) => {
-                                const isExpanded = expandedDates.has(group.key);
+                                // Hoy nunca se colapsa — pedido explícito:
+                                // "el chat de hoy está totalmente
+                                // abierto", el dropdown es sólo para Ayer
+                                // y días anteriores.
+                                const isToday =
+                                    group.key ===
+                                    dayKey(new Date().toISOString());
+                                const isExpanded =
+                                    isToday || expandedDates.has(group.key);
                                 // Colapsado: NADA visible de ese día —
                                 // pedido explícito, "ocultar todos los
                                 // mensajes y mantenerlos colapsados" para
@@ -1879,32 +1929,43 @@ function Thread({
                                 return (
                                     <div key={group.key} className="min-w-0">
                                         <div className="my-3 flex justify-center">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    toggleDateExpanded(
-                                                        group.key,
-                                                    )
-                                                }
-                                                className="bg-foreground/5 text-muted-foreground hover:bg-foreground/10 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-                                            >
-                                                {formatDaySeparator(
-                                                    group.messages[0].createdAt,
-                                                )}
-                                                {!isExpanded &&
-                                                    hiddenCount > 0 && (
-                                                        <span className="opacity-70">
-                                                            ·{' '}
-                                                            {hiddenCount > 99
-                                                                ? '99+'
-                                                                : hiddenCount}{' '}
-                                                            más
-                                                        </span>
+                                            {isToday ? (
+                                                <span className="bg-foreground/5 text-muted-foreground flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium">
+                                                    {formatDaySeparator(
+                                                        group.messages[0]
+                                                            .createdAt,
                                                     )}
-                                                <ChevronDown
-                                                    className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                                                />
-                                            </button>
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        toggleDateExpanded(
+                                                            group.key,
+                                                        )
+                                                    }
+                                                    className="bg-foreground/5 text-muted-foreground hover:bg-foreground/10 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+                                                >
+                                                    {formatDaySeparator(
+                                                        group.messages[0]
+                                                            .createdAt,
+                                                    )}
+                                                    {!isExpanded &&
+                                                        hiddenCount > 0 && (
+                                                            <span className="opacity-70">
+                                                                ·{' '}
+                                                                {hiddenCount >
+                                                                99
+                                                                    ? '99+'
+                                                                    : hiddenCount}{' '}
+                                                                más
+                                                            </span>
+                                                        )}
+                                                    <ChevronDown
+                                                        className={`size-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                    />
+                                                </button>
+                                            )}
                                         </div>
                                         {visibleMessages.map(
                                             (message, index) => {
@@ -2015,9 +2076,22 @@ function Thread({
                         </button>
                     )}
                     {typingUserName && (
-                        <p className="text-muted-foreground px-4 pb-1 text-xs italic">
-                            {typingUserName} está escribiendo…
-                        </p>
+                        <div className="flex items-center gap-1.5 px-4 pb-1.5">
+                            <span className="text-muted-foreground text-xs italic">
+                                {typingUserName} está escribiendo
+                            </span>
+                            <span className="inline-flex items-center gap-0.5 rounded-full bg-[var(--bubble-received)] px-2 py-1.5">
+                                {[0, 1, 2].map((dot) => (
+                                    <span
+                                        key={dot}
+                                        className="animate-typing-dot block size-1.5 rounded-full bg-[var(--bubble-received-foreground)]"
+                                        style={{
+                                            animationDelay: `${dot * 160}ms`,
+                                        }}
+                                    />
+                                ))}
+                            </span>
+                        </div>
                     )}
                 </div>
 
@@ -2235,17 +2309,20 @@ function BubbleActionButton({
     );
 }
 
-/** Accesos rápidos + emoji picker completo (biblioteca libre, sin
- *  costo) — pedido explícito: "para qué vas a escribir ahí cuando se
- *  pueden manejar todos [los emojis]". El picker completo vive DENTRO
- *  del mismo Popover (alterna contenido) en vez de anidar otro Popover
- *  — más simple y sin pelear con el focus-trap de Radix. */
-function ReactionPickerButton({ onPick }: { onPick: (emoji: string) => void }) {
-    const [showFullPicker, setShowFullPicker] = useState(false);
-
+/** Trigger con el estilo propio de la fila de acciones de la burbuja —
+ *  el picker en sí (accesos rápidos + "+ más emojis" + librería
+ *  completa) vive en el componente compartido ReactionPicker, mismo
+ *  que usa el visor de imagen/video (pedido explícito: "todas las
+ *  reacciones aplica igual"). */
+function BubbleReactionPickerButton({
+    onPick,
+}: {
+    onPick: (emoji: string) => void;
+}) {
     return (
-        <Popover onOpenChange={(open) => !open && setShowFullPicker(false)}>
-            <PopoverTrigger asChild>
+        <ReactionPickerButton
+            onPick={onPick}
+            trigger={
                 <button
                     type="button"
                     aria-label="Reaccionar"
@@ -2253,46 +2330,8 @@ function ReactionPickerButton({ onPick }: { onPick: (emoji: string) => void }) {
                 >
                     <Smile className="size-3.5" />
                 </button>
-            </PopoverTrigger>
-            <PopoverContent
-                side="top"
-                className={
-                    showFullPicker
-                        ? 'w-fit border-none bg-transparent p-0 shadow-none'
-                        : 'w-fit rounded-2xl p-2'
-                }
-            >
-                {showFullPicker ? (
-                    <EmojiPicker
-                        theme={EmojiPickerTheme.AUTO}
-                        onEmojiClick={(data) => onPick(data.emoji)}
-                        height={360}
-                        width={300}
-                    />
-                ) : (
-                    <div className="flex items-center gap-1">
-                        {QUICK_REACTIONS.map((emoji) => (
-                            <button
-                                key={emoji}
-                                type="button"
-                                onClick={() => onPick(emoji)}
-                                className="flex size-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-125 active:scale-95"
-                            >
-                                {emoji}
-                            </button>
-                        ))}
-                        <button
-                            type="button"
-                            aria-label="Más emojis"
-                            onClick={() => setShowFullPicker(true)}
-                            className="text-muted-foreground hover:bg-foreground/10 flex size-8 items-center justify-center rounded-full transition-colors"
-                        >
-                            <Plus className="size-4" />
-                        </button>
-                    </div>
-                )}
-            </PopoverContent>
-        </Popover>
+            }
+        />
     );
 }
 
@@ -2360,13 +2399,25 @@ function MessageBubble({
     // siempre — mezclar el recorte edge-to-edge con el badge de cita
     // (que a propósito se sale del borde superior, ver más abajo) los
     // haría pelear entre sí.
+    // Foto/video (o documento YA con preview real generada) SIEMPRE
+    // llena de punta a punta arriba, tenga o no caption — pedido
+    // explícito: "de ahí para arriba debe cubrir todo... sin tener más
+    // BG de la burbuja", "deben cubrir la parte superior sin
+    // márgenes". El texto (si hay) vive en su propio "pie" de color
+    // debajo, que SIEMPRE existe — vacío si no hay caption. Reenviado
+    // también entra acá ahora (antes se excluía, pedido explícito:
+    // "evitar esas esquinas [cuadradas]") — la etiqueta "Reenviado" se
+    // corre adentro del pie, ver más abajo. Con cita SÍ se sigue
+    // excluyendo: el badge de cita se sale del borde superior y
+    // pelearía con el recorte del media.
     const hasEdgeToEdgeMedia =
-        !message.body &&
         !message.replyToId &&
-        !message.isForwarded &&
         message.attachments.some(
             (attachment) =>
-                attachment.type === 'image' || attachment.type === 'video',
+                attachment.type === 'image' ||
+                attachment.type === 'video' ||
+                (attachment.type === 'document' &&
+                    attachment.thumbnailUrl !== null),
         );
     // Tono del acento del badge de respuesta según A QUIÉN se está
     // citando, no según quién envía este mensaje — pedido explícito:
@@ -2475,7 +2526,7 @@ function MessageBubble({
                             // de la burbuja, no tocar la esquina de la cola (esa
                             // sigue -none, cuadrada a propósito, ver comentario
                             // arriba).
-                            className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${
+                            className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_2px_rgba(0,0,0,0.12),0_6px_16px_rgba(0,0,0,0.16)] transition-transform duration-150 ease-out hover:-translate-y-px dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_6px_18px_rgba(0,0,0,0.5)] ${
                                 hasEdgeToEdgeMedia
                                     ? ''
                                     : `px-3 py-2 ${bubbleColor}`
@@ -2501,22 +2552,98 @@ function MessageBubble({
                             cortada (rounded-br/bl-none) que la burbuja,
                             así el pico continúa esa esquina en vez de
                             superponerse a mitad de la imagen. */}
-                            {/* Sin pico en foto/video edge-to-edge (pedido
-                            explícito, reemplaza la regla anterior de
-                            "siempre va"): la media ya cubre toda la
-                            burbuja, un pico ahí no suma nada visual. En
-                            cualquier otra burbuja (texto, cita,
-                            documento, audio) el pico se mantiene. Curva
+                            {/* El pico va SIEMPRE (pedido explícito: "no
+                            se negocia"), también en foto/video edge-to-
+                            edge — el "pie" de abajo (con o sin caption)
+                            siempre existe, así que siempre hay una
+                            superficie de color donde apoyarlo. Curva
                             leve en la esquina que mira al avatar (la
                             otra queda cuadrada, pegada al borde real de
                             la burbuja) para que apunte hacia él en vez
                             de verse como un triángulo recto. */}
-                            {isLastInGroup && !hasEdgeToEdgeMedia && (
+                            {isLastInGroup && (
                                 <span
                                     aria-hidden="true"
-                                    className={`pointer-events-none absolute bottom-0 z-10 size-3 ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg] rounded-tr-[6px] rounded-bl-[3px]' : 'left-0 origin-bottom-right -skew-y-[38deg] rounded-tl-[6px] rounded-br-[3px]'}`}
+                                    className={`pointer-events-none absolute bottom-0 z-10 size-3 ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[32deg] rounded-tr-[4px] rounded-bl-[9px]' : 'left-0 origin-bottom-right -skew-y-[32deg] rounded-tl-[4px] rounded-br-[9px]'}`}
                                 />
                             )}
+
+                            {/* Badge de reacción: superpuesto en la
+                            esquina INFERIOR opuesta al pico (pico a la
+                            derecha en mis mensajes, badge a la
+                            izquierda, y viceversa) — pedido explícito:
+                            "en una de las esquinas de la burbuja,
+                            superpuesta como el badge de reacciones...
+                            sin BG, sólo el emoji grandecito". z-20 para
+                            quedar sobre el media edge-to-edge. */}
+                            {/* Tocar el badge NO reacciona/cambia nada —
+                            pedido explícito: es sólo informativo, "quién
+                            reaccionó con qué". Cambiar la propia reacción
+                            sigue siendo el picker (ícono 😀 de la fila de
+                            acciones), no este badge. */}
+                            {!message.isDeleted &&
+                                groupedReactions.length > 0 && (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                type="button"
+                                                aria-label="Ver quién reaccionó"
+                                                className={`absolute -bottom-2.5 z-20 flex items-center transition-transform active:scale-90 ${message.isMine ? 'left-1.5' : 'right-1.5'}`}
+                                            >
+                                                {groupedReactions.map(
+                                                    (reaction, index) => (
+                                                        <span
+                                                            key={reaction.emoji}
+                                                            className="text-xl leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
+                                                            style={
+                                                                index > 0
+                                                                    ? {
+                                                                          marginLeft:
+                                                                              '-6px',
+                                                                      }
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            {reaction.emoji}
+                                                        </span>
+                                                    ),
+                                                )}
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent
+                                            side="bottom"
+                                            align={
+                                                message.isMine ? 'start' : 'end'
+                                            }
+                                            className="w-56 p-2"
+                                        >
+                                            <ul className="flex flex-col gap-1.5">
+                                                {message.reactions.map(
+                                                    (reaction) => (
+                                                        <li
+                                                            key={
+                                                                reaction.userId
+                                                            }
+                                                            className="flex items-center justify-between gap-3 text-sm"
+                                                        >
+                                                            <span className="min-w-0 truncate">
+                                                                {
+                                                                    reaction.userName
+                                                                }
+                                                                {reaction.userId ===
+                                                                    authUserId &&
+                                                                    ' (Tú)'}
+                                                            </span>
+                                                            <span className="shrink-0 text-lg leading-none">
+                                                                {reaction.emoji}
+                                                            </span>
+                                                        </li>
+                                                    ),
+                                                )}
+                                            </ul>
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
 
                             {message.isDeleted && (
                                 <p
@@ -2527,8 +2654,15 @@ function MessageBubble({
                                 </p>
                             )}
 
+                            {/* Con media edge-to-edge, "Reenviado" se corre
+                            DENTRO del pie (ver más abajo, junto al
+                            cuerpo) — acá arriba de la burbuja no hay
+                            superficie de color donde apoyarlo (pedido
+                            explícito: "evitar esas esquinas [cuadradas]",
+                            la imagen tiene que cubrir todo sin margen). */}
                             {!message.isDeleted &&
-                                message.isForwarded && (
+                                message.isForwarded &&
+                                !hasEdgeToEdgeMedia && (
                                     // Línea informativa, sin acento de color (no
                                     // compite con la cita de respuesta, que sí
                                     // lo lleva) — mismo criterio que WhatsApp:
@@ -2580,7 +2714,19 @@ function MessageBubble({
                                     // (Radix), el bug crítico de antes — "no
                                     // muestra los mensajes enviados").
                                     <div
-                                        className={`relative z-10 -mt-6 mb-1.5 max-w-[420px] rounded-3xl border-l-[5px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${replyAccentColor}`}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() =>
+                                            jumpToMessage(message.replyToId)
+                                        }
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter') {
+                                                jumpToMessage(
+                                                    message.replyToId,
+                                                );
+                                            }
+                                        }}
+                                        className={`relative z-10 -mt-6 mb-1.5 max-w-[420px] cursor-pointer rounded-3xl border-l-[5px] bg-[#71717a] px-3 py-1.5 text-left text-xs shadow-sm transition-opacity hover:opacity-90 ${replyAccentColor}`}
                                     >
                                         <p className="line-clamp-1 font-bold break-words text-white">
                                             {message.replyToUserName}
@@ -2596,19 +2742,13 @@ function MessageBubble({
                                     <div
                                         className={
                                             hasEdgeToEdgeMedia
-                                                ? // Recorte propio del media (no de
-                                                  // la burbuja entera) — mismas
-                                                  // esquinas que la burbuja para
-                                                  // que se vea como una sola
-                                                  // pieza, pero SIN tapar el pico
-                                                  // (ese vive fuera, con z-10).
-                                                  `flex flex-col overflow-hidden rounded-3xl ${
-                                                      isLastInGroup
-                                                          ? message.isMine
-                                                              ? 'rounded-br-none'
-                                                              : 'rounded-bl-none'
-                                                          : ''
-                                                  }`
+                                                ? // Sólo las esquinas de ARRIBA
+                                                  // redondean acá — las de abajo
+                                                  // las pone el "pie" de texto,
+                                                  // que SIEMPRE sigue
+                                                  // inmediatamente después (con
+                                                  // o sin caption).
+                                                  'flex flex-col overflow-hidden rounded-t-3xl'
                                                 : 'mb-1 flex max-w-[280px] flex-col gap-1.5'
                                         }
                                     >
@@ -2618,11 +2758,79 @@ function MessageBubble({
                                                     key={attachment.id}
                                                     attachment={attachment}
                                                     fill={hasEdgeToEdgeMedia}
+                                                    onReact={(emoji) =>
+                                                        onReact(message, emoji)
+                                                    }
+                                                    onReply={() =>
+                                                        onReply(message)
+                                                    }
+                                                    onForward={onForward}
+                                                    onToggleSave={() =>
+                                                        onToggleSave(message)
+                                                    }
+                                                    isSaved={message.isSaved}
+                                                    onTogglePin={() =>
+                                                        onTogglePin(message)
+                                                    }
+                                                    isPinned={isPinned}
+                                                    onDelete={(scope) =>
+                                                        onDelete(message, scope)
+                                                    }
+                                                    canDeleteEveryone={
+                                                        message.isMine
+                                                    }
                                                 />
                                             ),
                                         )}
                                     </div>
                                 )}
+
+                            {/* Franja de nombre/tipo/peso — SÓLO para
+                            documentos (pedido explícito: "para fotos y
+                            video sólo el bloque reservado de mensajes",
+                            esto no aplica ahí). Vive entre el media y el
+                            pie, sin redondear nada propio (el media ya
+                            redondeó arriba, el pie redondea abajo). */}
+                            {!message.isDeleted &&
+                                hasEdgeToEdgeMedia &&
+                                message.attachments[0]?.type === 'document' &&
+                                (() => {
+                                    const doc = message.attachments[0];
+                                    const { icon: DocIcon, color } =
+                                        documentStyleFor(doc.originalName);
+                                    const extension =
+                                        doc.originalName
+                                            .split('.')
+                                            .pop()
+                                            ?.toUpperCase() ?? '';
+
+                                    return (
+                                        <div
+                                            className={`flex items-center gap-2 px-3 py-2 ${bubbleColor}`}
+                                        >
+                                            <span
+                                                className="flex size-7 shrink-0 items-center justify-center rounded-md"
+                                                style={{
+                                                    backgroundColor: `${color}26`,
+                                                    color,
+                                                }}
+                                            >
+                                                <DocIcon className="size-3.5" />
+                                            </span>
+                                            <div className="min-w-0 flex-1 leading-tight">
+                                                <p className="truncate text-xs font-medium">
+                                                    {doc.originalName}
+                                                </p>
+                                                <p className="text-[10px] opacity-70">
+                                                    {extension} ·{' '}
+                                                    {formatFileSize(
+                                                        doc.sizeBytes,
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
 
                             {/* max-w fijo en px (no %): el wrapper interno de
                     ScrollArea (Radix) mide contenido con un
@@ -2636,64 +2844,81 @@ function MessageBubble({
                     adentro). Vacío (mensaje de sólo adjunto) no
                     renderiza nada — sin este chequeo quedaba un hueco
                     de padding fantasma debajo de la foto/archivo. */}
-                            {!message.isDeleted && message.body && (
-                                <div className="max-w-[420px] break-words">
-                                    {renderMessageBody(
-                                        message.body,
-                                        message.isMine,
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Reacciones + acciones: AL OPUESTO de la burbuja
-                        (mismo flex-row-reverse de arriba las separa del
-                        lado del avatar), centradas contra la ALTURA DE
-                        LA BURBUJA (items-center de la fila de arriba),
-                        no contra el avatar ni el hora-read. Siempre
-                        visibles, nunca por hover (en móvil no hay
-                        mouse). */}
-                        {!message.isDeleted && (
-                            <div className="flex shrink-0 flex-col items-center gap-1">
-                                {groupedReactions.length > 0 && (
-                                    <div className="flex flex-wrap items-center justify-center gap-0.5">
-                                        {groupedReactions.map((reaction) => (
-                                            <button
-                                                key={reaction.emoji}
-                                                type="button"
-                                                onClick={() =>
-                                                    onReact(
-                                                        message,
-                                                        reaction.emoji,
-                                                    )
-                                                }
-                                                title={
-                                                    reaction.count > 1
-                                                        ? `${reaction.count}`
-                                                        : undefined
-                                                }
-                                                // Sin fondo, sin círculo, sin
-                                                // borde — pedido explícito:
-                                                // "no se debe ver con BG ni
-                                                // círculo ni nada". Vive
-                                                // FUERA de la burbuja (esta
-                                                // columna está al lado, no
-                                                // encima), así que nunca tapa
-                                                // texto.
-                                                className="text-xl leading-none transition-transform active:scale-90"
-                                            >
-                                                {reaction.emoji}
-                                            </button>
-                                        ))}
+                            {!message.isDeleted &&
+                                hasEdgeToEdgeMedia && (
+                                    // "Pie" de color debajo del media edge-to-
+                                    // edge — SIEMPRE existe, tenga o no caption
+                                    // (pedido explícito: "espacio para mensaje
+                                    // o vacío, igual debe existir"), tomando
+                                    // las esquinas INFERIORES de la burbuja
+                                    // (las de arriba ya las tomó el media).
+                                    // w-full (no max-w-[420px]): pedido
+                                    // explícito, "siempre se debe pintar del
+                                    // ancho de la burbuja" — el ancho real de
+                                    // la burbuja lo define la imagen (su
+                                    // hermano de arriba en este mismo flex-col),
+                                    // este pie sólo tiene que igualarlo, no
+                                    // imponer su propio tope independiente.
+                                    // Vacío: franja mínima (sólo lo que
+                                    // necesita el pico para apoyarse) — más
+                                    // amplio SÓLO cuando de verdad hay
+                                    // caption/"Reenviado" que mostrar,
+                                    // pedido explícito: "al estar vacío...
+                                    // debe ser menor, sólo será más amplio
+                                    // cuando venga mensaje".
+                                    <div
+                                        className={`w-full rounded-b-3xl px-3 break-words ${message.body || message.isForwarded ? 'py-2' : 'py-1.5'} ${bubbleColor} ${
+                                            isLastInGroup
+                                                ? message.isMine
+                                                    ? 'rounded-br-none'
+                                                    : 'rounded-bl-none'
+                                                : ''
+                                        }`}
+                                    >
+                                        {message.isForwarded && (
+                                            <p className="mb-1 flex items-center gap-1 text-[11px] italic opacity-70">
+                                                <Forward className="size-3" />
+                                                Reenviado
+                                            </p>
+                                        )}
+                                        {message.body &&
+                                            renderMessageBody(
+                                                message.body,
+                                                message.isMine,
+                                            )}
                                     </div>
                                 )}
+                            {!message.isDeleted &&
+                                !hasEdgeToEdgeMedia &&
+                                message.body && (
+                                    <div className="max-w-[420px] break-words">
+                                        {renderMessageBody(
+                                            message.body,
+                                            message.isMine,
+                                        )}
+                                    </div>
+                                )}
+                        </div>
+
+                        {/* Acciones: AL OPUESTO de la burbuja (mismo
+                        flex-row-reverse de arriba las separa del lado
+                        del avatar), centradas contra la ALTURA DE LA
+                        BURBUJA (items-center de la fila de arriba), no
+                        contra el avatar ni el hora-read. Siempre
+                        visibles, nunca por hover (en móvil no hay
+                        mouse). Las reacciones YA NO viven acá — pedido
+                        explícito: van superpuestas en la esquina de la
+                        burbuja (badge), ver más abajo dentro del propio
+                        div de la burbuja. */}
+                        {!message.isDeleted && (
+                            <div className="flex shrink-0 flex-col items-center gap-1">
                                 <div className="flex items-center gap-0.5">
                                     <BubbleActionButton
                                         icon={Reply}
                                         label="Responder"
                                         onClick={() => onReply(message)}
                                     />
-                                    <ReactionPickerButton
+                                    <BubbleReactionPickerButton
                                         onPick={(emoji) =>
                                             onReact(message, emoji)
                                         }
@@ -2718,12 +2943,23 @@ function MessageBubble({
                                                 message.isMine ? 'end' : 'start'
                                             }
                                         >
-                                            <DropdownMenuItem
-                                                onClick={() => onCopy(message)}
-                                            >
-                                                <Copy className="size-4" />
-                                                Copiar texto
-                                            </DropdownMenuItem>
+                                            {/* Copiar sólo tiene sentido para
+                                            texto — un adjunto se reenvía
+                                            completo o se descarga y se
+                                            envía de nuevo, pedido
+                                            explícito: "no debe tener
+                                            copiar". */}
+                                            {message.attachments.length ===
+                                                0 && (
+                                                <DropdownMenuItem
+                                                    onClick={() =>
+                                                        onCopy(message)
+                                                    }
+                                                >
+                                                    <Copy className="size-4" />
+                                                    Copiar texto
+                                                </DropdownMenuItem>
+                                            )}
                                             <DropdownMenuItem
                                                 onClick={() =>
                                                     onToggleSave(message)

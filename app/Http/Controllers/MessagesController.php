@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attachments\GenerateAttachmentPreview;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Data\MessageData;
 use App\Data\ReactionData;
@@ -86,6 +87,12 @@ class MessagesController extends Controller
             // "isCurrent" acá para que la gotera también aplique en la
             // pestaña Archivado.
             'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true),
+            // Desde "Guardados" (u otro enlace externo al chat): salta al
+            // mensaje puntual al abrir. Sólo funciona si ese mensaje cayó
+            // dentro de la ventana inicial cargada (INITIAL_MESSAGE_LIMIT)
+            // — misma limitación que ya tiene el badge de fijado hasta que
+            // exista paginación por cursor (Fase F).
+            'jumpToMessageId' => $request->integer('message') ?: null,
         ]);
     }
 
@@ -109,7 +116,7 @@ class MessagesController extends Controller
         // trae sólo los más recientes; "cargar más hacia arriba" queda
         // pendiente de esa fase.
         return $conversation->messages()
-            ->with(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy'])
+            ->with(['user', 'replyTo.user', 'attachments', 'reactions.user', 'forwardedFromMessage.user', 'savedBy'])
             // "Limpiar chat": sólo oculta el historial anterior a la
             // marca PARA ESTE usuario — no borra nada, los demás
             // participantes siguen viendo todo igual.
@@ -343,7 +350,7 @@ class MessagesController extends Controller
             ? (@getimagesize($file->getRealPath()) ?: [null, null])
             : [null, null];
 
-        Attachment::create([
+        $attachment = Attachment::create([
             'message_id' => $message->id,
             'type' => $type,
             'disk' => $disk,
@@ -354,6 +361,12 @@ class MessagesController extends Controller
             'width' => $width,
             'height' => $height,
         ]);
+
+        // Síncrono a propósito — pedido explícito: "la preview de la
+        // primera página la quiero desde la miniatura que se carga, no
+        // al rato". La propia Action decide si el tipo de archivo
+        // aplica (pdf/doc/docx/xls/xlsx/txt) antes de convertir.
+        app(GenerateAttachmentPreview::class)->handle($attachment);
     }
 
     /**
@@ -384,6 +397,16 @@ class MessagesController extends Controller
         if ($existing) {
             $existing->delete();
         } else {
+            // Un solo emoji por persona y mensaje — pedido explícito:
+            // elegir otra reacción CAMBIA la propia, no la suma. Sin
+            // esto, el `where emoji` de arriba sólo evita duplicar el
+            // MISMO emoji, pero dejaba acumular varios distintos del
+            // mismo usuario en el mismo mensaje.
+            Reaction::query()
+                ->where('message_id', $message->id)
+                ->where('user_id', $user->id)
+                ->delete();
+
             Reaction::create([
                 'message_id' => $message->id,
                 'user_id' => $user->id,
@@ -392,7 +415,7 @@ class MessagesController extends Controller
             ]);
         }
 
-        $message->load('reactions');
+        $message->load('reactions.user');
 
         // Sin ->toOthers() acá: el propio autor de la reacción ya
         // recibe la lista actualizada en la respuesta JSON de abajo,
@@ -436,7 +459,7 @@ class MessagesController extends Controller
             'edit_count' => $message->edit_count + 1,
         ]);
 
-        $message->load(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy']);
+        $message->load(['user', 'replyTo.user', 'attachments', 'reactions.user', 'forwardedFromMessage.user', 'savedBy']);
 
         try {
             broadcast(new MessageUpdated($message))->toOthers();
@@ -527,7 +550,7 @@ class MessagesController extends Controller
             'is_hidden' => false,
         ]);
 
-        $message->load(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy']);
+        $message->load(['user', 'replyTo.user', 'attachments', 'reactions.user', 'forwardedFromMessage.user', 'savedBy']);
 
         try {
             broadcast(new MessageUpdated($message))->toOthers();

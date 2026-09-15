@@ -18,6 +18,7 @@ readonly class ReactionData
     public function __construct(
         public string $emoji,
         public int $userId,
+        public string $userName,
     ) {}
 
     /**
@@ -29,6 +30,7 @@ readonly class ReactionData
             ->map(fn ($reaction) => new self(
                 emoji: $reaction->emoji,
                 userId: $reaction->user_id,
+                userName: $reaction->user->name,
             ))
             ->all();
     }

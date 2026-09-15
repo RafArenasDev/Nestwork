@@ -21,11 +21,13 @@ export type AttachmentData = {
     sizeBytes: number;
     width: number | null;
     height: number | null;
+    thumbnailUrl: string | null;
 };
 
 export type ReactionData = {
     emoji: string;
     userId: number;
+    userName: string;
 };
 
 export type MessageData = {
@@ -68,4 +70,16 @@ export type TeamMemberOption = {
     name: string;
     username: string;
     avatar: string | null;
+};
+
+export type SavedMessageSummary = {
+    messageId: number;
+    conversationId: number;
+    conversationName: string;
+    senderName: string;
+    senderAvatar: string | null;
+    excerpt: string;
+    messageCreatedAt: string;
+    savedAt: string;
+    isMine: boolean;
 };
