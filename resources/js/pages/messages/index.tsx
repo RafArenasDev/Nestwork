@@ -6,23 +6,33 @@ import {
     ArrowDown,
     Bell,
     BellOff,
+    Bookmark,
+    BookmarkCheck,
     Check,
     CheckCheck,
     ChevronDown,
     CircleAlert,
     Clock,
+    Copy,
+    Eraser,
     Forward,
     Link as LinkIcon,
     MoreHorizontal,
     MoreVertical,
+    Pencil,
     Phone,
+    Pin,
+    PinOff,
+    Plus,
     Reply,
     Search,
     Smile,
+    Trash2,
     UserRound,
     Video,
     X,
 } from 'lucide-react';
+import EmojiPicker, { Theme as EmojiPickerTheme } from 'emoji-picker-react';
 import {
     useEffect,
     useLayoutEffect,
@@ -31,18 +41,48 @@ import {
     type ReactNode,
 } from 'react';
 import {
+    destroy as destroyMessageRoute,
+    forward as forwardMessageRoute,
+    hide as hideMessageRoute,
     index as messagesIndex,
     read as markReadRoute,
     show as messagesShow,
     store as storeMessage,
+    update as updateMessageRoute,
 } from '@/routes/messages';
-import { toggleArchive, toggleMute } from '@/routes/conversations';
+import { toggle as togglePinRoute } from '@/routes/messages/pin';
+import { toggle as toggleReactionRoute } from '@/routes/messages/reactions';
+import { toggle as toggleSaveRoute } from '@/routes/messages/save';
+import {
+    clear as clearChatRoute,
+    toggleArchive,
+    toggleHidden,
+    toggleMute,
+} from '@/routes/conversations';
 import { MessageAttachment } from '@/components/message-attachment';
 import { MessageCodeBlock } from '@/components/message-code-block';
 import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -50,6 +90,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Tooltip,
@@ -61,12 +106,57 @@ import {
     clearOpenConversationUnseen,
     setOpenConversationUnseen,
 } from '@/hooks/use-open-conversation-unseen';
-import type { ActiveConversation, AttachmentData, MessageData } from '@/types';
+import type {
+    ActiveConversation,
+    AttachmentData,
+    ConversationSummary,
+    MessageData,
+    ReactionData,
+} from '@/types';
 
 type Props = {
     conversation: ActiveConversation | null;
     messages: MessageData[];
 };
+
+/** Mismo header que ya usaba markRead() (ver más abajo) — se extrae
+ *  acá porque las acciones de mensaje (reaccionar, editar, reenviar)
+ *  también son pings livianos por fetch, no visitas Inertia. */
+function csrfHeaders(): HeadersInit {
+    const csrfToken = document.querySelector<HTMLMetaElement>(
+        'meta[name="csrf-token"]',
+    )?.content;
+
+    return {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+    };
+}
+
+/** Barra rápida de reacciones — mismo puñado corto que WhatsApp/Slack
+ *  muestran antes de "ver más emojis" (que no se implementa en esta
+ *  ronda, YAGNI: un picker completo es una épica en sí misma). */
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+
+/** "Copiar" copia el texto LEGIBLE, no el markdown-ligero crudo — pegar
+ *  "**hola**" en otra app sería peor que no ofrecer copiar. Bloques de
+ *  código pierden la etiqueta de lenguaje del fence (no aporta nada al
+ *  pegarlo en otro lado) pero conservan el código tal cual. */
+function stripMarkdownForCopy(body: string): string {
+    return body
+        .replace(
+            /```([\w-]*)\n([\s\S]*?)```/g,
+            (_match, _language: string, code: string) =>
+                code.replace(/\n$/, ''),
+        )
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/__(.+?)__/g, '$1')
+        .replace(/~~(.+?)~~/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/\[([^\]]+)\]\([^\s)]+\)/g, '$1')
+        .replace(/_(.+?)_/g, '$1');
+}
 
 export default function MessagesIndex({ conversation, messages }: Props) {
     const page = usePage();
@@ -594,6 +684,30 @@ function ConversationHeader({
         );
     };
 
+    const [confirmAction, setConfirmAction] = useState<'clear' | 'hide' | null>(
+        null,
+    );
+
+    const handleClearChat = (scope: 'today' | 'all') => {
+        if (!currentTeamSlug) {
+            return;
+        }
+
+        router.patch(
+            clearChatRoute([currentTeamSlug, conversation.id]).url,
+            { scope },
+            { preserveScroll: true, only: ['messages'] },
+        );
+    };
+
+    const handleHideConversation = () => {
+        if (!currentTeamSlug) {
+            return;
+        }
+
+        router.patch(toggleHidden([currentTeamSlug, conversation.id]).url);
+    };
+
     const statusLabel =
         conversation.type === 'group'
             ? 'Grupo'
@@ -687,8 +801,74 @@ function ConversationHeader({
                                 ? 'Desarchivar conversación'
                                 : 'Archivar conversación'}
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            onClick={() => setConfirmAction('clear')}
+                        >
+                            <Eraser />
+                            Limpiar chat
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setConfirmAction('hide')}
+                        >
+                            <Trash2 />
+                            Eliminar conversación
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
+
+                <AlertDialog
+                    open={confirmAction !== null}
+                    onOpenChange={(open) => !open && setConfirmAction(null)}
+                >
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                {confirmAction === 'clear'
+                                    ? 'Limpiar chat'
+                                    : 'Eliminar conversación'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {confirmAction === 'clear'
+                                    ? 'Solo para ti — la otra persona sigue viendo todo igual, y los mensajes nuevos vuelven a aparecer normal. ¿Ocultar solo los de hoy, o todo el historial hasta ahora?'
+                                    : 'La conversación desaparece de tu lista hasta que la busques a propósito, y tu historial hasta ahora se oculta contigo. No se borra ningún mensaje ni afecta a la otra persona.'}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            {confirmAction === 'clear' ? (
+                                <>
+                                    <AlertDialogAction
+                                        onClick={() => {
+                                            handleClearChat('today');
+                                            setConfirmAction(null);
+                                        }}
+                                    >
+                                        Solo hoy
+                                    </AlertDialogAction>
+                                    <AlertDialogAction
+                                        onClick={() => {
+                                            handleClearChat('all');
+                                            setConfirmAction(null);
+                                        }}
+                                    >
+                                        Todo el historial
+                                    </AlertDialogAction>
+                                </>
+                            ) : (
+                                <AlertDialogAction
+                                    onClick={() => {
+                                        handleHideConversation();
+                                        setConfirmAction(null);
+                                    }}
+                                >
+                                    Eliminar
+                                </AlertDialogAction>
+                            )}
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -753,7 +933,24 @@ function Thread({
     const getInitials = useInitials();
     const [sending, setSending] = useState(false);
     const [replyingTo, setReplyingTo] = useState<MessageData | null>(null);
+    const [editingMessage, setEditingMessage] = useState<MessageData | null>(
+        null,
+    );
+    // Mensaje que se está reenviando (abre el ForwardDialog) — null
+    // cierra el diálogo, ver <ForwardDialog> al final del componente.
+    const [forwardingMessage, setForwardingMessage] =
+        useState<MessageData | null>(null);
+    // Estado local reactivo al prop (cambia de conversación) + a los
+    // toggles propios/del otro participante vía ConversationPinChanged.
+    const [pinnedMessageId, setPinnedMessageId] = useState<number | null>(
+        conversation.pinnedMessageId,
+    );
     const [liveMessages, setLiveMessages] = useState<MessageData[]>(messages);
+    // Si el mensaje fijado no está en el lote cargado (historial
+    // largo), el badge simplemente no aparece — mismo límite que
+    // "cargar más hacia arriba" (sección 4.1/Fase F, todavía pendiente).
+    const pinnedMessage =
+        liveMessages.find((m) => m.id === pinnedMessageId) ?? null;
     // Badges de fecha como dropdown (sección 17.5 del prompt v2): sólo
     // el día MÁS RECIENTE arranca desplegado (es el que se está usando
     // ahora mismo) — el resto del historial empieza colapsado,
@@ -857,17 +1054,9 @@ function Thread({
         setUnseenCount(0);
         setReadWatermarkId(lastId);
 
-        const csrfToken = document.querySelector<HTMLMetaElement>(
-            'meta[name="csrf-token"]',
-        )?.content;
-
         fetch(markReadRoute([currentTeam.slug, conversation.id]).url, {
             method: 'PATCH',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-            },
+            headers: csrfHeaders(),
         })
             .then(() => {
                 router.visit(
@@ -944,6 +1133,10 @@ function Thread({
     useEffect(() => {
         setLiveMessages(messages);
     }, [messages]);
+
+    useEffect(() => {
+        setPinnedMessageId(conversation.pinnedMessageId);
+    }, [conversation.pinnedMessageId]);
 
     // Detecta si el usuario está viendo el fondo del chat o leyendo
     // historial más arriba — Radix ScrollArea no expone onScroll
@@ -1119,6 +1312,42 @@ function Thread({
         [conversation.id, authUser.id],
     );
 
+    // Reacciones y ediciones de OTROS participantes llegan acá — el
+    // payload siempre trae isMine:false (mismo criterio que
+    // MessageSent, ver MessageData::fromMessage en el backend: un
+    // socket comparte payload entre todos los conectados al canal), así
+    // que se recalcula localmente antes de reemplazar el mensaje.
+    useEcho<{ conversationId: number; message: MessageData }>(
+        `conversation.${conversation.id}`,
+        '.MessageUpdated',
+        (payload) => {
+            setLiveMessages((previous) =>
+                previous.map((message) =>
+                    message.id === payload.message.id
+                        ? {
+                              ...payload.message,
+                              isMine: payload.message.userId === authUser.id,
+                          }
+                        : message,
+                ),
+            );
+        },
+        [conversation.id, authUser.id],
+    );
+
+    // Fijar/desfijar SÍ es visible para el otro participante (a
+    // diferencia de guardar, que es privado) — necesita su propio
+    // evento en vez de reutilizar MessageUpdated (no es un cambio del
+    // mensaje en sí, es de la conversación).
+    useEcho<{ conversationId: number; pinnedMessageId: number | null }>(
+        `conversation.${conversation.id}`,
+        '.ConversationPinChanged',
+        (payload) => {
+            setPinnedMessageId(payload.pinnedMessageId);
+        },
+        [conversation.id],
+    );
+
     // Indicador de "escribiendo…": whisper de Echo (no toca el backend,
     // no persiste nada) entre los participantes del mismo canal privado.
     useEffect(() => {
@@ -1161,11 +1390,232 @@ function Thread({
     };
 
     const handleReply = (message: MessageData) => {
+        setEditingMessage(null);
         setReplyingTo(message);
         // El foco del composer ahora reacciona solo al cambio de
         // replyingTo (ver el useEffect en MessageComposer) — Tiptap no
         // es un <textarea> al que se le pueda pedir .focus() desde
         // acá con un ref simple.
+    };
+
+    const handleEdit = (message: MessageData) => {
+        setReplyingTo(null);
+        setEditingMessage(message);
+    };
+
+    const handleSubmitEdit = (markdownBody: string) => {
+        if (!currentTeam || !editingMessage) {
+            return;
+        }
+
+        const targetId = editingMessage.id;
+
+        // Optimista: el texto nuevo se ve al instante, igual que un
+        // mensaje recién enviado — se reconcilia con la respuesta real
+        // (que trae editedAt/editableUntil recalculados) apenas llega.
+        setLiveMessages((previous) =>
+            previous.map((m) =>
+                m.id === targetId ? { ...m, body: markdownBody } : m,
+            ),
+        );
+        setEditingMessage(null);
+
+        fetch(
+            updateMessageRoute([currentTeam.slug, conversation.id, targetId])
+                .url,
+            {
+                method: 'PATCH',
+                headers: csrfHeaders(),
+                body: JSON.stringify({ body: markdownBody }),
+            },
+        )
+            .then((response) =>
+                response.ok ? response.json() : Promise.reject(),
+            )
+            .then((data: { message: MessageData }) => {
+                setLiveMessages((previous) =>
+                    previous.map((m) => (m.id === targetId ? data.message : m)),
+                );
+            })
+            .catch(() => {
+                // Silencioso, mismo criterio que markAsRead: la próxima
+                // visita/evento en vivo reconcilia si esto falló.
+            });
+    };
+
+    const handleReact = (message: MessageData, emoji: string) => {
+        if (!currentTeam) {
+            return;
+        }
+
+        const alreadyMine = message.reactions.some(
+            (r) => r.userId === authUser.id && r.emoji === emoji,
+        );
+
+        setLiveMessages((previous) =>
+            previous.map((m) =>
+                m.id === message.id
+                    ? {
+                          ...m,
+                          reactions: alreadyMine
+                              ? m.reactions.filter(
+                                    (r) =>
+                                        !(
+                                            r.userId === authUser.id &&
+                                            r.emoji === emoji
+                                        ),
+                                )
+                              : [
+                                    ...m.reactions,
+                                    { emoji, userId: authUser.id },
+                                ],
+                      }
+                    : m,
+            ),
+        );
+
+        fetch(
+            toggleReactionRoute([currentTeam.slug, conversation.id, message.id])
+                .url,
+            {
+                method: 'POST',
+                headers: csrfHeaders(),
+                body: JSON.stringify({ emoji }),
+            },
+        )
+            .then((response) =>
+                response.ok ? response.json() : Promise.reject(),
+            )
+            .then((data: { reactions: ReactionData[] }) => {
+                setLiveMessages((previous) =>
+                    previous.map((m) =>
+                        m.id === message.id
+                            ? { ...m, reactions: data.reactions }
+                            : m,
+                    ),
+                );
+            })
+            .catch(() => {
+                // Silencioso — próximo MessageUpdated/recarga reconcilia.
+            });
+    };
+
+    const handleCopy = (message: MessageData) => {
+        void navigator.clipboard.writeText(stripMarkdownForCopy(message.body));
+    };
+
+    const handleForward = (targetIds: number[]) => {
+        if (!currentTeam || !forwardingMessage) {
+            return Promise.resolve();
+        }
+
+        return fetch(
+            forwardMessageRoute([
+                currentTeam.slug,
+                conversation.id,
+                forwardingMessage.id,
+            ]).url,
+            {
+                method: 'POST',
+                headers: csrfHeaders(),
+                body: JSON.stringify({ conversation_ids: targetIds }),
+            },
+        ).then((response) => {
+            if (response.ok) {
+                setForwardingMessage(null);
+            }
+        });
+    };
+
+    const handleToggleSave = (message: MessageData) => {
+        if (!currentTeam) {
+            return;
+        }
+
+        // Privado del viewer — optimista y sin esperar broadcast (no
+        // hay ninguno, ver toggleSave() en el backend).
+        setLiveMessages((previous) =>
+            previous.map((m) =>
+                m.id === message.id ? { ...m, isSaved: !m.isSaved } : m,
+            ),
+        );
+
+        fetch(
+            toggleSaveRoute([currentTeam.slug, conversation.id, message.id])
+                .url,
+            { method: 'POST', headers: csrfHeaders() },
+        ).catch(() => {
+            // Silencioso — reintentar tocando el botón de nuevo alcanza.
+        });
+    };
+
+    const handleTogglePin = (message: MessageData) => {
+        if (!currentTeam) {
+            return;
+        }
+
+        const next = pinnedMessageId === message.id ? null : message.id;
+
+        setPinnedMessageId(next);
+
+        fetch(
+            togglePinRoute([currentTeam.slug, conversation.id, message.id]).url,
+            { method: 'POST', headers: csrfHeaders() },
+        )
+            .then((response) =>
+                response.ok ? response.json() : Promise.reject(),
+            )
+            .then((data: { pinnedMessageId: number | null }) => {
+                setPinnedMessageId(data.pinnedMessageId);
+            })
+            .catch(() => {
+                setPinnedMessageId(pinnedMessageId);
+            });
+    };
+
+    const handleDelete = (message: MessageData, scope: 'me' | 'everyone') => {
+        if (!currentTeam) {
+            return;
+        }
+
+        if (scope === 'me') {
+            // "Para mí": el mensaje desaparece de MI lista nada más —
+            // no hay nada que mostrarle a los demás (siguen viendo todo
+            // intacto), así que se quita del todo en vez de marcar
+            // isDeleted (eso es sólo para "para todos").
+            setLiveMessages((previous) =>
+                previous.filter((m) => m.id !== message.id),
+            );
+
+            fetch(
+                hideMessageRoute([
+                    currentTeam.slug,
+                    conversation.id,
+                    message.id,
+                ]).url,
+                { method: 'POST', headers: csrfHeaders() },
+            ).catch(() => {
+                // Silencioso — próxima recarga reconcilia si esto falló.
+            });
+
+            return;
+        }
+
+        setLiveMessages((previous) =>
+            previous.map((m) =>
+                m.id === message.id
+                    ? { ...m, isDeleted: true, body: '', attachments: [] }
+                    : m,
+            ),
+        );
+
+        fetch(
+            destroyMessageRoute([currentTeam.slug, conversation.id, message.id])
+                .url,
+            { method: 'DELETE', headers: csrfHeaders() },
+        ).catch(() => {
+            // Silencioso — próxima recarga reconcilia si esto falló.
+        });
     };
 
     const toggleDateExpanded = (key: string) => {
@@ -1248,6 +1698,12 @@ function Thread({
             replyToBody: replyTo?.body ?? null,
             status: 'sending',
             attachments: optimisticAttachment ? [optimisticAttachment] : [],
+            reactions: [],
+            isForwarded: false,
+            editableUntil: null,
+            editsRemaining: 0,
+            isDeleted: false,
+            isSaved: false,
         };
 
         setLiveMessages((previous) => [...previous, optimisticMessage]);
@@ -1259,14 +1715,12 @@ function Thread({
         // último mensaje real, nunca hasta el id negativo temporal).
         markAsRead();
 
-        // Respaldo por si la confirmación tarda de más (pedido
-        // explícito: "debe haber un timer... para evitar congestiones
-        // en la red"). El mensaje ya se guardó en el servidor apenas
-        // llega el POST — lo único que puede demorarse es que ESTE
-        // cliente reciba la respuesta que lo reconcilia con el real.
-        // 8s de margen: de sobra para el viaje normal (bajo 1-2s), pero
-        // no tan largo como para que el ícono de reloj se sienta
-        // pegado si la red anda lenta.
+        // Respaldo por si la confirmación tarda de más — el mensaje ya
+        // se guardó en el servidor apenas llega el POST, lo único que
+        // puede demorarse es que ESTE cliente reciba la respuesta que
+        // lo reconcilia con el real (normalmente bajo 1s). 1.5s de
+        // margen: pedido explícito de acortarlo — 8s daba sensación de
+        // falla de red aunque el mensaje ya hubiera llegado.
         setTimeout(() => {
             setLiveMessages((previous) =>
                 previous.map((existing) =>
@@ -1276,7 +1730,7 @@ function Thread({
                         : existing,
                 ),
             );
-        }, 8000);
+        }, 1500);
 
         router.post(
             storeMessage([currentTeam.slug, conversation.id]).url,
@@ -1338,6 +1792,55 @@ function Thread({
                     getInitials={getInitials}
                     onClose={handleClose}
                 />
+
+                {pinnedMessage && (
+                    // Badge debajo del título, NO dentro de la burbuja
+                    // — pedido explícito. Clic salta al mensaje real en
+                    // el historial (mismo mecanismo que usará "saltar a
+                    // la cita" más adelante).
+                    <button
+                        type="button"
+                        onClick={() =>
+                            document
+                                .getElementById(`message-${pinnedMessage.id}`)
+                                ?.scrollIntoView({
+                                    block: 'center',
+                                    behavior: 'smooth',
+                                })
+                        }
+                        className="border-border/60 flex w-full items-center gap-2 border-b bg-[color-mix(in_srgb,var(--background)_94%,var(--foreground)_6%)] px-4 py-2 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--background)_88%,var(--foreground)_12%)]"
+                    >
+                        <Pin className="text-muted-foreground size-3.5 shrink-0 fill-current" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-muted-foreground text-[11px] font-medium">
+                                Mensaje fijado
+                            </p>
+                            <p className="truncate text-xs">
+                                {pinnedMessage.isDeleted
+                                    ? 'Mensaje eliminado'
+                                    : pinnedMessage.body || '📎 Adjunto'}
+                            </p>
+                        </div>
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                handleTogglePin(pinnedMessage);
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    event.stopPropagation();
+                                    handleTogglePin(pinnedMessage);
+                                }
+                            }}
+                            aria-label="Desfijar mensaje"
+                            className="text-muted-foreground hover:bg-foreground/10 flex size-6 shrink-0 items-center justify-center rounded-full transition-colors"
+                        >
+                            <PinOff className="size-3.5" />
+                        </span>
+                    </button>
+                )}
 
                 <div
                     ref={scrollAreaRef}
@@ -1422,6 +1925,7 @@ function Thread({
                                                 return (
                                                     <div
                                                         key={message.id}
+                                                        id={`message-${message.id}`}
                                                         className="min-w-0"
                                                     >
                                                         {message.id ===
@@ -1437,6 +1941,9 @@ function Thread({
                                                             getInitials={
                                                                 getInitials
                                                             }
+                                                            authUserId={
+                                                                authUser.id
+                                                            }
                                                             authUserName={
                                                                 authUser.name
                                                             }
@@ -1446,8 +1953,31 @@ function Thread({
                                                             isLastInGroup={
                                                                 isLastInGroup
                                                             }
+                                                            isPinned={
+                                                                message.id ===
+                                                                pinnedMessageId
+                                                            }
                                                             onReply={
                                                                 handleReply
+                                                            }
+                                                            onReact={
+                                                                handleReact
+                                                            }
+                                                            onEdit={handleEdit}
+                                                            onCopy={handleCopy}
+                                                            onForward={() =>
+                                                                setForwardingMessage(
+                                                                    message,
+                                                                )
+                                                            }
+                                                            onTogglePin={
+                                                                handleTogglePin
+                                                            }
+                                                            onToggleSave={
+                                                                handleToggleSave
+                                                            }
+                                                            onDelete={
+                                                                handleDelete
                                                             }
                                                         />
                                                     </div>
@@ -1495,10 +2025,20 @@ function Thread({
                     placeholder="Escribe un mensaje…"
                     replyingTo={replyingTo}
                     onCancelReply={() => setReplyingTo(null)}
+                    editingMessage={editingMessage}
+                    onCancelEdit={() => setEditingMessage(null)}
                     onSubmit={handleSend}
+                    onSubmitEdit={handleSubmitEdit}
                     onTyping={notifyTyping}
                 />
             </div>
+
+            <ForwardDialog
+                message={forwardingMessage}
+                currentConversationId={conversation.id}
+                onClose={() => setForwardingMessage(null)}
+                onForward={handleForward}
+            />
         </div>
     );
 }
@@ -1518,6 +2058,123 @@ function UnreadDivider({ count }: { count: number }) {
             </span>
             <div className="bg-foreground/25 h-px flex-1" />
         </div>
+    );
+}
+
+/** Reenviar: lista las conversaciones donde el usuario participa (mismo
+ *  prop compartido `conversations` que ya alimenta el sidebar, ver
+ *  global.d.ts) y deja marcar varias a la vez — no hace falta un
+ *  endpoint aparte sólo para listar destinos. */
+function ForwardDialog({
+    message,
+    currentConversationId,
+    onClose,
+    onForward,
+}: {
+    message: MessageData | null;
+    currentConversationId: number;
+    onClose: () => void;
+    onForward: (targetIds: number[]) => Promise<void>;
+}) {
+    const page = usePage();
+    const [selected, setSelected] = useState<Set<number>>(new Set());
+    const [isSending, setIsSending] = useState(false);
+
+    const targets: ConversationSummary[] = page.props.conversations.filter(
+        (item) => item.id !== currentConversationId,
+    );
+
+    const toggle = (id: number) => {
+        setSelected((previous) => {
+            const next = new Set(previous);
+
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+
+            return next;
+        });
+    };
+
+    const handleOpenChange = (open: boolean) => {
+        if (!open) {
+            setSelected(new Set());
+            onClose();
+        }
+    };
+
+    const submit = () => {
+        if (selected.size === 0) {
+            return;
+        }
+
+        setIsSending(true);
+        onForward(Array.from(selected))
+            .catch(() => {
+                // Silencioso — el usuario puede intentar de nuevo, el
+                // diálogo se queda abierto con su selección intacta.
+            })
+            .finally(() => {
+                setIsSending(false);
+                setSelected(new Set());
+            });
+    };
+
+    return (
+        <Dialog open={message !== null} onOpenChange={handleOpenChange}>
+            <DialogContent className="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>Reenviar mensaje</DialogTitle>
+                </DialogHeader>
+
+                <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+                    {targets.length === 0 && (
+                        <p className="text-muted-foreground px-1 py-4 text-center text-sm">
+                            No tienes otras conversaciones a las que reenviar
+                            todavía.
+                        </p>
+                    )}
+                    {targets.map((target) => (
+                        <label
+                            key={target.id}
+                            className="hover:bg-accent flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2"
+                        >
+                            <Checkbox
+                                checked={selected.has(target.id)}
+                                onCheckedChange={() => toggle(target.id)}
+                            />
+                            <Avatar className="size-8 shrink-0">
+                                {target.avatar && (
+                                    <AvatarImage
+                                        src={target.avatar}
+                                        alt={target.name}
+                                    />
+                                )}
+                                <AvatarFallback className="text-[10px]">
+                                    {target.name.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                                {target.name}
+                            </span>
+                        </label>
+                    ))}
+                </div>
+
+                <DialogFooter>
+                    <Button
+                        type="button"
+                        className="btn-elevated rounded-full"
+                        disabled={selected.size === 0 || isSending}
+                        onClick={submit}
+                    >
+                        Reenviar{selected.size > 0 ? ` (${selected.size})` : ''}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -1578,21 +2235,122 @@ function BubbleActionButton({
     );
 }
 
+/** Accesos rápidos + emoji picker completo (biblioteca libre, sin
+ *  costo) — pedido explícito: "para qué vas a escribir ahí cuando se
+ *  pueden manejar todos [los emojis]". El picker completo vive DENTRO
+ *  del mismo Popover (alterna contenido) en vez de anidar otro Popover
+ *  — más simple y sin pelear con el focus-trap de Radix. */
+function ReactionPickerButton({ onPick }: { onPick: (emoji: string) => void }) {
+    const [showFullPicker, setShowFullPicker] = useState(false);
+
+    return (
+        <Popover onOpenChange={(open) => !open && setShowFullPicker(false)}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    aria-label="Reaccionar"
+                    className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-6 items-center justify-center rounded-full transition-colors"
+                >
+                    <Smile className="size-3.5" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                side="top"
+                className={
+                    showFullPicker
+                        ? 'w-fit border-none bg-transparent p-0 shadow-none'
+                        : 'w-fit rounded-2xl p-2'
+                }
+            >
+                {showFullPicker ? (
+                    <EmojiPicker
+                        theme={EmojiPickerTheme.AUTO}
+                        onEmojiClick={(data) => onPick(data.emoji)}
+                        height={360}
+                        width={300}
+                    />
+                ) : (
+                    <div className="flex items-center gap-1">
+                        {QUICK_REACTIONS.map((emoji) => (
+                            <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => onPick(emoji)}
+                                className="flex size-8 items-center justify-center rounded-full text-lg transition-transform hover:scale-125 active:scale-95"
+                            >
+                                {emoji}
+                            </button>
+                        ))}
+                        <button
+                            type="button"
+                            aria-label="Más emojis"
+                            onClick={() => setShowFullPicker(true)}
+                            className="text-muted-foreground hover:bg-foreground/10 flex size-8 items-center justify-center rounded-full transition-colors"
+                        >
+                            <Plus className="size-4" />
+                        </button>
+                    </div>
+                )}
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 function MessageBubble({
     message,
     getInitials,
+    authUserId,
     authUserName,
     isFirstInGroup,
     isLastInGroup,
+    isPinned,
     onReply,
+    onReact,
+    onEdit,
+    onCopy,
+    onForward,
+    onTogglePin,
+    onToggleSave,
+    onDelete,
 }: {
     message: MessageData;
     getInitials: (name: string) => string;
+    authUserId: number;
     authUserName: string;
     isFirstInGroup: boolean;
     isLastInGroup: boolean;
+    isPinned: boolean;
     onReply: (message: MessageData) => void;
+    onReact: (message: MessageData, emoji: string) => void;
+    onEdit: (message: MessageData) => void;
+    onCopy: (message: MessageData) => void;
+    onForward: () => void;
+    onTogglePin: (message: MessageData) => void;
+    onToggleSave: (message: MessageData) => void;
+    onDelete: (message: MessageData, scope: 'me' | 'everyone') => void;
 }) {
+    const groupedReactions = Object.values(
+        message.reactions.reduce<
+            Record<string, { emoji: string; count: number; mine: boolean }>
+        >((acc, reaction) => {
+            acc[reaction.emoji] ??= {
+                emoji: reaction.emoji,
+                count: 0,
+                mine: false,
+            };
+            acc[reaction.emoji].count += 1;
+            if (reaction.userId === authUserId) {
+                acc[reaction.emoji].mine = true;
+            }
+
+            return acc;
+        }, {}),
+    );
+    const canEdit =
+        message.isMine &&
+        message.editsRemaining > 0 &&
+        message.editableUntil !== null &&
+        new Date(message.editableUntil) > new Date();
     const failed = message.status === 'failed';
     // Foto/video sin texto NI cita: burbuja "a lo WhatsApp nuevo" — el
     // media llena casi toda la burbuja de punta a punta, sin
@@ -1605,6 +2363,7 @@ function MessageBubble({
     const hasEdgeToEdgeMedia =
         !message.body &&
         !message.replyToId &&
+        !message.isForwarded &&
         message.attachments.some(
             (attachment) =>
                 attachment.type === 'image' || attachment.type === 'video',
@@ -1654,7 +2413,7 @@ function MessageBubble({
     return (
         <div className={topMargin}>
             <div
-                className={`group/row flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''}`}
+                className={`flex min-w-0 items-end gap-2 ${message.isMine ? 'flex-row-reverse' : ''}`}
             >
                 <Avatar
                     // items-end en la fila alinea este avatar con lo último
@@ -1702,29 +2461,39 @@ function MessageBubble({
                     // de referencia real: el de la fila completa.
                     className="flex max-w-[70%] min-w-0 flex-col"
                 >
+                    {/* Fila [burbuja + acciones]: items-center centra la
+                        columna de acciones exactamente contra la ALTURA
+                        DE LA BURBUJA (ni pegada arriba ni abajo, "entre
+                        ambos") — no contra el avatar ni contra el
+                        hora-read, que viven fuera de esta fila. */}
                     <div
-                        // rounded-3xl (no -2xl): el pico ya quedó bien tal cual
-                        // está — pedido explícito de sumarle MÁS curva al resto
-                        // de la burbuja, no tocar la esquina de la cola (esa
-                        // sigue -none, cuadrada a propósito, ver comentario
-                        // arriba).
-                        className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${
-                            hasEdgeToEdgeMedia ? '' : `px-3 py-2 ${bubbleColor}`
-                        } ${
-                            isLastInGroup
-                                ? message.isMine
-                                    ? 'rounded-br-none'
-                                    : 'rounded-bl-none'
-                                : ''
-                        } ${
-                            failed
-                                ? 'text-foreground ring-destructive/40 ring-1'
-                                : message.isMine
-                                  ? 'text-[var(--bubble-sent-foreground)]'
-                                  : 'text-[var(--bubble-received-foreground)]'
-                        }`}
+                        className={`flex items-center gap-1 ${message.isMine ? 'flex-row-reverse' : ''}`}
                     >
-                        {/* El pico va SIEMPRE, sin excepción (pedido
+                        <div
+                            // rounded-3xl (no -2xl): el pico ya quedó bien tal cual
+                            // está — pedido explícito de sumarle MÁS curva al resto
+                            // de la burbuja, no tocar la esquina de la cola (esa
+                            // sigue -none, cuadrada a propósito, ver comentario
+                            // arriba).
+                            className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_1px_rgba(0,0,0,0.05),0_2px_6px_rgba(0,0,0,0.08)] transition-transform duration-150 ease-out hover:-translate-y-px ${
+                                hasEdgeToEdgeMedia
+                                    ? ''
+                                    : `px-3 py-2 ${bubbleColor}`
+                            } ${
+                                isLastInGroup
+                                    ? message.isMine
+                                        ? 'rounded-br-none'
+                                        : 'rounded-bl-none'
+                                    : ''
+                            } ${
+                                failed
+                                    ? 'text-foreground ring-destructive/40 ring-1'
+                                    : message.isMine
+                                      ? 'text-[var(--bubble-sent-foreground)]'
+                                      : 'text-[var(--bubble-received-foreground)]'
+                            }`}
+                        >
+                            {/* El pico va SIEMPRE, sin excepción (pedido
                             explícito: "no se negocia") — también en
                             foto/video edge-to-edge. z-10 para que quede
                             por encima del media, y el wrapper del media
@@ -1732,91 +2501,130 @@ function MessageBubble({
                             cortada (rounded-br/bl-none) que la burbuja,
                             así el pico continúa esa esquina en vez de
                             superponerse a mitad de la imagen. */}
-                        {isLastInGroup && (
-                            <span
-                                aria-hidden="true"
-                                className={`pointer-events-none absolute bottom-0 z-10 size-3 rounded-[3px] ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg]' : 'left-0 origin-bottom-right -skew-y-[38deg]'}`}
-                            />
-                        )}
+                            {/* Sin pico en foto/video edge-to-edge (pedido
+                            explícito, reemplaza la regla anterior de
+                            "siempre va"): la media ya cubre toda la
+                            burbuja, un pico ahí no suma nada visual. En
+                            cualquier otra burbuja (texto, cita,
+                            documento, audio) el pico se mantiene. Curva
+                            leve en la esquina que mira al avatar (la
+                            otra queda cuadrada, pegada al borde real de
+                            la burbuja) para que apunte hacia él en vez
+                            de verse como un triángulo recto. */}
+                            {isLastInGroup && !hasEdgeToEdgeMedia && (
+                                <span
+                                    aria-hidden="true"
+                                    className={`pointer-events-none absolute bottom-0 z-10 size-3 ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[38deg] rounded-tr-[6px] rounded-bl-[3px]' : 'left-0 origin-bottom-right -skew-y-[38deg] rounded-tl-[6px] rounded-br-[3px]'}`}
+                                />
+                            )}
 
-                        {message.replyToId && (
-                            // Insignia flotante montada sobre el borde
-                            // superior de la burbuja (-mt-6: pasa la
-                            // mitad de su propia altura afuera; la
-                            // burbuja no tiene overflow-hidden que la
-                            // recorte). Gris fijo (no var(--background),
-                            // que en tema claro no leía como "gris") —
-                            // pedido explícito: SIEMPRE gris, en los dos
-                            // temas. Acento de color a la izquierda +
-                            // rounded-3xl (igual que las burbujas): el
-                            // "badge" propio, no el recuadro plano
-                            // típico de WhatsApp.
-                            //
-                            // EL BUG REAL de "se sale del ancho de la
-                            // burbuja" no era el -mt negativo: era
-                            // `truncate` en los <p> de acá adentro —
-                            // truncate = white-space:nowrap, que fuerza
-                            // un ancho mínimo igual al del texto COMPLETO
-                            // sin cortar. line-clamp (NO truncate):
-                            // permite que el texto SÍ envuelva y sólo
-                            // recorta por CANTIDAD de líneas.
-                            //
-                            // SIN w-fit (ancho de contenido) — pedido
-                            // explícito: "totalmente ceñido al ancho de
-                            // la burbuja", no sólo lo que el texto pida.
-                            // width:auto (el default de un div en flujo
-                            // normal, NINGUNA clase de ancho) rellena el
-                            // content-box del padre igual que ya hace el
-                            // <p> del cuerpo más abajo — mismo patrón
-                            // seguro que ese <p> (sólo max-w-[420px]
-                            // fijo en px como tope, nunca % ni w-full:
-                            // esos sí reabren la referencia circular con
-                            // el `display:table` interno de ScrollArea
-                            // (Radix), el bug crítico de antes — "no
-                            // muestra los mensajes enviados").
-                            <div
-                                className={`relative z-10 -mt-6 mb-1.5 max-w-[420px] rounded-3xl border-l-[5px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${replyAccentColor}`}
-                            >
-                                <p className="line-clamp-1 font-bold break-words text-white">
-                                    {message.replyToUserName}
+                            {message.isDeleted && (
+                                <p
+                                    className={`flex items-center gap-1.5 text-sm italic opacity-70 ${message.isMine ? 'text-[var(--bubble-sent-foreground)]' : 'text-[var(--bubble-received-foreground)]'}`}
+                                >
+                                    <Trash2 className="size-3.5" />
+                                    Mensaje eliminado
                                 </p>
-                                <p className="line-clamp-1 break-words text-white/70">
-                                    {message.replyToBody}
-                                </p>
-                            </div>
-                        )}
+                            )}
 
-                        {message.attachments.length > 0 && (
-                            <div
-                                className={
-                                    hasEdgeToEdgeMedia
-                                        ? // Recorte propio del media (no de
-                                          // la burbuja entera) — mismas
-                                          // esquinas que la burbuja para
-                                          // que se vea como una sola
-                                          // pieza, pero SIN tapar el pico
-                                          // (ese vive fuera, con z-10).
-                                          `flex flex-col overflow-hidden rounded-3xl ${
-                                              isLastInGroup
-                                                  ? message.isMine
-                                                      ? 'rounded-br-none'
-                                                      : 'rounded-bl-none'
-                                                  : ''
-                                          }`
-                                        : 'mb-1 flex max-w-[280px] flex-col gap-1.5'
-                                }
-                            >
-                                {message.attachments.map((attachment) => (
-                                    <MessageAttachment
-                                        key={attachment.id}
-                                        attachment={attachment}
-                                        fill={hasEdgeToEdgeMedia}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                            {!message.isDeleted &&
+                                message.isForwarded && (
+                                    // Línea informativa, sin acento de color (no
+                                    // compite con la cita de respuesta, que sí
+                                    // lo lleva) — mismo criterio que WhatsApp:
+                                    // "Reenviado" antes que nada más del cuerpo,
+                                    // SIN el nombre de quien reenvió (pedido
+                                    // explícito).
+                                    <p
+                                        className={`mb-1 flex items-center gap-1 text-[11px] italic opacity-70 ${message.isMine ? 'text-[var(--bubble-sent-foreground)]' : 'text-[var(--bubble-received-foreground)]'}`}
+                                    >
+                                        <Forward className="size-3" />
+                                        Reenviado
+                                    </p>
+                                )}
 
-                        {/* max-w fijo en px (no %): el wrapper interno de
+                            {!message.isDeleted &&
+                                message.replyToId && (
+                                    // Insignia flotante montada sobre el borde
+                                    // superior de la burbuja (-mt-6: pasa la
+                                    // mitad de su propia altura afuera; la
+                                    // burbuja no tiene overflow-hidden que la
+                                    // recorte). Gris fijo (no var(--background),
+                                    // que en tema claro no leía como "gris") —
+                                    // pedido explícito: SIEMPRE gris, en los dos
+                                    // temas. Acento de color a la izquierda +
+                                    // rounded-3xl (igual que las burbujas): el
+                                    // "badge" propio, no el recuadro plano
+                                    // típico de WhatsApp.
+                                    //
+                                    // EL BUG REAL de "se sale del ancho de la
+                                    // burbuja" no era el -mt negativo: era
+                                    // `truncate` en los <p> de acá adentro —
+                                    // truncate = white-space:nowrap, que fuerza
+                                    // un ancho mínimo igual al del texto COMPLETO
+                                    // sin cortar. line-clamp (NO truncate):
+                                    // permite que el texto SÍ envuelva y sólo
+                                    // recorta por CANTIDAD de líneas.
+                                    //
+                                    // SIN w-fit (ancho de contenido) — pedido
+                                    // explícito: "totalmente ceñido al ancho de
+                                    // la burbuja", no sólo lo que el texto pida.
+                                    // width:auto (el default de un div en flujo
+                                    // normal, NINGUNA clase de ancho) rellena el
+                                    // content-box del padre igual que ya hace el
+                                    // <p> del cuerpo más abajo — mismo patrón
+                                    // seguro que ese <p> (sólo max-w-[420px]
+                                    // fijo en px como tope, nunca % ni w-full:
+                                    // esos sí reabren la referencia circular con
+                                    // el `display:table` interno de ScrollArea
+                                    // (Radix), el bug crítico de antes — "no
+                                    // muestra los mensajes enviados").
+                                    <div
+                                        className={`relative z-10 -mt-6 mb-1.5 max-w-[420px] rounded-3xl border-l-[5px] bg-[#71717a] px-3 py-1.5 text-xs shadow-sm ${replyAccentColor}`}
+                                    >
+                                        <p className="line-clamp-1 font-bold break-words text-white">
+                                            {message.replyToUserName}
+                                        </p>
+                                        <p className="line-clamp-1 break-words text-white/70">
+                                            {message.replyToBody}
+                                        </p>
+                                    </div>
+                                )}
+
+                            {!message.isDeleted &&
+                                message.attachments.length > 0 && (
+                                    <div
+                                        className={
+                                            hasEdgeToEdgeMedia
+                                                ? // Recorte propio del media (no de
+                                                  // la burbuja entera) — mismas
+                                                  // esquinas que la burbuja para
+                                                  // que se vea como una sola
+                                                  // pieza, pero SIN tapar el pico
+                                                  // (ese vive fuera, con z-10).
+                                                  `flex flex-col overflow-hidden rounded-3xl ${
+                                                      isLastInGroup
+                                                          ? message.isMine
+                                                              ? 'rounded-br-none'
+                                                              : 'rounded-bl-none'
+                                                          : ''
+                                                  }`
+                                                : 'mb-1 flex max-w-[280px] flex-col gap-1.5'
+                                        }
+                                    >
+                                        {message.attachments.map(
+                                            (attachment) => (
+                                                <MessageAttachment
+                                                    key={attachment.id}
+                                                    attachment={attachment}
+                                                    fill={hasEdgeToEdgeMedia}
+                                                />
+                                            ),
+                                        )}
+                                    </div>
+                                )}
+
+                            {/* max-w fijo en px (no %): el wrapper interno de
                     ScrollArea (Radix) mide contenido con un
                     `display:table`, que crece sin límite frente a texto
                     sin espacios — un % no lo frena porque la tabla no
@@ -1828,61 +2636,175 @@ function MessageBubble({
                     adentro). Vacío (mensaje de sólo adjunto) no
                     renderiza nada — sin este chequeo quedaba un hueco
                     de padding fantasma debajo de la foto/archivo. */}
-                        {message.body && (
-                            <div className="max-w-[420px] break-words">
-                                {renderMessageBody(
-                                    message.body,
-                                    message.isMine,
+                            {!message.isDeleted && message.body && (
+                                <div className="max-w-[420px] break-words">
+                                    {renderMessageBody(
+                                        message.body,
+                                        message.isMine,
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Reacciones + acciones: AL OPUESTO de la burbuja
+                        (mismo flex-row-reverse de arriba las separa del
+                        lado del avatar), centradas contra la ALTURA DE
+                        LA BURBUJA (items-center de la fila de arriba),
+                        no contra el avatar ni el hora-read. Siempre
+                        visibles, nunca por hover (en móvil no hay
+                        mouse). */}
+                        {!message.isDeleted && (
+                            <div className="flex shrink-0 flex-col items-center gap-1">
+                                {groupedReactions.length > 0 && (
+                                    <div className="flex flex-wrap items-center justify-center gap-0.5">
+                                        {groupedReactions.map((reaction) => (
+                                            <button
+                                                key={reaction.emoji}
+                                                type="button"
+                                                onClick={() =>
+                                                    onReact(
+                                                        message,
+                                                        reaction.emoji,
+                                                    )
+                                                }
+                                                title={
+                                                    reaction.count > 1
+                                                        ? `${reaction.count}`
+                                                        : undefined
+                                                }
+                                                // Sin fondo, sin círculo, sin
+                                                // borde — pedido explícito:
+                                                // "no se debe ver con BG ni
+                                                // círculo ni nada". Vive
+                                                // FUERA de la burbuja (esta
+                                                // columna está al lado, no
+                                                // encima), así que nunca tapa
+                                                // texto.
+                                                className="text-xl leading-none transition-transform active:scale-90"
+                                            >
+                                                {reaction.emoji}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
+                                <div className="flex items-center gap-0.5">
+                                    <BubbleActionButton
+                                        icon={Reply}
+                                        label="Responder"
+                                        onClick={() => onReply(message)}
+                                    />
+                                    <ReactionPickerButton
+                                        onPick={(emoji) =>
+                                            onReact(message, emoji)
+                                        }
+                                    />
+                                    <BubbleActionButton
+                                        icon={Forward}
+                                        label="Reenviar"
+                                        onClick={onForward}
+                                    />
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                type="button"
+                                                aria-label="Más opciones"
+                                                className="text-muted-foreground hover:bg-foreground/10 hover:text-foreground flex size-6 items-center justify-center rounded-full transition-colors"
+                                            >
+                                                <MoreHorizontal className="size-3.5" />
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align={
+                                                message.isMine ? 'end' : 'start'
+                                            }
+                                        >
+                                            <DropdownMenuItem
+                                                onClick={() => onCopy(message)}
+                                            >
+                                                <Copy className="size-4" />
+                                                Copiar texto
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    onToggleSave(message)
+                                                }
+                                            >
+                                                {message.isSaved ? (
+                                                    <BookmarkCheck className="size-4" />
+                                                ) : (
+                                                    <Bookmark className="size-4" />
+                                                )}
+                                                {message.isSaved
+                                                    ? 'Quitar de guardados'
+                                                    : 'Guardar mensaje'}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    onTogglePin(message)
+                                                }
+                                            >
+                                                {isPinned ? (
+                                                    <PinOff className="size-4" />
+                                                ) : (
+                                                    <Pin className="size-4" />
+                                                )}
+                                                {isPinned
+                                                    ? 'Desfijar mensaje'
+                                                    : 'Fijar mensaje'}
+                                            </DropdownMenuItem>
+                                            {canEdit && (
+                                                <DropdownMenuItem
+                                                    onClick={() =>
+                                                        onEdit(message)
+                                                    }
+                                                >
+                                                    <Pencil className="size-4" />
+                                                    Editar
+                                                </DropdownMenuItem>
+                                            )}
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                onClick={() =>
+                                                    onDelete(message, 'me')
+                                                }
+                                            >
+                                                <Trash2 className="size-4" />
+                                                Eliminar para mí
+                                            </DropdownMenuItem>
+                                            {message.isMine && (
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onClick={() =>
+                                                        onDelete(
+                                                            message,
+                                                            'everyone',
+                                                        )
+                                                    }
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                    Eliminar para todos
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </div>
                         )}
                     </div>
-                </div>
 
-                {/* Hora fuera de la burbuja, en TODAS (no sólo la última de
-                    la racha) — pedido explícito: "todas las burbujas deben
-                    mostrar hora... la quiero fuera de las burbujas". Vive en
-                    la MISMA columna que la burbuja (no una fila aparte) para
-                    heredar gratis su mismo borde izq/der — nada de spacers
-                    del ancho del avatar para no taparse con él. Separación
-                    extra del lado de la cola/avatar (pr-2 si es mío, pl-2
-                    si es del otro) — pegada al borde se traslapaba con el
-                    pico, que justo de ese lado sobresale un poco de la
-                    burbuja. mt-1.5 (no mt-0.5): más aire respecto a la
-                    burbuja, no tan pegado. */}
-                <div
-                    className={`text-muted-foreground mt-1.5 flex items-center gap-1 text-[10px] ${message.isMine ? 'justify-end pr-2' : 'justify-start pl-2'}`}
-                >
-                    <span>{formatBubbleTime(message.createdAt)}</span>
-                    <MessageStatus message={message} />
+                    {/* Hora + estado, simple — debajo de la burbuja, no de
+                    la fila [burbuja+acciones] de arriba. */}
+                    <div
+                        className={`text-muted-foreground mt-1.5 flex items-center gap-1 text-[10px] ${message.isMine ? 'justify-end pr-2' : 'justify-start pl-2'}`}
+                    >
+                        <span>{formatBubbleTime(message.createdAt)}</span>
+                        {message.editedAt && (
+                            <span className="italic opacity-70">Editado</span>
+                        )}
+                        {isPinned && <Pin className="size-3 fill-current" />}
+                        <MessageStatus message={message} />
+                    </div>
                 </div>
-            </div>
-
-            {/* Grupo de acciones al hover: sólo aparece con el mouse
-                encima de la fila (no depende de clic derecho). Vive al
-                lado externo de la burbuja (lejos del avatar) gracias al
-                mismo flex-row-reverse que ya posiciona todo lo demás. */}
-            <div className="pointer-events-none flex shrink-0 items-center self-center opacity-0 transition-opacity group-hover/row:pointer-events-auto group-hover/row:opacity-100">
-                <BubbleActionButton
-                    icon={Reply}
-                    label="Responder"
-                    onClick={() => onReply(message)}
-                />
-                <BubbleActionButton
-                    icon={Smile}
-                    label="Reaccionar (próximamente)"
-                    disabled
-                />
-                <BubbleActionButton
-                    icon={Forward}
-                    label="Reenviar (próximamente)"
-                    disabled
-                />
-                <BubbleActionButton
-                    icon={MoreHorizontal}
-                    label="Más opciones (próximamente)"
-                    disabled
-                />
             </div>
         </div>
     );
