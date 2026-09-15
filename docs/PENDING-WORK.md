@@ -65,6 +65,7 @@ distintos. Fix: el pico usa un sólido (el stop final del degradé,
 del dropdown del avatar, ya no un ícono de engranaje aparte ni un
 drawer lateral): layout tipo macOS System Settings (rail de tabs
 Estado/Apariencia + panel ancho, sin scroll). Incluye:
+
 - **Estado**: texto + emoji personalizado (reusa `ReactionPickerButton`),
   duración real vía Combobox (15 min / 30 min / 1 h / 2 h / 4 h / hoy /
   1 día / 1 semana / fecha y hora exacta con `datetime-local`) — el
