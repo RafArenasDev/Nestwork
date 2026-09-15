@@ -17,11 +17,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $muted_at
  * @property Carbon|null $archived_at
  * @property Carbon|null $hidden_at
+ * @property Carbon|null $cleared_at
  * @property int|null $last_read_message_id
  * @property-read Conversation $conversation
  * @property-read User $user
  */
-#[Fillable(['conversation_id', 'user_id', 'role', 'joined_at', 'muted_at', 'archived_at', 'hidden_at', 'last_read_message_id'])]
+#[Fillable(['conversation_id', 'user_id', 'role', 'joined_at', 'muted_at', 'archived_at', 'hidden_at', 'cleared_at', 'last_read_message_id'])]
 class ConversationParticipant extends Pivot
 {
     protected $table = 'conversation_participants';
@@ -36,6 +37,7 @@ class ConversationParticipant extends Pivot
             'muted_at' => 'datetime',
             'archived_at' => 'datetime',
             'hidden_at' => 'datetime',
+            'cleared_at' => 'datetime',
         ];
     }
 

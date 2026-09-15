@@ -25,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $ephemeral_ttl_seconds
  * @property int|null $default_message_ttl_seconds
  * @property int $created_by
+ * @property int|null $pinned_message_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Team $team
@@ -32,9 +33,10 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Message> $messages
  * @property-read Collection<int, User> $participants
  * @property-read Collection<int, ConversationParticipant> $conversationParticipants
+ * @property-read Message|null $pinnedMessage
  * @property-read ConversationParticipant|null $pivot Only set when loaded through User::conversations().
  */
-#[Fillable(['team_id', 'type', 'name', 'is_public', 'avatar_path', 'description', 'is_ephemeral', 'ephemeral_ttl_seconds', 'default_message_ttl_seconds', 'created_by'])]
+#[Fillable(['team_id', 'type', 'name', 'is_public', 'avatar_path', 'description', 'is_ephemeral', 'ephemeral_ttl_seconds', 'default_message_ttl_seconds', 'created_by', 'pinned_message_id'])]
 class Conversation extends Model
 {
     /** @use HasFactory<ConversationFactory> */
@@ -88,8 +90,16 @@ class Conversation extends Model
     {
         return $this->belongsToMany(User::class, 'conversation_participants')
             ->using(ConversationParticipant::class)
-            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'hidden_at', 'role', 'last_read_message_id'])
+            ->withPivot(['joined_at', 'muted_at', 'archived_at', 'hidden_at', 'cleared_at', 'role', 'last_read_message_id'])
             ->withTimestamps();
+    }
+
+    /**
+     * @return BelongsTo<Message, $this>
+     */
+    public function pinnedMessage(): BelongsTo
+    {
+        return $this->belongsTo(Message::class, 'pinned_message_id');
     }
 
     /**
