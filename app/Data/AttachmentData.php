@@ -17,6 +17,11 @@ readonly class AttachmentData
         public int $sizeBytes,
         public ?int $width = null,
         public ?int $height = null,
+        /** Primera página/hoja convertida a imagen (PDF/Word/Excel vía
+         *  GenerateAttachmentPreviewJob) — null mientras no se generó
+         *  (adjuntos recién subidos) o si el tipo no aplica (zip, txt,
+         *  ejecutables, etc.). */
+        public ?string $thumbnailUrl = null,
     ) {
         //
     }
@@ -41,6 +46,9 @@ readonly class AttachmentData
                 sizeBytes: $attachment->size_bytes,
                 width: $attachment->width,
                 height: $attachment->height,
+                thumbnailUrl: $attachment->thumbnail_path
+                    ? Storage::disk($attachment->disk)->url($attachment->thumbnail_path)
+                    : null,
             ))
             ->all();
     }

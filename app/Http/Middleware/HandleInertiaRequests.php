@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Conversations\ListConversationsForUser;
+use App\Actions\Messages\ListSavedMessagesForUser;
 use App\Data\StatusPresetOption;
 use App\Data\TeamMemberOption;
 use App\Models\StatusPreset;
@@ -71,6 +72,12 @@ class HandleInertiaRequests extends Middleware
             // "Archivado" del mini-rail con datos reales.
             'archivedConversations' => fn () => $user && $user->currentTeam
                 ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true)
+                : [],
+            // Alimenta la pestaña "Guardados" del mini-rail — mismo
+            // criterio que conversations/archivedConversations arriba
+            // (compartido globalmente, no sólo en messages/*).
+            'savedMessages' => fn () => $user && $user->currentTeam
+                ? app(ListSavedMessagesForUser::class)->handle($user, $user->currentTeam)
                 : [],
             // Para el modal de "Nuevo chat" en el mini-sidebar de
             // Mensajes — compartido globalmente por la misma razón que
