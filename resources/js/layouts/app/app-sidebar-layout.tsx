@@ -126,26 +126,14 @@ export default function AppSidebarLayout({
                 active={activeModule}
                 onChange={handleModuleChange}
             />
-            {/* Rellena, con el mismo negro fijo de la mini, el huequito
-                que el border-radius + overflow:hidden de la sidebar
-                recorta en sus dos esquinas izquierdas. Van DETRÁS de la
-                sidebar (z-index bajo, fuera del stacking context de la
-                mini) para que la sidebar las tape en todos lados menos
-                justo en ese recorte — si vivieran dentro de
-                .curved-rail heredarían su z-index alto y taparían el
-                título en vez de solo el huequito. */}
-            <div
-                className="rail-sidebar-corner-patch rail-sidebar-corner-patch--top"
-                aria-hidden="true"
-            />
-            <div
-                className="rail-sidebar-corner-patch rail-sidebar-corner-patch--bottom"
-                aria-hidden="true"
-            />
-            {/* Con `collapsible="none"` el <Sidebar> ya no es
-                `position:fixed` (ver app-shell.tsx) — es flujo normal,
-                así que alcanza con este margen para correrlo a la
-                derecha de la mini-sidebar. */}
+            {/* Rediseño Aurora (2026-09-15): mini-sidebar y sidebar ya no
+                comparten degradé ("gotera") — un hairline de 1px las
+                separa (ver curved-nav-rail.css/sidebar-list.css), así que
+                no hace falta parche de esquina ni margen/radio flotante
+                acá. El panel de contenido va de punta a punta: la
+                "audacia" de curvas grandes se gasta en piezas puntuales
+                que sí flotan sobre contenido (header del chat, composer,
+                modales, menús), no en el panel base. */}
             <div style={{ marginLeft: CURVED_RAIL_WIDTH }}>
                 <AppShell variant="sidebar">
                     <AppSidebar
@@ -154,28 +142,7 @@ export default function AppSidebarLayout({
                     />
                     <AppContent
                         variant="sidebar"
-                        // DECISIÓN FIJA — NO TOCAR sin pedido explícito
-                        // (confirmado con el usuario 2026-09-11): el
-                        // "enmarcado" es SOLO en el fondo (rounded-xl,
-                        // las 4 esquinas) — CERO border, CERO shadow. Una
-                        // línea de borde es, literalmente, un divider; un
-                        // fondo redondeado sin trazo no lo es. Por eso
-                        // ahora SÍ se puede redondear la esquina
-                        // izquierda (pegada al sidebar) sin que se vea
-                        // como una costura: no hay ninguna línea ahí, y
-                        // el pill del item seleccionado en
-                        // sidebar-list.css sigue pintado con el mismo
-                        // --background de este panel, así que la gotera
-                        // conecta igual de bien.
-                        //
-                        // `min-h-0` cancela el `min-h-svh` de base (esa
-                        // altura MÍNIMA es justo lo que generaba 8px de
-                        // scroll de más en TODA la página — el stretch de
-                        // flexbox ya resta el margen solo, pero un
-                        // min-height más alto que ese resultado gana el
-                        // conflicto y desborda). Sin `h-full` explícito:
-                        // dejar que el stretch del flex haga la cuenta.
-                        className="bg-background m-2 ml-0 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto rounded-xl"
+                        className="bg-background min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
                     >
                         <AppSidebarHeader breadcrumbs={breadcrumbs} />
                         {children}

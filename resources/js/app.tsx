@@ -3,6 +3,7 @@ import { RouteLoadingOverlay } from '@/components/route-loading-overlay';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import { initializeCustomization } from '@/hooks/use-customization';
 import { initializeLocale } from '@/hooks/use-locale';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
@@ -69,6 +70,11 @@ void createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+// Color de sidebar / intensidad del glass / densidad de mensajes —
+// sin cookie/SSR (a diferencia del tema): no afectan el primer render
+// del servidor, así que alcanza con aplicarlas acá.
+initializeCustomization();
 
 // This will set the ES/EN locale on load...
 initializeLocale();

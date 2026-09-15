@@ -716,7 +716,7 @@ export function MessageComposer({
     };
 
     return (
-        <div className="flex flex-col gap-2 border-t p-3">
+        <div className="glass-panel-edge-t flex flex-col gap-2 p-3">
             {editingMessage && (
                 // Acento violeta (ninguna otra barra del composer usa
                 // ese tono) para que "editando" se distinga de un

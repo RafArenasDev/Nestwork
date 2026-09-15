@@ -1,16 +1,12 @@
 /*
- * Puerto de la técnica "curve outside" de
- * github.com/FlakoArenas26/Sidebar (sidebar.html + style.css).
- * A diferencia de la referencia: sin padding/margin/offset (ocupa todo
- * el alto, pegada al borde), ancho siempre fijo (sin toggle), fondo
- * negro puro fijo (no cambia con el tema), y el BG del item activo es
- * el mismo --sidebar del sidebar real (para que el item se vea
- * "chorreado" hacia ese lado).
- *
- * Importada desde app.css (no desde el componente) para que quede en
- * el bundle CSS principal, cargado en sync — importarla desde el .tsx
- * la separaba en un chunk propio que a veces llegaba después del
- * primer paint, dejando los íconos "pegados" sin estilo un instante.
+ * Mini-sidebar tipo "dock" (rediseño Aurora, 2026-09-15) — reemplaza
+ * la técnica "curve outside" anterior (gotera/muescas cóncavas). La
+ * mini-sidebar es SIEMPRE oscura, fija en los dos temas (no personalizable
+ * — sólo la sidebar expandida lo es, ver sidebar-list.css), un simple
+ * borde de 1px la separa del panel de al lado en vez de "chorrear" color
+ * entre ambas. Ítem activo = fondo translúcido + barra de acento a la
+ * izquierda (gradiente --accent-gradient), no un pill que se funde con
+ * el sidebar vecino.
  */
 
 .curved-rail {
@@ -18,80 +14,38 @@
     top: 0;
     left: 0;
     bottom: 0;
-    width: 72px;
+    width: 76px;
     display: flex;
     flex-direction: column;
-    background: #000;
+    align-items: center;
+    background: var(--mini-sidebar-bg, #05070c);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
     z-index: 40;
-    /* Probé redondear este lado para "abrazar" al sidebar, pero al ser
-       colores distintos (negro puro vs. navy) y redondear cada uno por
-       separado, queda un hueco visible en la unión — se ve peor que
-       plano. Revertido: acá SÍ hace falta el truco de máscara con
-       overlay (como sidebar-row-notch), no un simple border-radius. */
+    padding: 16px 0;
+    gap: 4px;
 }
 
-/* NOTA: el parche negro que tapa el hueco de la esquina redondeada de
-   la sidebar (contra la mini) NO va acá como pseudo-elemento — hereda
-   el z-index:40 de .curved-rail y termina pintando ENCIMA de la
-   sidebar (tapando el título), no solo en el huequito. Va como
-   elemento propio con z-index bajo, ver .rail-sidebar-corner-patch en
-   sidebar-list.css / el div en app-sidebar-layout.tsx. */
-
-/* Botón 3D blanco tipo iOS/macOS (no un ícono plano con hover gris):
-   degradé blanco sutil + sombra oscura (volumen) + glow blanco
-   alrededor (resalta sobre el negro de la mini) + highlight interno.
-   Sin estado hover — es fijo.
-
-   Márgenes parejos en los 4 lados (16px): ya no hace falta dejarle más
-   aire abajo que arriba para que la sombra no choque con la muesca del
-   primer item — en vez de eso, el botón lleva su propio z-index por
-   encima de la muesca (ver más abajo), así puede solaparla sin que
-   ella lo tape. 16px (no menos) por OTRA razón, del lado del sidebar
-   completo: .sidebar-list necesita padding-top ≥ 16px (la altura de
-   la muesca) o esa muesca del primer item invade el header de arriba
-   ("Inicio") y se ve encima del título — con menos margen acá,
-   .sidebar-list también tendría que bajar de 16 para seguir alineado
-   y ahí aparece ese problema. Total: 16+32+16=64px — .sidebar-list
-   tiene que sumar lo mismo (padding-top) para seguir alineado. */
 .curved-rail-brand {
-    width: 32px;
-    height: 32px;
-    align-self: center;
-    margin: 16px;
+    width: 42px;
+    height: 42px;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Encima de la muesca del primer item (z-index:1) Y de su pill
-       (z-index:2) — sin esto, al acercar el botón la muesca lo tapaba
-       (pintaba encima) donde llegaran a solaparse. */
-    position: relative;
-    z-index: 3;
+    margin-bottom: 12px;
     border: 0;
-    border-radius: 10px;
-    /* Degradé con más contraste (no un blanco casi plano): el salto
-       de #fff a un gris más visible en la base es lo que de verdad
-       lee como una superficie curva con volumen, no una pegatina. */
-    background: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #ccced8 100%);
-    /* Sombra en capas — contacto, media distancia y ambiental — más
-       el glow blanco (resalta contra el negro de la mini) y un
-       highlight interno fuerte arriba + una sombra interna sutil
-       abajo (le da el "borde" cóncavo típico de un ícono iOS/macOS,
-       no solo una tarjeta plana con una sombra genérica). Con el
-       z-index de arriba ya no hay presupuesto de margen que cuidar:
-       la sombra puede ser tan grande como haga falta, el botón siempre
-       pinta encima de lo que toque. */
-    box-shadow:
-        0 0 0 1px rgba(255, 255, 255, 0.16),
-        0 0 18px rgba(255, 255, 255, 0.35),
-        0 1px 1px rgba(0, 0, 0, 0.45),
-        0 3px 5px rgba(0, 0, 0, 0.42),
-        0 7px 11px rgba(0, 0, 0, 0.32),
-        0 12px 10px rgba(0, 0, 0, 0.18),
-        inset 0 1.5px 0 rgba(255, 255, 255, 1),
-        inset 0 -1.5px 2px rgba(0, 0, 0, 0.14);
-    color: #141824;
+    border-radius: 14px;
+    background: var(--accent-gradient);
+    box-shadow: 0 6px 16px -4px rgba(91, 127, 255, 0.55);
+    color: #fff;
     cursor: pointer;
+    transition: transform 0.15s ease;
+}
+.curved-rail-brand:hover {
+    transform: scale(1.05);
+}
+.curved-rail-brand:active {
+    transform: scale(0.95);
 }
 
 .curved-rail ul {
@@ -99,93 +53,56 @@
     margin: 0;
     padding: 0;
     list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .curved-rail-item {
     position: relative;
-    /* Los items en reposo ocupan todo el ancho del rail: el ícono
-       queda totalmente centrado. Solo el activo se angosta y se corre
-       hacia "end" (ver .curved-rail-item--active). */
-    width: 100%;
-    /* Un valor bien por encima de la mitad de la altura del item
-       clampea a un semicírculo perfecto en el lado izquierdo. */
-    border-radius: 999px 0 0 999px;
-}
-
-.curved-rail-item--active {
-    width: 58px;
-    margin-left: 14px;
-    background: var(--sidebar);
-}
-
-/* Muescas cóncavas arriba/abajo del item activo: solo el item activo
-   las muestra, y cada una recorta (border-radius) su propia esquina,
-   la que toca al item, dejando ver el color del sidebar real. El
-   degradé (background-image/size/attachment) se define una sola vez
-   en app.css con `background-attachment: fixed`, compartido con el
-   panel del sidebar y con .curved-rail-item--active .curved-rail-link
-   — así las tres piezas leen el mismo punto real del degradé según su
-   posición en pantalla, sin costuras entre ellas. */
-.curved-rail-notch {
-    position: absolute;
-    width: 100%;
-    height: 16px;
-    display: none;
-    /* Sin esto, la muesca del item activo (que se extiende 16px por
-       encima o por debajo de su propio item) pinta encima del ícono
-       vecino cuando ese vecino aparece ANTES en el DOM — z-index
-       global (ninguno de los <li> crea su propio stacking context)
-       para que el ícono siempre gane, sin importar el orden. */
-    z-index: 1;
-}
-.curved-rail-notch--top {
-    top: -16px;
-}
-.curved-rail-notch--bottom {
-    bottom: -16px;
-}
-.curved-rail-item--active .curved-rail-notch {
-    display: block;
-}
-.curved-rail-notch::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: #000;
-}
-.curved-rail-notch--top::before {
-    border-bottom-right-radius: 16px;
-}
-.curved-rail-notch--bottom::before {
-    border-top-right-radius: 16px;
 }
 
 .curved-rail-link {
     position: relative;
-    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    /* Misma altura que .sidebar-row-link — el seleccionado de la mini
-       y el del sidebar deben verse del mismo tamaño. */
-    height: 42px;
+    width: 48px;
+    height: 48px;
     border: 0;
-    border-radius: 999px 0 0 999px;
+    border-radius: 16px;
     background: transparent;
-    /* Atenuado por defecto: el hover (brillo completo + lupa) se nota
-       más así, en vez de partir ya del blanco pleno. */
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    transition: color 0.15s ease;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
 }
+
 .curved-rail-link:hover {
-    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.9);
 }
+
 .curved-rail-item--active .curved-rail-link {
-    color: var(--sidebar-foreground);
-    /* El degradé mismo (background-image/size/attachment) está
-       centralizado en app.css — ver el comentario ahí. */
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Barra de acento a la izquierda del ítem activo — el único lugar de
+   la mini-sidebar que muestra el color de marca, todo lo demás es
+   monocromo a propósito (jerarquía: un solo acento, no ruido). */
+.curved-rail-item--active::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    translate: 0 -50%;
+    width: 3px;
+    height: 20px;
+    border-radius: 0 4px 4px 0;
+    background: var(--accent-gradient);
 }
 
 .curved-rail-icon {
@@ -195,18 +112,11 @@
     justify-content: center;
 }
 
-/* Sin hover "de fondo" en la mini: el efecto es lupa, solo sobre el
-   ícono (el `transform` no mueve el layout, así que el ícono
-   agrandado puede salirse de su fila sin desalinear a los de abajo). */
 .curved-rail-icon svg {
     transition: transform 0.15s ease;
 }
-/* Mismo tamaño SIEMPRE (seleccionado o no) — antes el activo escalaba
-   1.35x y el resto se veía chico/apagado al lado; ahora el tamaño base
-   ya es ese tamaño grande (ver size-7 en curved-nav-rail.tsx), acá solo
-   queda el "lupa" leve al pasar el mouse. */
 .curved-rail-link:hover .curved-rail-icon svg {
-    transform: scale(1.1);
+    transform: scale(1.08);
 }
 
 .curved-rail-footer {
@@ -215,13 +125,21 @@
     flex-direction: column;
     align-items: center;
     gap: 10px;
-    padding: 12px 0 16px;
+    padding: 8px 0 4px;
 }
 
 .curved-rail-avatar {
+    position: relative;
     border: 0;
-    background: transparent;
-    padding: 0;
+    padding: 2px;
     border-radius: 999px;
     cursor: pointer;
+    background: var(--accent-gradient);
+    transition: transform 0.15s ease;
+}
+.curved-rail-avatar:hover {
+    transform: scale(1.05);
+}
+.curved-rail-avatar:active {
+    transform: scale(0.95);
 }

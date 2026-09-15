@@ -13,9 +13,10 @@ import {
     ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
     HomeIcon as HomeIconSolid,
 } from '@heroicons/react/24/solid';
-import { Circle, LogOut, UserRound, X } from 'lucide-react';
+import { Circle, LogOut, Settings, UserRound, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProfileModal } from '@/components/profile-modal';
+import { SettingsModal } from '@/components/settings-modal';
 import { PresenceDot } from '@/components/presence-dot';
 import { TeamSwitcher } from '@/components/team-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -101,6 +102,7 @@ export function CurvedNavRail({ active, onChange }: Props) {
     const { t } = useLocale();
     const cleanup = useMobileNavigation();
     const [profileOpen, setProfileOpen] = useState(false);
+    const [customizationOpen, setCustomizationOpen] = useState(false);
     const showAvatar = Boolean(auth.user.avatar && auth.user.avatar !== '');
 
     const unreadMessageCount = conversations.reduce(
@@ -186,14 +188,6 @@ export function CurvedNavRail({ active, onChange }: Props) {
                                 key={key}
                                 className={`curved-rail-item${isActive ? ' curved-rail-item--active' : ''}`}
                             >
-                                <span
-                                    className="curved-rail-notch curved-rail-notch--top"
-                                    aria-hidden="true"
-                                />
-                                <span
-                                    className="curved-rail-notch curved-rail-notch--bottom"
-                                    aria-hidden="true"
-                                />
                                 {/* Sin tooltip cuando ya está seleccionado:
                                 el título ya se ve en el header del
                                 sidebar, sería redundante. */}
@@ -310,6 +304,12 @@ export function CurvedNavRail({ active, onChange }: Props) {
                             <UserRound className="mr-2" />
                             {t.userMenu.profile}
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => setCustomizationOpen(true)}
+                        >
+                            <Settings className="mr-2" />
+                            Ajustes
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
                             <Link
@@ -328,6 +328,10 @@ export function CurvedNavRail({ active, onChange }: Props) {
             </div>
 
             <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
+            <SettingsModal
+                open={customizationOpen}
+                onOpenChange={setCustomizationOpen}
+            />
         </nav>
     );
 }

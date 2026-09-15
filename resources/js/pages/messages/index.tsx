@@ -719,7 +719,7 @@ function ConversationHeader({
               }[conversation.presence ?? 'offline'];
 
     return (
-        <div className="border-border/60 sticky top-0 z-10 flex shrink-0 items-center gap-4 border-b bg-[color-mix(in_srgb,var(--background)_90%,var(--foreground)_10%)] py-3 pr-4 pl-3">
+        <div className="glass-panel-edge-b sticky top-0 z-10 flex shrink-0 items-center gap-4 px-4 py-3">
             <div className="relative shrink-0">
                 <Avatar className="size-10">
                     {conversation.avatar && (
@@ -738,7 +738,7 @@ function ConversationHeader({
                 {conversation.presence && (
                     <PresenceDot
                         presence={conversation.presence}
-                        surfaceTone="color-mix(in srgb, var(--background) 90%, var(--foreground) 10%)"
+                        surfaceTone="var(--bg-elevated)"
                     />
                 )}
             </div>
@@ -2438,10 +2438,28 @@ function MessageBubble({
             ? 'border-l-[#166534]' // él me responde a mí: verde oscuro
             : 'border-l-[#b91c1c]'; // él responde a un tercero (grupo): rojo, más visible que el gris de antes
 
+    // bg-[image:...] (no bg-[var(...)] a secas): --bubble-sent ahora
+    // guarda un gradiente (--accent-gradient), background-image es la
+    // única propiedad que lo renderiza — background-color lo
+    // ignoraría en silencio.
     const bubbleColor = failed
         ? 'bg-destructive/15'
         : message.isMine
-          ? 'bg-[var(--bubble-sent)]'
+          ? 'bg-[image:var(--bubble-sent)]'
+          : 'bg-[var(--bubble-received)]';
+    // El pico NO repite el degradé de la burbuja (bg-[image:...]): un
+    // recorte de 12px pintando el MISMO gradiente 135deg por su cuenta
+    // calcula sus propios extremos sobre una caja minúscula, así que
+    // termina en un tono distinto al de la burbuja grande en el punto
+    // exacto donde se tocan — se percibían como dos colores. En vez de
+    // eso, el pico usa un color SÓLIDO tomado del extremo del degradé
+    // que le corresponde (accent-2, el final de 135deg, coincide con
+    // la esquina inferior-derecha real de la burbuja) — burbuja y pico
+    // vuelven a leer como una sola superficie continua.
+    const tailColor = failed
+        ? 'bg-destructive/15'
+        : message.isMine
+          ? 'bg-[var(--bubble-sent-tail)]'
           : 'bg-[var(--bubble-received)]';
 
     // mt-2.5 (no mt-px): ahora CADA mensaje muestra su hora debajo, así
@@ -2455,11 +2473,15 @@ function MessageBubble({
     // getBoundingClientRect da esos ~8px reales hasta el badge (el
     // resto —hasta la burbuja— es el solape a propósito del badge
     // flotando encima de ella).
+    // Clases propias (no mt-2/mt-2.5/mt-6 de Tailwind a secas): la
+    // densidad de mensajes (drawer de personalización) necesita poder
+    // overridear este espaciado sin tocar utilidades globales que
+    // también usa medio proyecto para otra cosa.
     const topMargin = message.replyToId
-        ? 'mt-6'
+        ? 'msg-spacing-reply'
         : isFirstInGroup
-          ? 'mt-2'
-          : 'mt-2.5';
+          ? 'msg-spacing-group'
+          : 'msg-spacing-normal';
 
     return (
         <div className={topMargin}>
@@ -2474,7 +2496,7 @@ function MessageBubble({
                     // no con el pico"). Sin translate: la hora/read ya vive
                     // en esa misma columna, así que el borde inferior de esa
                     // fila ES el de la hora — items-end alcanza solo.
-                    className={`size-7 shrink-0 ${isLastInGroup ? '' : 'invisible'}`}
+                    className={`msg-avatar size-7 shrink-0 ${isLastInGroup ? '' : 'invisible'}`}
                 >
                     {message.userAvatar && (
                         <AvatarImage
@@ -2526,7 +2548,7 @@ function MessageBubble({
                             // de la burbuja, no tocar la esquina de la cola (esa
                             // sigue -none, cuadrada a propósito, ver comentario
                             // arriba).
-                            className={`relative min-w-0 rounded-3xl text-sm shadow-[0_1px_2px_rgba(0,0,0,0.12),0_6px_16px_rgba(0,0,0,0.16)] transition-transform duration-150 ease-out hover:-translate-y-px dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_6px_18px_rgba(0,0,0,0.5)] ${
+                            className={`msg-bubble relative min-w-0 rounded-3xl text-sm shadow-[0_1px_2px_rgba(0,0,0,0.12),0_6px_16px_rgba(0,0,0,0.16)] transition-transform duration-150 ease-out hover:-translate-y-px dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_6px_18px_rgba(0,0,0,0.5)] ${
                                 hasEdgeToEdgeMedia
                                     ? ''
                                     : `px-3 py-2 ${bubbleColor}`
@@ -2564,7 +2586,7 @@ function MessageBubble({
                             {isLastInGroup && (
                                 <span
                                     aria-hidden="true"
-                                    className={`pointer-events-none absolute bottom-0 z-10 size-3 ${bubbleColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[32deg] rounded-tr-[4px] rounded-bl-[9px]' : 'left-0 origin-bottom-right -skew-y-[32deg] rounded-tl-[4px] rounded-br-[9px]'}`}
+                                    className={`pointer-events-none absolute bottom-0 z-10 size-3 ${tailColor} ${message.isMine ? 'right-0 origin-bottom-left skew-y-[32deg] rounded-tr-[4px] rounded-bl-[9px]' : 'left-0 origin-bottom-right -skew-y-[32deg] rounded-tl-[4px] rounded-br-[9px]'}`}
                                 />
                             )}
 
