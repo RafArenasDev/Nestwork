@@ -18,7 +18,7 @@
 
 1. **`Message::is_hidden` null en memoria** (`app/Models/Message.php`):
    `Message::create()` no reflejaba el default de BD (`is_hidden =
-   false`) en la instancia recién creada, así que
+false`) en la instancia recién creada, así que
    `MessageData::fromMessage()` reventaba con `TypeError` en el
    argumento `$isDeleted` en **cada** creación/actualización de mensaje
    — capturado en silencio por el try/catch alrededor de
@@ -26,9 +26,9 @@
    vivo (reacciones, ediciones, mensajes nuevos) para cualquier otro
    participante, en todo el histórico del proyecto, no sólo en
    funcionalidad nueva. Fix: `protected $attributes = ['is_hidden' =>
-   false];` en el modelo.
+false];` en el modelo.
 2. **Preview de PDF en blanco con LibreOffice**: `soffice --convert-to
-   png` directo sobre un PDF real producía una imagen totalmente en
+png` directo sobre un PDF real producía una imagen totalmente en
    blanco (reproducido con un PDF real del usuario). Fix: pipeline en
    dos pasos — LibreOffice sólo convierte Office/texto → PDF; el
    render de la página a PNG lo hace **Poppler** (`pdftoppm`, instalado
@@ -191,7 +191,7 @@ merge). Caminos a evaluar la próxima sesión, de más a menos simple:
    llegó a tiempo — sigue siendo "casi síncrono" sin violar el pedido
    original tan literalmente.
 3. Investigar por separado por qué la reconciliación (`useEffect(() =>
-   setLiveMessages(messages), [messages])` en
+setLiveMessages(messages), [messages])` en
    `resources/js/pages/messages/index.tsx`) deja el mensaje pegado en
    optimista ante CUALQUIER error de red, no sólo timeouts de
    preview — hoy `onError` sólo marca `status: 'failed'`, nunca
