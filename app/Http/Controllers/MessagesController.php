@@ -3,17 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Conversations\ListConversationsForUser;
-use App\Data\AttachmentData;
 use App\Data\MessageData;
+use App\Data\ReactionData;
 use App\Enums\AttachmentType;
 use App\Enums\ConversationType;
 use App\Enums\MessageType;
+use App\Events\ConversationPinChanged;
 use App\Events\MessageRead;
 use App\Events\MessageSent;
+use App\Events\MessageUpdated;
 use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
+use App\Models\MessageDeletion;
+use App\Models\Reaction;
+use App\Models\SavedMessage;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -89,17 +94,12 @@ class MessagesController extends Controller
      */
     private function loadMessages(Conversation $conversation, User $user)
     {
-        // "Leído" real: sólo si TODOS los demás participantes ya marcaron
-        // last_read_message_id — para un DM es uno solo, para un grupo
-        // exige que el más rezagado también lo haya visto.
-        $otherLastReadIds = $conversation->participants()
-            ->where('users.id', '!=', $user->id)
-            ->get()
-            ->pluck('pivot.last_read_message_id');
-
-        $readThreshold = $otherLastReadIds->isNotEmpty() && $otherLastReadIds->every(fn (?int $id) => $id !== null)
-            ? $otherLastReadIds->min()
-            : null;
+        $readThreshold = $this->readThresholdFor($conversation, $user);
+        $clearedAt = $conversation->participants()
+            ->where('users.id', $user->id)
+            ->first()
+            ?->pivot
+            ->cleared_at;
 
         // Tope de seguridad mientras no existe paginación por cursor
         // (sección 4.1/Fase F del prompt v2): sin esto, una conversación
@@ -108,32 +108,41 @@ class MessagesController extends Controller
         // y pesado de renderizar en el frontend. `INITIAL_MESSAGE_LIMIT`
         // trae sólo los más recientes; "cargar más hacia arriba" queda
         // pendiente de esa fase.
-        $messages = $conversation->messages()
-            ->with(['user', 'replyTo.user', 'attachments'])
+        return $conversation->messages()
+            ->with(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy'])
+            // "Limpiar chat": sólo oculta el historial anterior a la
+            // marca PARA ESTE usuario — no borra nada, los demás
+            // participantes siguen viendo todo igual.
+            ->when($clearedAt, fn ($query) => $query->where('created_at', '>', $clearedAt))
+            // "Eliminar para mí" (individual o en bloque desde "Limpiar
+            // chat > Solo hoy"): el mensaje desaparece SOLO de mi vista,
+            // el resto de participantes lo sigue viendo intacto.
+            ->whereNotIn('id', MessageDeletion::query()->where('user_id', $user->id)->select('message_id'))
             ->orderByDesc('id')
             ->limit(self::INITIAL_MESSAGE_LIMIT)
             ->get()
             ->sortBy('id')
             ->values()
-            ->map(fn (Message $message) => new MessageData(
-                id: $message->id,
-                body: $message->body,
-                createdAt: $message->created_at->toIso8601String(),
-                editedAt: $message->edited_at?->toIso8601String(),
-                userId: $message->user_id,
-                userName: $message->user->name,
-                userAvatar: $message->user->avatar,
-                isMine: $message->user_id === $user->id,
-                replyToId: $message->replyTo?->id,
-                replyToUserName: $message->replyTo?->user->name,
-                replyToBody: $message->replyTo?->body,
-                status: $message->user_id === $user->id
-                    ? ($readThreshold !== null && $readThreshold >= $message->id ? 'read' : 'sent')
-                    : 'sent',
-                attachments: AttachmentData::collectionFor($message),
-            ));
+            ->map(fn (Message $message) => MessageData::fromMessage($message, $user->id, $readThreshold));
+    }
 
-        return $messages;
+    /**
+     * "Leído" real: sólo si TODOS los demás participantes ya marcaron
+     * last_read_message_id — para un DM es uno solo, para un grupo
+     * exige que el más rezagado también lo haya visto. Null significa
+     * "nadie más ha leído nada todavía" (ningún mensaje propio cuenta
+     * como leído).
+     */
+    private function readThresholdFor(Conversation $conversation, User $user): ?int
+    {
+        $otherLastReadIds = $conversation->participants()
+            ->where('users.id', '!=', $user->id)
+            ->get()
+            ->pluck('pivot.last_read_message_id');
+
+        return $otherLastReadIds->isNotEmpty() && $otherLastReadIds->every(fn (?int $id) => $id !== null)
+            ? $otherLastReadIds->min()
+            : null;
     }
 
     /**
@@ -170,6 +179,7 @@ class MessagesController extends Controller
             // mensajes eran no leídos al abrir el chat y dibujar el
             // divisor/resaltado hasta que el usuario los lea de verdad.
             'viewerLastReadMessageId' => $pivot->last_read_message_id,
+            'pinnedMessageId' => $conversation->pinned_message_id,
         ];
     }
 
@@ -344,6 +354,319 @@ class MessagesController extends Controller
             'width' => $width,
             'height' => $height,
         ]);
+    }
+
+    /**
+     * Reaccionar es un toggle, no un "agregar": tocar el mismo emoji
+     * que ya pusiste lo quita — igual que WhatsApp/Slack. La fila
+     * `unique(message_id, user_id, emoji)` en la migración es la que
+     * de verdad impide duplicados; acá sólo se decide crear o borrar.
+     */
+    public function toggleReaction(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+
+        $validated = $request->validate([
+            'emoji' => ['required', 'string', 'max:8'],
+        ]);
+
+        $existing = Reaction::query()
+            ->where('message_id', $message->id)
+            ->where('user_id', $user->id)
+            ->where('emoji', $validated['emoji'])
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+        } else {
+            Reaction::create([
+                'message_id' => $message->id,
+                'user_id' => $user->id,
+                'emoji' => $validated['emoji'],
+                'created_at' => now(),
+            ]);
+        }
+
+        $message->load('reactions');
+
+        // Sin ->toOthers() acá: el propio autor de la reacción ya
+        // recibe la lista actualizada en la respuesta JSON de abajo,
+        // no necesita el eco de su propia acción por el socket (mismo
+        // criterio que store() con MessageSent).
+        try {
+            broadcast(new MessageUpdated($message))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json(['reactions' => ReactionData::listFor($message)]);
+    }
+
+    /**
+     * Editar tiene ventana de tiempo (MessageData::EDIT_WINDOW_MINUTES)
+     * Y un tope de veces (MessageData::MAX_EDITS) dentro de ese margen
+     * — pasado cualquiera de los dos, ni con una llamada directa a este
+     * endpoint se puede editar; la opción "Editar" ya desaparece antes
+     * en el frontend, esto es la validación real del lado del servidor.
+     */
+    public function update(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+        abort_unless($message->user_id === $user->id, 403);
+        abort_if(now()->greaterThan(MessageData::editWindowEndsAt($message)), 422, 'Ya pasó el tiempo permitido para editar este mensaje.');
+        abort_if($message->edit_count >= MessageData::MAX_EDITS, 422, 'Ya editaste este mensaje el máximo de veces permitido.');
+
+        $validated = $request->validate([
+            'body' => ['required', 'string', 'max:4000'],
+        ]);
+
+        $message->update([
+            'body' => $validated['body'],
+            'edited_at' => now(),
+            'edit_count' => $message->edit_count + 1,
+        ]);
+
+        $message->load(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy']);
+
+        try {
+            broadcast(new MessageUpdated($message))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json([
+            'message' => MessageData::fromMessage($message, $user->id, $this->readThresholdFor($conversation, $user)),
+        ]);
+    }
+
+    /**
+     * "Eliminar para mí": el mensaje deja de existir SOLO en mi propia
+     * lista (reutiliza `message_deletions`, ya migrada para esto) — el
+     * resto de participantes lo sigue viendo intacto. Cualquier
+     * participante puede hacerlo con cualquier mensaje (no sólo con los
+     * propios), a diferencia de "eliminar para todos".
+     */
+    public function hideForMe(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+
+        MessageDeletion::query()->firstOrCreate(
+            ['message_id' => $message->id, 'user_id' => $user->id],
+            ['deleted_at' => now()],
+        );
+
+        return response()->json(['hidden' => true]);
+    }
+
+    /**
+     * "Eliminar para todos": el cuerpo se mueve cifrado a
+     * `original_body` (cast `encrypted`, ver Message::casts) y `body`
+     * queda vacío — el registro NUNCA se borra ni queda en texto plano.
+     * Todos los participantes ven "Mensaje eliminado"
+     * (MessageData::isDeleted). Sólo el autor puede hacerlo.
+     */
+    public function destroy(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+        abort_unless($message->user_id === $user->id, 403);
+
+        $message->update([
+            'original_body' => $message->body,
+            'body' => '',
+            'is_hidden' => true,
+        ]);
+
+        try {
+            broadcast(new MessageUpdated($message))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /**
+     * Restaurar sólo lo puede hacer quien eliminó — no hace falta pedir
+     * el `original_body` de vuelta al cliente para mostrarlo antes: es
+     * una acción a ciegas, el backend ya sabe qué había ahí.
+     */
+    public function restore(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+        abort_unless($message->user_id === $user->id, 403);
+        abort_unless($message->is_hidden, 422, 'Este mensaje no está eliminado.');
+
+        $message->update([
+            'body' => $message->original_body ?? '',
+            'original_body' => null,
+            'is_hidden' => false,
+        ]);
+
+        $message->load(['user', 'replyTo.user', 'attachments', 'reactions', 'forwardedFromMessage.user', 'savedBy']);
+
+        try {
+            broadcast(new MessageUpdated($message))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json([
+            'message' => MessageData::fromMessage($message, $user->id, $this->readThresholdFor($conversation, $user)),
+        ]);
+    }
+
+    /**
+     * Guardar es privado del viewer — no se transmite por Reverb (los
+     * demás participantes no necesitan saberlo), sólo se refleja en la
+     * respuesta JSON de quien lo tocó.
+     */
+    public function toggleSave(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+
+        $existing = SavedMessage::query()
+            ->where('user_id', $user->id)
+            ->where('message_id', $message->id)
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+        } else {
+            SavedMessage::create([
+                'user_id' => $user->id,
+                'message_id' => $message->id,
+                'created_at' => now(),
+            ]);
+        }
+
+        return response()->json(['saved' => ! $existing]);
+    }
+
+    /**
+     * Un solo mensaje fijado por conversación (alcance de esta ronda,
+     * ver la migración) — fijar uno nuevo reemplaza al anterior.
+     * Cualquier participante puede fijar/desfijar, mismo criterio que
+     * archivar/silenciar (no hay roles todavía fuera de DMs).
+     */
+    public function togglePin(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+
+        $nowPinned = $conversation->pinned_message_id === $message->id;
+
+        $conversation->update([
+            'pinned_message_id' => $nowPinned ? null : $message->id,
+        ]);
+
+        try {
+            broadcast(new ConversationPinChanged($conversation))->toOthers();
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return response()->json(['pinnedMessageId' => $conversation->pinned_message_id]);
+    }
+
+    /**
+     * Reenviar copia cuerpo + adjuntos (mismo disco/ruta física, sin
+     * volver a subir el archivo) a una o varias conversaciones donde el
+     * usuario participa — la regla `exists` de `conversation_ids.*` ya
+     * impide reenviar a una conversación ajena, no sólo el frontend.
+     */
+    public function forward(Request $request, string $current_team, Conversation $conversation, Message $message): JsonResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        abort_unless($conversation->participants()->where('users.id', $user->id)->exists(), 403);
+        abort_unless($message->conversation_id === $conversation->id, 404);
+
+        $validated = $request->validate([
+            'conversation_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'conversation_ids.*' => [
+                'integer',
+                Rule::exists('conversation_participants', 'conversation_id')->where('user_id', $user->id),
+            ],
+        ]);
+
+        $targets = Conversation::query()
+            ->whereIn('id', $validated['conversation_ids'])
+            ->where('team_id', $team->id)
+            ->get();
+
+        $message->load('attachments');
+
+        foreach ($targets as $target) {
+            $forwarded = $target->messages()->create([
+                'user_id' => $user->id,
+                'body' => $message->body,
+                'type' => $message->type,
+                'forwarded_from_message_id' => $message->id,
+                'forwarded_from_conversation_id' => $message->conversation_id,
+            ]);
+
+            foreach ($message->attachments as $attachment) {
+                Attachment::create([
+                    'message_id' => $forwarded->id,
+                    'type' => $attachment->type,
+                    'disk' => $attachment->disk,
+                    'path' => $attachment->path,
+                    'original_name' => $attachment->original_name,
+                    'mime_type' => $attachment->mime_type,
+                    'size_bytes' => $attachment->size_bytes,
+                    'width' => $attachment->width,
+                    'height' => $attachment->height,
+                ]);
+            }
+
+            $target->participants()->updateExistingPivot($user->id, [
+                'last_read_message_id' => $forwarded->id,
+            ]);
+
+            try {
+                broadcast(new MessageSent($forwarded))->toOthers();
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
+        return response()->json(['forwarded' => $targets->count()]);
     }
 
     /**

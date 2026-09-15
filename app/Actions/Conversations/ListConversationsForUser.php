@@ -19,7 +19,12 @@ class ListConversationsForUser
      */
     public function handle(User $user, Team $team, ?int $currentConversationId = null, bool $archivedOnly = false): Collection
     {
-        $query = $user->conversations()->where('conversations.team_id', $team->id);
+        $query = $user->conversations()
+            ->where('conversations.team_id', $team->id)
+            // "Eliminar conversación" (hidden_at): no aparece en NINGÚN
+            // listado hasta que se busque a propósito — ni activo ni
+            // archivado.
+            ->wherePivotNull('hidden_at');
 
         if ($archivedOnly) {
             $query->wherePivotNotNull('archived_at');

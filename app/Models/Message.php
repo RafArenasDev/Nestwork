@@ -19,12 +19,14 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property MessageType $type
  * @property string $body
+ * @property string|null $original_body
  * @property array<string, mixed>|null $metadata
  * @property int|null $reply_to_message_id
  * @property int|null $forwarded_from_message_id
  * @property int|null $forwarded_from_conversation_id
  * @property bool $is_hidden
  * @property Carbon|null $edited_at
+ * @property int $edit_count
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -37,8 +39,9 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Reaction> $reactions
  * @property-read Collection<int, MessageReceipt> $receipts
  * @property-read Collection<int, MessageDeletion> $deletions
+ * @property-read Collection<int, SavedMessage> $savedBy
  */
-#[Fillable(['conversation_id', 'user_id', 'type', 'body', 'metadata', 'reply_to_message_id', 'forwarded_from_message_id', 'forwarded_from_conversation_id', 'is_hidden', 'edited_at'])]
+#[Fillable(['conversation_id', 'user_id', 'type', 'body', 'original_body', 'metadata', 'reply_to_message_id', 'forwarded_from_message_id', 'forwarded_from_conversation_id', 'is_hidden', 'edited_at', 'edit_count'])]
 class Message extends Model
 {
     /** @use HasFactory<MessageFactory> */
@@ -48,6 +51,11 @@ class Message extends Model
     {
         return [
             'type' => MessageType::class,
+            // Laravel cifra/descifra con APP_KEY de forma transparente
+            // — nunca queda en texto plano en la BD, y no hace falta
+            // tocar nada más al leer/escribir (ver `destroy`/`restore`
+            // en MessagesController).
+            'original_body' => 'encrypted',
             'metadata' => 'array',
             'is_hidden' => 'boolean',
             'edited_at' => 'datetime',
@@ -124,5 +132,13 @@ class Message extends Model
     public function deletions(): HasMany
     {
         return $this->hasMany(MessageDeletion::class);
+    }
+
+    /**
+     * @return HasMany<SavedMessage, $this>
+     */
+    public function savedBy(): HasMany
+    {
+        return $this->hasMany(SavedMessage::class);
     }
 }

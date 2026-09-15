@@ -2,7 +2,6 @@
 
 namespace App\Events;
 
-use App\Data\AttachmentData;
 use App\Data\MessageData;
 use App\Models\Message;
 use Illuminate\Broadcasting\Channel;
@@ -53,28 +52,12 @@ class MessageSent implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        $viewer = $this->message->user;
-
         return [
             'conversationId' => $this->message->conversation_id,
-            'message' => new MessageData(
-                id: $this->message->id,
-                body: $this->message->body,
-                createdAt: $this->message->created_at->toIso8601String(),
-                editedAt: $this->message->edited_at?->toIso8601String(),
-                userId: $this->message->user_id,
-                userName: $viewer->name,
-                userAvatar: $viewer->avatar,
-                // Se recalcula por cada destinatario en el frontend (el
-                // payload no sabe "para quién" se está renderizando) —
-                // acá siempre false, el cliente compara userId === auth.user.id.
-                isMine: false,
-                replyToId: $this->message->replyTo?->id,
-                replyToUserName: $this->message->replyTo?->user->name,
-                replyToBody: $this->message->replyTo?->body,
-                status: 'sent',
-                attachments: AttachmentData::collectionFor($this->message),
-            ),
+            // viewerUserId null: se recalcula por cada destinatario en
+            // el frontend (el payload no sabe "para quién" se está
+            // renderizando) — el cliente compara userId === auth.user.id.
+            'message' => MessageData::fromMessage($this->message, null, null),
         ];
     }
 }
