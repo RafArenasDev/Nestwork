@@ -1812,6 +1812,15 @@ function Thread({
                                 : existing,
                         ),
                     );
+
+                    // Un error de red/timeout del lado del cliente no
+                    // significa que el servidor no haya guardado el
+                    // mensaje (causa raíz real del bug del adjunto en
+                    // blob: pegado para siempre) — se recarga el estado
+                    // real en vez de confiar ciegamente en "failed". Si
+                    // de verdad no se guardó, esto no trae nada nuevo y
+                    // el mensaje se queda marcado como falló.
+                    router.reload({ only: ['conversation', 'messages'] });
                 },
                 onFinish: () => setSending(false),
             },

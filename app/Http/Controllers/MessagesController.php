@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Attachments\GenerateAttachmentPreview;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Data\MessageData;
 use App\Data\ReactionData;
@@ -13,6 +12,7 @@ use App\Events\ConversationPinChanged;
 use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
+use App\Jobs\GenerateAttachmentPreviewJob;
 use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -377,11 +377,11 @@ class MessagesController extends Controller
             'height' => $height,
         ]);
 
-        // Síncrono a propósito — pedido explícito: "la preview de la
-        // primera página la quiero desde la miniatura que se carga, no
-        // al rato". La propia Action decide si el tipo de archivo
-        // aplica (pdf/doc/docx/xls/xlsx/txt) antes de convertir.
-        app(GenerateAttachmentPreview::class)->handle($attachment);
+        // En cola, no síncrono (ver GenerateAttachmentPreviewJob para el
+        // porqué: correrlo dentro del request causaba 503 reales por
+        // timeout del proxy). La propia Action decide si el tipo de
+        // archivo aplica (pdf/doc/docx/xls/xlsx/txt) antes de convertir.
+        GenerateAttachmentPreviewJob::dispatch($attachment);
     }
 
     /**

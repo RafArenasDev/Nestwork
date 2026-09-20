@@ -10,10 +10,15 @@ use Symfony\Component\Process\Process;
 
 /**
  * Preview real de la primera página/hoja de un documento (PDF/Word/
- * Excel/texto plano) — pedido explícito: "ver el documento siquiera
- * una página al cargarlo... la preview de la primera página la quiero
- * desde la miniatura que se carga, no al rato" — por eso corre
- * SÍNCRONO, dentro del mismo POST que sube el adjunto, no en cola.
+ * Excel/texto plano). Corría síncrona dentro del propio POST de subida
+ * (pedido explícito original: "la preview... la quiero desde la
+ * miniatura que se carga, no al rato") — eso causaba 503 reales
+ * (LibreOffice en frío + Poppler pueden tardar más que el timeout del
+ * proxy) que dejaban el mensaje pegado en su preview `blob:` local para
+ * siempre. Ahora la dispara `GenerateAttachmentPreviewJob` en cola —
+ * la demora percibida (1-3s típico) llega por el mismo canal en vivo
+ * que ya usan reacciones/ediciones, así que sigue viéndose "casi
+ * inmediata" sin poder tumbar el envío del mensaje.
  *
  * Pipeline en dos pasos, cada herramienta en lo que de verdad es
  * confiable (probado con un PDF real que LibreOffice exportaba en
