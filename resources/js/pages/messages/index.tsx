@@ -2028,6 +2028,12 @@ function Thread({
                                                                 message.id ===
                                                                 pinnedMessageId
                                                             }
+                                                            showsThreads={
+                                                                conversation.type ===
+                                                                    'group' ||
+                                                                conversation.type ===
+                                                                    'channel'
+                                                            }
                                                             onReply={
                                                                 handleReply
                                                             }
@@ -2105,16 +2111,30 @@ function Thread({
                     )}
                 </div>
 
-                <MessageComposer
-                    placeholder="Escribe un mensaje…"
-                    replyingTo={replyingTo}
-                    onCancelReply={() => setReplyingTo(null)}
-                    editingMessage={editingMessage}
-                    onCancelEdit={() => setEditingMessage(null)}
-                    onSubmit={handleSend}
-                    onSubmitEdit={handleSubmitEdit}
-                    onTyping={notifyTyping}
-                />
+                {conversation.type === 'channel' &&
+                !conversation.isAdmin &&
+                !replyingTo ? (
+                    <div className="glass-panel-edge-t text-muted-foreground px-4 py-3 text-center text-sm">
+                        Sólo quien administra este canal puede publicar acá.
+                        Responde a una publicación para participar en su hilo.
+                    </div>
+                ) : (
+                    <MessageComposer
+                        placeholder={
+                            conversation.type === 'channel' &&
+                            !conversation.isAdmin
+                                ? 'Responder en el hilo…'
+                                : 'Escribe un mensaje…'
+                        }
+                        replyingTo={replyingTo}
+                        onCancelReply={() => setReplyingTo(null)}
+                        editingMessage={editingMessage}
+                        onCancelEdit={() => setEditingMessage(null)}
+                        onSubmit={handleSend}
+                        onSubmitEdit={handleSubmitEdit}
+                        onTyping={notifyTyping}
+                    />
+                )}
             </div>
 
             <ForwardDialog
@@ -2361,6 +2381,7 @@ function MessageBubble({
     onTogglePin,
     onToggleSave,
     onDelete,
+    showsThreads = false,
 }: {
     message: MessageData;
     getInitials: (name: string) => string;
@@ -2369,6 +2390,11 @@ function MessageBubble({
     isFirstInGroup: boolean;
     isLastInGroup: boolean;
     isPinned: boolean;
+    /** Grupo/Canal (`ConversationType::supportsThreads()`) — la acción
+     *  de responder se etiqueta distinto para dejar claro que ahí crea
+     *  un hilo, no sólo una cita en línea (que sigue siendo el mismo
+     *  mecanismo por debajo: `reply_to_message_id`). */
+    showsThreads?: boolean;
     onReply: (message: MessageData) => void;
     onReact: (message: MessageData, emoji: string) => void;
     onEdit: (message: MessageData) => void;
@@ -2947,7 +2973,11 @@ function MessageBubble({
                                 <div className="flex items-center gap-0.5">
                                     <BubbleActionButton
                                         icon={Reply}
-                                        label="Responder"
+                                        label={
+                                            showsThreads
+                                                ? 'Responder en hilo'
+                                                : 'Responder'
+                                        }
                                         onClick={() => onReply(message)}
                                     />
                                     <BubbleReactionPickerButton
