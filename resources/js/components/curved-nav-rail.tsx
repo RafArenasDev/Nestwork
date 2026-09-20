@@ -77,6 +77,12 @@ const RAIL_MODULES = [
 export { RAIL_MODULES };
 export type RailModuleKey = (typeof RAIL_MODULES)[number]['key'];
 
+/** El Home (accesos rápidos a Guardados/Archivo/Actividad) dispara esto
+ *  en vez de navegar directo — el módulo activo del rail es estado
+ *  local de AppSidebarLayout, no una URL, así que una página no puede
+ *  cambiarlo con un <Link> normal. */
+export const SWITCH_MODULE_EVENT = 'nestwork:switch-module';
+
 /** Ancho fijo (siempre el mismo, ocupa todo el alto, sin padding/margin). */
 export const CURVED_RAIL_WIDTH = 72;
 

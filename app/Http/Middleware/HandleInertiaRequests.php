@@ -92,6 +92,9 @@ class HandleInertiaRequests extends Middleware
                         name: $member->name,
                         username: $member->username,
                         avatar: $member->avatar,
+                        presence: $member->presenceStatus(),
+                        statusEmoji: $member->status_emoji,
+                        statusText: $member->status_text,
                     ))
                 : [],
             // Presencia (disponible/ausente/ocupado/no molestar) y

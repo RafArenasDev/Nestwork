@@ -9,8 +9,10 @@ import {
     CURVED_RAIL_WIDTH,
     CurvedNavRail,
     RAIL_MODULES,
+    SWITCH_MODULE_EVENT,
     type RailModuleKey,
 } from '@/components/curved-nav-rail';
+import { ModulePlaceholder } from '@/components/module-placeholder';
 import {
     getNotificationPreferences,
     playNotificationSound,
@@ -78,6 +80,21 @@ export default function AppSidebarLayout({
     const [manualModule, setManualModule] = useState<RailModuleKey | null>(
         null,
     );
+
+    // Los accesos rápidos del Home (Guardados/Archivo/Actividad) no
+    // pueden usar un <Link> normal — el módulo activo es este estado
+    // local, no una URL — así que avisan por evento en vez de eso.
+    useEffect(() => {
+        function handleSwitchModule(event: Event) {
+            const key = (event as CustomEvent<RailModuleKey>).detail;
+            setManualModule(key);
+        }
+
+        window.addEventListener(SWITCH_MODULE_EVENT, handleSwitchModule);
+
+        return () =>
+            window.removeEventListener(SWITCH_MODULE_EVENT, handleSwitchModule);
+    }, []);
 
     // Tiempo real (Reverb): un mensaje nuevo en cualquier conversación
     // propia refresca sólo el contador de no-leídos del sidebar — el
@@ -152,6 +169,18 @@ export default function AppSidebarLayout({
     const activeModuleLabel =
         RAIL_MODULES.find((module) => module.key === activeModule)?.label ?? '';
 
+    // Actividad/Archivo/Guardados no navegan hasta que se elige una
+    // conversación puntual de la lista (eso sí navega de verdad, ver
+    // ConversationRow en app-sidebar.tsx) — mientras tanto, mostrar el
+    // contenido de la página anterior (ej. Home) quedaba desactualizado
+    // y confuso. `conversation` sólo llega en messages/show.
+    const openConversation = page.props.conversation as
+        | ActiveConversation
+        | null
+        | undefined;
+    const showModulePlaceholder =
+        !ROUTED_MODULES[activeModule] && !openConversation;
+
     const handleModuleChange = (key: RailModuleKey) => {
         if (ROUTED_MODULES[key] && currentTeam) {
             setManualModule(null);
@@ -193,8 +222,18 @@ export default function AppSidebarLayout({
                         variant="sidebar"
                         className="bg-background min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
                     >
-                        <AppSidebarHeader breadcrumbs={breadcrumbs} />
-                        {children}
+                        <AppSidebarHeader
+                            breadcrumbs={
+                                showModulePlaceholder
+                                    ? [{ title: activeModuleLabel, href: '#' }]
+                                    : breadcrumbs
+                            }
+                        />
+                        {showModulePlaceholder ? (
+                            <ModulePlaceholder module={activeModule} />
+                        ) : (
+                            children
+                        )}
                     </AppContent>
                 </AppShell>
             </div>

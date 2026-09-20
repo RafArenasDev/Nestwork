@@ -70,6 +70,9 @@ export type TeamMemberOption = {
     name: string;
     username: string;
     avatar: string | null;
+    presence: 'available' | 'away' | 'busy' | 'offline';
+    statusEmoji: string | null;
+    statusText: string | null;
 };
 
 export type SavedMessageSummary = {
