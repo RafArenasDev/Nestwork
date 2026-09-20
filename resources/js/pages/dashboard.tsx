@@ -12,6 +12,7 @@ import {
 } from '@/components/curved-nav-rail';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
+import { useLivePresence } from '@/hooks/use-live-presence';
 import { dashboard } from '@/routes';
 import { store as startConversation } from '@/routes/conversations';
 import type { DashboardInvitation } from '@/types';
@@ -65,6 +66,7 @@ function TeammateRow({ member }: { member: TeamMemberOption }) {
     const [starting, setStarting] = useState(false);
     const page = usePage();
     const currentTeam = page.props.currentTeam;
+    const live = useLivePresence(member.id, member);
 
     const handleClick = () => {
         if (!currentTeam || starting) {
@@ -95,19 +97,16 @@ function TeammateRow({ member }: { member: TeamMemberOption }) {
                         {getInitials(member.name)}
                     </AvatarFallback>
                 </Avatar>
-                <PresenceDot
-                    presence={member.presence}
-                    surfaceTone="var(--card)"
-                />
+                <PresenceDot presence={live.presence} surfaceTone="var(--card)" />
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">
                     {member.name}
                 </span>
                 <span className="text-muted-foreground block truncate text-xs">
-                    {member.statusText
-                        ? `${member.statusEmoji ?? ''} ${member.statusText}`.trim()
-                        : PRESENCE_LABEL[member.presence]}
+                    {live.statusText
+                        ? `${live.statusEmoji ?? ''} ${live.statusText}`.trim()
+                        : PRESENCE_LABEL[live.presence]}
                 </span>
             </span>
         </button>

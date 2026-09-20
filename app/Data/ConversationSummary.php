@@ -9,6 +9,10 @@ readonly class ConversationSummary
         public string $type,
         public string $name,
         public ?string $avatar,
+        /** Sólo DMs — para poder aplicar overrides de presencia en vivo
+         *  del lado del cliente (ver `useLivePresence`) sin adivinar a
+         *  qué usuario corresponde la fila. */
+        public ?int $otherUserId,
         /** @var 'available'|'away'|'busy'|'dnd'|'offline'|null */
         public ?string $presence,
         /** Estado personalizado del otro participante (sólo DMs) —

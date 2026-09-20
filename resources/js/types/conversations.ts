@@ -3,6 +3,7 @@ export type ConversationSummary = {
     type: 'dm' | 'group';
     name: string;
     avatar: string | null;
+    otherUserId: number | null;
     presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
     statusEmoji: string | null;
     statusText: string | null;

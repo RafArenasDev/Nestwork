@@ -17,6 +17,7 @@ import {
     getNotificationPreferences,
     playNotificationSound,
 } from '@/hooks/use-notification-preferences';
+import { TeamPresenceProvider } from '@/hooks/use-live-presence';
 import { updateFaviconBadge } from '@/lib/favicon-badge';
 import { dashboard } from '@/routes';
 import {
@@ -199,7 +200,15 @@ export default function AppSidebarLayout({
     };
 
     return (
-        <>
+        <TeamPresenceProvider
+            teamId={currentTeam?.id}
+            reloadProps={[
+                'teamMembers',
+                'conversations',
+                'archivedConversations',
+                'conversation',
+            ]}
+        >
             <CurvedNavRail
                 active={activeModule}
                 onChange={handleModuleChange}
@@ -237,6 +246,6 @@ export default function AppSidebarLayout({
                     </AppContent>
                 </AppShell>
             </div>
-        </>
+        </TeamPresenceProvider>
     );
 }

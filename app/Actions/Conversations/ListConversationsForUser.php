@@ -67,6 +67,9 @@ class ListConversationsForUser
             type: $conversation->type->value,
             name: $conversation->displayNameFor($user),
             avatar: $otherParticipant instanceof User ? $otherParticipant->avatar : null,
+            otherUserId: $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->id
+                : null,
             presence: $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
                 ? $otherParticipant->presenceStatus()
                 : null,

@@ -19,6 +19,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import { useLivePresence } from '@/hooks/use-live-presence';
 import { useOpenConversationUnseen } from '@/hooks/use-open-conversation-unseen';
 import { csrfHeaders } from '@/lib/csrf';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
@@ -201,6 +202,8 @@ function ConversationRow({
             ? openUnseen.count
             : conversation.unreadCount;
 
+    const live = useLivePresence(conversation.otherUserId, conversation);
+
     const row = (
         <li
             className={`sidebar-row${conversation.isCurrent ? ' sidebar-row--active' : ''}`}
@@ -245,13 +248,13 @@ function ConversationRow({
                             {getInitials(conversation.name)}
                         </AvatarFallback>
                     </Avatar>
-                    {conversation.presence && (
+                    {live.presence && (
                         <PresenceDot
-                            presence={conversation.presence}
+                            presence={live.presence}
                             surfaceTone="var(--bg-elevated)"
                         />
                     )}
-                    {conversation.statusEmoji && (
+                    {live.statusEmoji && (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span
@@ -260,11 +263,11 @@ function ConversationRow({
                                         backgroundColor: 'var(--bg-elevated)',
                                     }}
                                 >
-                                    {conversation.statusEmoji}
+                                    {live.statusEmoji}
                                 </span>
                             </TooltipTrigger>
                             <TooltipContent side="right">
-                                {conversation.statusText}
+                                {live.statusText}
                             </TooltipContent>
                         </Tooltip>
                     )}

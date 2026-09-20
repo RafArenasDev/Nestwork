@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserPresenceUpdated;
 use App\Models\StatusPreset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,9 +22,16 @@ class UserPresenceController extends Controller
             'preset' => ['nullable', Rule::in(StatusPreset::PRESENCE_KEYS)],
         ]);
 
-        $request->user()->forceFill([
+        $user = $request->user();
+
+        $user->forceFill([
             'status_preset' => $validated['preset'] ?? null,
         ])->save();
+
+        // Sin esto, el cambio sólo lo ve quien lo hizo — nadie más se
+        // entera hasta que su propia pantalla recargue por otro motivo
+        // (ver App\Events\UserPresenceUpdated).
+        broadcast(new UserPresenceUpdated($user))->toOthers();
 
         return back();
     }

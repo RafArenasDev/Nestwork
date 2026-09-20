@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\UserPresenceUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -27,7 +28,9 @@ class UserStatusController extends Controller
             'duration_minutes' => ['nullable', 'integer', 'min:1', 'max:10080'],
         ]);
 
-        $request->user()->forceFill([
+        $user = $request->user();
+
+        $user->forceFill([
             'status_emoji' => $validated['emoji'] ?? null,
             'status_text' => $validated['text'] ?? null,
             'status_expires_at' => isset($validated['duration_minutes'])
@@ -35,16 +38,22 @@ class UserStatusController extends Controller
                 : null,
         ])->save();
 
+        broadcast(new UserPresenceUpdated($user))->toOthers();
+
         return back();
     }
 
     public function destroy(Request $request): RedirectResponse
     {
-        $request->user()->forceFill([
+        $user = $request->user();
+
+        $user->forceFill([
             'status_emoji' => null,
             'status_text' => null,
             'status_expires_at' => null,
         ])->save();
+
+        broadcast(new UserPresenceUpdated($user))->toOthers();
 
         return back();
     }

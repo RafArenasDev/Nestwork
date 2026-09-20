@@ -102,6 +102,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import { useLivePresence } from '@/hooks/use-live-presence';
 import { getPrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import {
     clearOpenConversationUnseen,
@@ -649,6 +650,8 @@ function ConversationHeader({
     getInitials: (name: string) => string;
     onClose: () => void;
 }) {
+    const live = useLivePresence(conversation.otherUserId, conversation);
+
     const handleToggleArchive = () => {
         if (!currentTeamSlug) {
             return;
@@ -719,7 +722,7 @@ function ConversationHeader({
                   busy: 'Ocupado',
                   dnd: 'No molestar',
                   offline: 'Desconectado',
-              }[conversation.presence ?? 'offline'];
+              }[live.presence ?? 'offline'];
 
     return (
         <div className="glass-panel-edge-b sticky top-0 z-10 flex shrink-0 items-center gap-4 px-4 py-3">
@@ -738,13 +741,13 @@ function ConversationHeader({
                         {getInitials(conversation.name)}
                     </AvatarFallback>
                 </Avatar>
-                {conversation.presence && (
+                {live.presence && (
                     <PresenceDot
-                        presence={conversation.presence}
+                        presence={live.presence}
                         surfaceTone="var(--bg-elevated)"
                     />
                 )}
-                {conversation.statusEmoji && (
+                {live.statusEmoji && (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <span
@@ -753,11 +756,11 @@ function ConversationHeader({
                                     backgroundColor: 'var(--bg-elevated)',
                                 }}
                             >
-                                {conversation.statusEmoji}
+                                {live.statusEmoji}
                             </span>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
-                            {conversation.statusText}
+                            {live.statusText}
                         </TooltipContent>
                     </Tooltip>
                 )}
@@ -766,15 +769,15 @@ function ConversationHeader({
             <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1.5 truncate text-sm leading-tight font-semibold">
                     {conversation.name}
-                    {conversation.statusEmoji && (
+                    {live.statusEmoji && (
                         <span className="text-xs font-normal">
-                            {conversation.statusEmoji}
+                            {live.statusEmoji}
                         </span>
                     )}
                 </p>
                 <p className="text-muted-foreground truncate text-xs leading-tight">
                     {statusLabel}
-                    {conversation.statusText && ` · ${conversation.statusText}`}
+                    {live.statusText && ` · ${live.statusText}`}
                     {conversation.isMuted && ' · Silenciado'}
                 </p>
             </div>
