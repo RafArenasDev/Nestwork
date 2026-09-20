@@ -70,6 +70,12 @@ class ListConversationsForUser
             presence: $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
                 ? $otherParticipant->presenceStatus()
                 : null,
+            statusEmoji: $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->status_emoji
+                : null,
+            statusText: $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->status_text
+                : null,
             lastMessageBody: $lastMessage?->body,
             lastMessageAt: $lastMessage instanceof Message ? $this->isoString($lastMessage->created_at) : null,
             unreadCount: $unreadCount,

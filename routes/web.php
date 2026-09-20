@@ -2,10 +2,13 @@
 
 use App\Http\Controllers\ConversationsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GeoController;
 use App\Http\Controllers\MessagesController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
+use App\Http\Controllers\UserPreferencesController;
 use App\Http\Controllers\UserPresenceController;
+use App\Http\Controllers\UserSecurityController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +51,12 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('user/status', [UserStatusController::class, 'update'])->name('user-status.update');
     Route::delete('user/status', [UserStatusController::class, 'destroy'])->name('user-status.destroy');
     Route::patch('user/presence', [UserPresenceController::class, 'update'])->name('user-presence.update');
+    Route::patch('user/preferences', [UserPreferencesController::class, 'update'])->name('user-preferences.update');
+    Route::delete('user/sessions', [UserSecurityController::class, 'logoutOtherDevices'])->name('user-security.logout-other-devices');
+
+    Route::get('geo/countries', [GeoController::class, 'countries'])->name('geo.countries');
+    Route::get('geo/states', [GeoController::class, 'states'])->name('geo.states');
+    Route::get('geo/cities', [GeoController::class, 'cities'])->name('geo.cities');
 });
 
 require __DIR__.'/auth.php';

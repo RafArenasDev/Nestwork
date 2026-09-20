@@ -27,7 +27,7 @@ class StatusPreset extends Model
      *
      * @var list<string>
      */
-    public const PRESENCE_KEYS = ['available', 'away', 'busy', 'dnd'];
+    public const PRESENCE_KEYS = ['available', 'away', 'busy', 'dnd', 'invisible'];
 
     protected function casts(): array
     {

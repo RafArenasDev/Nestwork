@@ -3,7 +3,9 @@ export type ConversationSummary = {
     type: 'dm' | 'group';
     name: string;
     avatar: string | null;
-    presence: 'available' | 'away' | 'busy' | 'offline' | null;
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
+    statusEmoji: string | null;
+    statusText: string | null;
     lastMessageBody: string | null;
     lastMessageAt: string | null;
     unreadCount: number;
@@ -58,7 +60,9 @@ export type ActiveConversation = {
     type: 'dm' | 'group';
     avatar: string | null;
     otherUserId: number | null;
-    presence: 'available' | 'away' | 'busy' | 'offline' | null;
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
+    statusEmoji: string | null;
+    statusText: string | null;
     isArchived: boolean;
     isMuted: boolean;
     viewerLastReadMessageId: number | null;
@@ -70,7 +74,7 @@ export type TeamMemberOption = {
     name: string;
     username: string;
     avatar: string | null;
-    presence: 'available' | 'away' | 'busy' | 'offline';
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline';
     statusEmoji: string | null;
     statusText: string | null;
 };

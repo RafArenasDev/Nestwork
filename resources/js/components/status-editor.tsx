@@ -18,25 +18,25 @@ import {
 import { update as updatePresence } from '@/routes/user-presence';
 import type { StatusPresetOption } from '@/types/status';
 
-type Presence = 'available' | 'away' | 'busy' | 'dnd';
+type Presence = 'available' | 'away' | 'busy' | 'dnd' | 'invisible';
 
 const PRESENCE_DOT_CLASS: Record<Presence, string> = {
     available: 'bg-emerald-500',
     away: 'bg-amber-500',
     busy: 'bg-red-500',
-    dnd: 'bg-red-500',
+    dnd: 'bg-red-600',
+    invisible: 'bg-zinc-400',
 };
 
+/** Mismas opciones que Slack (Preferences › Status › "Clear after"):
+ *  No vence / 30 min / 1 h / 4 h / Hoy / Esta semana / Personalizado. */
 const DURATION_OPTIONS: ComboboxOption[] = [
     { value: '', label: 'No vence' },
-    { value: '15', label: '15 minutos' },
     { value: '30', label: '30 minutos' },
     { value: '60', label: '1 hora' },
-    { value: '120', label: '2 horas' },
     { value: '240', label: '4 horas' },
     { value: 'today', label: 'Hasta hoy a la noche' },
-    { value: '1440', label: '1 día' },
-    { value: '10080', label: '1 semana' },
+    { value: '10080', label: 'Esta semana' },
     { value: 'custom', label: 'Fecha y hora personalizada…' },
 ];
 
@@ -93,11 +93,15 @@ export function PresenceMenu({
                 >
                     <span
                         className={cn(
-                            'size-2.5 shrink-0 rounded-full',
+                            'flex size-2.5 shrink-0 items-center justify-center rounded-full',
                             PRESENCE_DOT_CLASS[preset.key as Presence] ??
                                 'bg-zinc-400',
                         )}
-                    />
+                    >
+                        {preset.key === 'dnd' && (
+                            <span className="h-[1.5px] w-1/2 rounded-full bg-white" />
+                        )}
+                    </span>
                     <span className="flex-1">{preset.label}</span>
                     {currentPreset === preset.key && (
                         <Check className="text-muted-foreground size-3.5" />

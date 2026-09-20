@@ -23,6 +23,8 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $username
  * @property int|null $country_id
+ * @property int|null $state_id
+ * @property int|null $city_id
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string|null $password
@@ -33,7 +35,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $status_emoji
  * @property string|null $status_text
  * @property Carbon|null $status_expires_at
- * @property-read 'available'|'away'|'busy'|'offline' $presence
+ * @property bool $read_receipts_enabled
+ * @property-read 'available'|'away'|'busy'|'dnd'|'offline' $presence
  * @property string|null $remember_token
  * @property int|null $current_team_id
  * @property Carbon|null $created_at
@@ -44,9 +47,11 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Team> $teams
  * @property-read Collection<int, Conversation> $conversations
  * @property-read Country|null $country
+ * @property-read State|null $state
+ * @property-read City|null $city
  * @property-read Collection<int, Favorite> $favorites
  */
-#[Fillable(['name', 'username', 'country_id', 'email', 'password', 'auth_provider', 'avatar', 'current_team_id', 'status_preset', 'status_emoji', 'status_text', 'status_expires_at'])]
+#[Fillable(['name', 'username', 'country_id', 'state_id', 'city_id', 'email', 'password', 'auth_provider', 'avatar', 'current_team_id', 'status_preset', 'status_emoji', 'status_text', 'status_expires_at', 'read_receipts_enabled'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -57,7 +62,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $appends = ['presence'];
 
     /**
-     * @return Attribute<'available'|'away'|'busy'|'offline', never>
+     * @return Attribute<'available'|'away'|'busy'|'dnd'|'offline', never>
      */
     protected function presence(): Attribute
     {
@@ -77,24 +82,39 @@ class User extends Authenticatable implements MustVerifyEmail
             'auth_provider' => AuthProvider::class,
             'last_seen_at' => 'datetime',
             'status_expires_at' => 'datetime',
+            'read_receipts_enabled' => 'boolean',
         ];
     }
 
     /**
      * Presencia real: un preset manual (disponible/ausente/ocupado/no
-     * molestar, `status_preset`) pisa todo hasta que se cambie a mano
-     * — NO vence solo (a diferencia del estado personalizado, ver
-     * `statusText()`/`statusEmoji()` abajo); si no hay uno activo, se
-     * deriva de `last_seen_at`. Presencia y estado personalizado son
-     * dos cosas independientes: cambiar una nunca toca la otra (ver
-     * UserStatusController vs UserPresenceController).
+     * molestar/invisible, `status_preset`) pisa todo hasta que se
+     * cambie a mano — NO vence solo (a diferencia del estado
+     * personalizado, ver `statusText()`/`statusEmoji()` abajo); si no
+     * hay uno activo, se deriva de `last_seen_at`. Presencia y estado
+     * personalizado son dos cosas independientes: cambiar una nunca
+     * toca la otra (ver UserStatusController vs UserPresenceController).
      *
-     * @return 'available'|'away'|'busy'|'offline'
+     * "busy" y "dnd" son valores DISTINTOS a propósito (antes "dnd"
+     * colapsaba en "busy" y se veían idénticos) — el frontend les da
+     * ícono/forma distinta, no sólo color, igual que Teams. "invisible"
+     * fuerza "offline" sin importar la actividad real (aparecer
+     * desconectado a propósito).
+     *
+     * @return 'available'|'away'|'busy'|'dnd'|'offline'
      */
     public function presenceStatus(): string
     {
-        if ($this->status_preset === 'busy' || $this->status_preset === 'dnd') {
+        if ($this->status_preset === 'invisible') {
+            return 'offline';
+        }
+
+        if ($this->status_preset === 'busy') {
             return 'busy';
+        }
+
+        if ($this->status_preset === 'dnd') {
+            return 'dnd';
         }
 
         if ($this->status_preset === 'available') {
@@ -166,6 +186,22 @@ class User extends Authenticatable implements MustVerifyEmail
     public function country(): BelongsTo
     {
         return $this->belongsTo(Country::class);
+    }
+
+    /**
+     * @return BelongsTo<State, $this>
+     */
+    public function state(): BelongsTo
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    /**
+     * @return BelongsTo<City, $this>
+     */
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class);
     }
 
     /**

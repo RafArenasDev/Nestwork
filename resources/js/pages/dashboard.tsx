@@ -26,6 +26,7 @@ const PRESENCE_LABEL: Record<TeamMemberOption['presence'], string> = {
     available: 'Disponible',
     away: 'Ausente',
     busy: 'Ocupado',
+    dnd: 'No molestar',
     offline: 'Desconectado',
 };
 
@@ -118,6 +119,15 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
     const auth = page.props.auth;
     const currentTeam = page.props.currentTeam;
     const teamMembers = page.props.teamMembers ?? [];
+    // Ni Slack ni Teams ponen un directorio completo del equipo en su
+    // landing — acá sólo tiene sentido mostrar quién está activo AHORA
+    // (información que de verdad cambia), nunca la lista entera con la
+    // mayoría "Desconectado" (eso ya está, con búsqueda, en "Nuevo
+    // chat"). Tope de 8: si hay más gente conectada que eso, ya no es
+    // un vistazo rápido.
+    const onlineMembers = teamMembers
+        .filter((member) => member.presence !== 'offline')
+        .slice(0, 8);
     const [showInvitations, setShowInvitations] = useState(
         pendingInvitations.length > 0,
     );
@@ -171,15 +181,18 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col">
-                    <h2 className="mb-1 text-sm font-semibold">Tu equipo</h2>
+                    <h2 className="mb-1 text-sm font-semibold">
+                        En línea ahora
+                    </h2>
 
-                    {teamMembers.length === 0 ? (
+                    {onlineMembers.length === 0 ? (
                         <p className="text-muted-foreground text-sm">
-                            Todavía no hay nadie más en este equipo.
+                            Nadie más de tu equipo está conectado en este
+                            momento.
                         </p>
                     ) : (
                         <ul className="flex min-h-0 flex-col overflow-y-auto">
-                            {teamMembers.map((member) => (
+                            {onlineMembers.map((member) => (
                                 <li key={member.id}>
                                     <TeammateRow member={member} />
                                 </li>

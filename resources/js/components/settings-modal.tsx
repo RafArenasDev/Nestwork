@@ -1,13 +1,20 @@
-import { usePage } from '@inertiajs/react';
-import { Bell, Palette, Sparkles } from 'lucide-react';
+import { router, usePage } from '@inertiajs/react';
+import { Bell, Palette, ShieldCheck, ShieldEllipsis } from 'lucide-react';
 import { useState } from 'react';
-import { PresenceMenu, CustomStatusEditor } from '@/components/status-editor';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useAppearance, type Appearance } from '@/hooks/use-appearance';
 import {
@@ -17,17 +24,23 @@ import {
 } from '@/hooks/use-customization';
 import {
     playNotificationSound,
+    SOUND_OPTIONS,
     useNotificationPreferences,
 } from '@/hooks/use-notification-preferences';
+import { usePrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import { COLOR_PRESETS } from '@/lib/color-presets';
 import { cn } from '@/lib/utils';
+import { destroy as deleteAccount } from '@/routes/profile';
+import { update as updatePreferences } from '@/routes/user-preferences';
+import { logoutOtherDevices } from '@/routes/user-security';
 
-type Tab = 'status' | 'appearance' | 'notifications';
+type Tab = 'appearance' | 'notifications' | 'privacy' | 'security';
 
-const TABS: { key: Tab; label: string; icon: typeof Sparkles }[] = [
-    { key: 'status', label: 'Estado', icon: Sparkles },
+const TABS: { key: Tab; label: string; icon: typeof Bell }[] = [
     { key: 'appearance', label: 'Apariencia', icon: Palette },
     { key: 'notifications', label: 'Notificaciones', icon: Bell },
+    { key: 'privacy', label: 'Privacidad', icon: ShieldEllipsis },
+    { key: 'security', label: 'Seguridad', icon: ShieldCheck },
 ];
 
 const THEME_TILES: { value: Appearance; label: string }[] = [
@@ -235,34 +248,6 @@ function ColorPresetGrid({
     );
 }
 
-function StatusTab() {
-    const page = usePage();
-    const auth = page.props.auth;
-    const presencePresets = page.props.presencePresets;
-    const statusPresets = page.props.statusPresets;
-
-    return (
-        <div className="flex flex-col gap-6">
-            <div>
-                <span className="text-muted-foreground mb-2 block text-xs font-medium">
-                    Presencia
-                </span>
-                <PresenceMenu
-                    presets={presencePresets}
-                    currentPreset={auth.user.status_preset}
-                />
-            </div>
-
-            <div className="border-border/50 border-t pt-5">
-                <span className="text-muted-foreground mb-2 block text-xs font-medium">
-                    Estado personalizado
-                </span>
-                <CustomStatusEditor presets={statusPresets} />
-            </div>
-        </div>
-    );
-}
-
 function AppearanceTab() {
     const { appearance, updateAppearance } = useAppearance();
     const {
@@ -370,7 +355,7 @@ function NotificationToggleRow({
 }
 
 function NotificationsTab() {
-    const { desktopEnabled, soundEnabled, showPreview, update } =
+    const { desktopEnabled, soundEnabled, sound, showPreview, update } =
         useNotificationPreferences();
     const [permission, setPermission] = useState<
         NotificationPermission | 'unsupported'
@@ -431,14 +416,159 @@ function NotificationsTab() {
                 checked={soundEnabled}
                 onChange={(checked) => update({ soundEnabled: checked })}
             />
-            <div className="pt-4">
-                <button
+            <div className="flex items-center justify-between gap-4 py-2.5">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">Tono</p>
+                    <p className="text-muted-foreground text-xs">
+                        Cuál sonido usar.
+                    </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <Select
+                        value={sound}
+                        disabled={!soundEnabled}
+                        onValueChange={(value) =>
+                            update({ sound: value as typeof sound })
+                        }
+                    >
+                        <SelectTrigger size="sm" className="w-32 rounded-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {SOUND_OPTIONS.map((option) => (
+                                <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                >
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <button
+                        type="button"
+                        disabled={!soundEnabled}
+                        onClick={() => playNotificationSound(sound)}
+                        className="border-border/60 hover:bg-foreground/5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
+                    >
+                        Probar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PrivacyTab() {
+    const page = usePage();
+    const auth = page.props.auth;
+    const { showTypingIndicator, update } = usePrivacyPreferences();
+
+    return (
+        <div className="flex flex-col divide-y divide-[var(--border)]/50">
+            <NotificationToggleRow
+                label="Confirmación de lectura"
+                description="Deja que los demás vean cuándo leíste sus mensajes. Si la apagas, tampoco ves la de ellos."
+                checked={auth.user.read_receipts_enabled}
+                onChange={(checked) =>
+                    router.patch(
+                        updatePreferences().url,
+                        { read_receipts_enabled: checked },
+                        { preserveScroll: true },
+                    )
+                }
+            />
+            <NotificationToggleRow
+                label="Mostrar “escribiendo…”"
+                description="Avisa a los demás en tiempo real cuando estás escribiendo un mensaje."
+                checked={showTypingIndicator}
+                onChange={(checked) => update({ showTypingIndicator: checked })}
+            />
+        </div>
+    );
+}
+
+function SecurityTab() {
+    const [loggingOut, setLoggingOut] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between gap-4 py-2.5">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                        Cerrar sesión en todos los dispositivos
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        Esta pestaña sigue activa; el resto se desconecta.
+                    </p>
+                </div>
+                <Button
                     type="button"
-                    onClick={() => playNotificationSound()}
-                    className="border-border/60 hover:bg-foreground/5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+                    variant="outline"
+                    size="sm"
+                    disabled={loggingOut}
+                    onClick={() => {
+                        setLoggingOut(true);
+                        router.delete(logoutOtherDevices().url, {
+                            preserveScroll: true,
+                            onFinish: () => setLoggingOut(false),
+                        });
+                    }}
                 >
-                    Probar sonido
-                </button>
+                    {loggingOut ? 'Cerrando…' : 'Cerrar sesiones'}
+                </Button>
+            </div>
+
+            <div className="border-destructive/30 bg-destructive/5 flex flex-col gap-3 rounded-xl border p-4">
+                <div>
+                    <p className="text-destructive text-sm font-medium">
+                        Eliminar cuenta
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        Borra tu cuenta y todo lo asociado a ella. No se puede
+                        deshacer.
+                    </p>
+                </div>
+                {confirmingDelete ? (
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleting}
+                            onClick={() => {
+                                setDeleting(true);
+                                router.delete(deleteAccount().url, {
+                                    onFinish: () => setDeleting(false),
+                                });
+                            }}
+                        >
+                            {deleting
+                                ? 'Eliminando…'
+                                : 'Sí, eliminar mi cuenta'}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmingDelete(false)}
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() => setConfirmingDelete(true)}
+                    >
+                        Eliminar cuenta
+                    </Button>
+                )}
             </div>
         </div>
     );
@@ -447,7 +577,7 @@ function NotificationsTab() {
 export function SettingsModal({
     open,
     onOpenChange,
-    initialTab = 'status',
+    initialTab = 'appearance',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -491,10 +621,15 @@ export function SettingsModal({
                     ))}
                 </div>
 
-                <div className="min-w-0 flex-1 overflow-y-auto p-6">
-                    {tab === 'status' && <StatusTab />}
+                {/* pt-11: el botón de cerrar del Dialog (top-4 right-4,
+                    ver ui/dialog.tsx) flota sobre ESTE panel — sin este
+                    espacio, cualquier control pegado arriba (el select
+                    de tono, un switch) quedaba debajo/tapado por la X. */}
+                <div className="min-w-0 flex-1 overflow-y-auto px-6 pt-11 pb-6">
                     {tab === 'appearance' && <AppearanceTab />}
                     {tab === 'notifications' && <NotificationsTab />}
+                    {tab === 'privacy' && <PrivacyTab />}
+                    {tab === 'security' && <SecurityTab />}
                 </div>
             </DialogContent>
         </Dialog>

@@ -9,8 +9,12 @@ readonly class ConversationSummary
         public string $type,
         public string $name,
         public ?string $avatar,
-        /** @var 'available'|'away'|'busy'|'offline'|null */
+        /** @var 'available'|'away'|'busy'|'dnd'|'offline'|null */
         public ?string $presence,
+        /** Estado personalizado del otro participante (sólo DMs) —
+         *  independiente de `presence`, ver User::statusText(). */
+        public ?string $statusEmoji,
+        public ?string $statusText,
         public ?string $lastMessageBody,
         public ?string $lastMessageAt,
         public int $unreadCount,

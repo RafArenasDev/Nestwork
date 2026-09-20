@@ -42,7 +42,7 @@ function notifyNewMessage(message: MessageData): void {
     const prefs = getNotificationPreferences();
 
     if (prefs.soundEnabled) {
-        playNotificationSound();
+        playNotificationSound(prefs.sound);
     }
 
     if (

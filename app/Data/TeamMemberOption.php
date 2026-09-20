@@ -9,7 +9,7 @@ readonly class TeamMemberOption
         public string $name,
         public string $username,
         public ?string $avatar,
-        /** @var 'available'|'away'|'busy'|'offline' */
+        /** @var 'available'|'away'|'busy'|'dnd'|'offline' */
         public string $presence,
         public ?string $statusEmoji,
         public ?string $statusText,

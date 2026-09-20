@@ -18,10 +18,16 @@ import { useState } from 'react';
 import { ProfileModal } from '@/components/profile-modal';
 import { SettingsModal } from '@/components/settings-modal';
 import { PresenceDot } from '@/components/presence-dot';
-import { PresenceMenu } from '@/components/status-editor';
+import { CustomStatusEditor, PresenceMenu } from '@/components/status-editor';
 import { TeamSwitcher } from '@/components/team-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -38,6 +44,7 @@ import {
 import { useInitials } from '@/hooks/use-initials';
 import { useLocale } from '@/hooks/use-locale';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { cn } from '@/lib/utils';
 import { logout } from '@/routes';
 import { destroy as clearStatus } from '@/routes/user-status';
 
@@ -100,26 +107,33 @@ const PRESENCE_LABEL: Record<string, string> = {
     available: 'Disponible',
     away: 'Ausente',
     busy: 'Ocupado',
+    dnd: 'No molestar',
     offline: 'Desconectado',
 };
 
+const PRESENCE_FILL: Record<string, string> = {
+    available: 'bg-emerald-500',
+    away: 'bg-amber-500',
+    busy: 'bg-red-500',
+    dnd: 'bg-red-600',
+    offline: 'bg-zinc-400',
+};
+
 export function CurvedNavRail({ active, onChange }: Props) {
-    const { auth, conversations, archivedConversations, presencePresets } =
-        usePage().props;
+    const {
+        auth,
+        conversations,
+        archivedConversations,
+        presencePresets,
+        statusPresets,
+    } = usePage().props;
     const getInitials = useInitials();
     const { t } = useLocale();
     const cleanup = useMobileNavigation();
     const [profileOpen, setProfileOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [settingsTab, setSettingsTab] = useState<'status' | 'appearance'>(
-        'appearance',
-    );
+    const [statusDialogOpen, setStatusDialogOpen] = useState(false);
     const showAvatar = Boolean(auth.user.avatar && auth.user.avatar !== '');
-
-    const openSettings = (tab: 'status' | 'appearance') => {
-        setSettingsTab(tab);
-        setSettingsOpen(true);
-    };
 
     const unreadMessageCount = conversations.reduce(
         (total, conversation) => total + conversation.unreadCount,
@@ -281,9 +295,22 @@ export function CurvedNavRail({ active, onChange }: Props) {
                                         {auth.user.name}
                                     </span>
                                     <span className="text-muted-foreground block truncate text-xs">
-                                        {PRESENCE_LABEL[auth.user.presence]}
+                                        @{auth.user.username}
                                     </span>
                                 </div>
+                            </div>
+                            <div className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
+                                <span
+                                    className={cn(
+                                        'inline-flex size-2 items-center justify-center rounded-full',
+                                        PRESENCE_FILL[auth.user.presence],
+                                    )}
+                                >
+                                    {auth.user.presence === 'dnd' && (
+                                        <span className="h-px w-1/2 bg-white" />
+                                    )}
+                                </span>
+                                {PRESENCE_LABEL[auth.user.presence]}
                             </div>
                             {auth.user.status_text && (
                                 <div className="border-border/50 mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5">
@@ -318,7 +345,7 @@ export function CurvedNavRail({ active, onChange }: Props) {
                         </div>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                            onClick={() => openSettings('status')}
+                            onClick={() => setStatusDialogOpen(true)}
                         >
                             <Sparkles className="mr-2" />
                             {auth.user.status_text
@@ -329,9 +356,7 @@ export function CurvedNavRail({ active, onChange }: Props) {
                             <UserRound className="mr-2" />
                             {t.userMenu.profile}
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                            onClick={() => openSettings('appearance')}
-                        >
+                        <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
                             <Settings className="mr-2" />
                             Ajustes
                         </DropdownMenuItem>
@@ -353,11 +378,19 @@ export function CurvedNavRail({ active, onChange }: Props) {
             </div>
 
             <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
-            <SettingsModal
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                initialTab={settingsTab}
-            />
+            <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+            <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Establecer un estado</DialogTitle>
+                    </DialogHeader>
+                    <CustomStatusEditor
+                        presets={statusPresets}
+                        onApplied={() => setStatusDialogOpen(false)}
+                    />
+                </DialogContent>
+            </Dialog>
         </nav>
     );
 }

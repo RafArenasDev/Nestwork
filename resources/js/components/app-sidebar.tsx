@@ -251,6 +251,23 @@ function ConversationRow({
                             surfaceTone="var(--bg-elevated)"
                         />
                     )}
+                    {conversation.statusEmoji && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span
+                                    className="absolute -bottom-1 -left-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none"
+                                    style={{
+                                        backgroundColor: 'var(--bg-elevated)',
+                                    }}
+                                >
+                                    {conversation.statusEmoji}
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                {conversation.statusText}
+                            </TooltipContent>
+                        </Tooltip>
+                    )}
                 </span>
                 <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">

@@ -1,17 +1,21 @@
 import { useSyncExternalStore } from 'react';
 
+export type NotificationSound = 'classic' | 'chime' | 'pop' | 'marimba';
+
 /** Mismo patrón que use-customization.tsx (localStorage + listeners) —
  *  preferencia de DISPOSITIVO, no de cuenta: cada navegador/equipo
  *  decide si quiere sonido/notificaciones propias. */
 export type NotificationPreferences = {
     desktopEnabled: boolean;
     soundEnabled: boolean;
+    sound: NotificationSound;
     showPreview: boolean;
 };
 
 const DEFAULT_STATE: NotificationPreferences = {
     desktopEnabled: false,
     soundEnabled: true,
+    sound: 'classic',
     showPreview: true,
 };
 
@@ -79,9 +83,40 @@ export function useNotificationPreferences() {
     return { ...state, update } as const;
 }
 
-/** Beep corto vía Web Audio — nada de asset de audio que cargar, sólo
- *  un tono generado (2 notas cortas, como el "ding" típico de chat). */
-export function playNotificationSound(): void {
+type Note = { frequency: number; start: number; duration: number };
+
+/** Cada sonido es una lista de notas (sin archivo de audio que
+ *  cargar) — mismo criterio que Slack: pocos tonos genéricos, cada uno
+ *  reconocible por su patrón, no por timbre realista. */
+const SOUND_PRESETS: Record<NotificationSound, Note[]> = {
+    classic: [
+        { frequency: 880, start: 0, duration: 0.18 },
+        { frequency: 1320, start: 0.09, duration: 0.18 },
+    ],
+    chime: [
+        { frequency: 660, start: 0, duration: 0.16 },
+        { frequency: 880, start: 0.1, duration: 0.16 },
+        { frequency: 1108, start: 0.2, duration: 0.22 },
+    ],
+    pop: [{ frequency: 520, start: 0, duration: 0.09 }],
+    marimba: [
+        { frequency: 987, start: 0, duration: 0.22 },
+        { frequency: 740, start: 0.12, duration: 0.24 },
+    ],
+};
+
+export const SOUND_OPTIONS: { value: NotificationSound; label: string }[] = [
+    { value: 'classic', label: 'Clásico' },
+    { value: 'chime', label: 'Campanita' },
+    { value: 'pop', label: 'Pop' },
+    { value: 'marimba', label: 'Marimba' },
+];
+
+/** Sin archivo de audio que cargar: cada tono es una nota (u ondas)
+ *  generada con Web Audio en el momento. */
+export function playNotificationSound(
+    sound: NotificationSound = getNotificationPreferences().sound,
+): void {
     try {
         const AudioContextClass =
             window.AudioContext ||
@@ -90,22 +125,25 @@ export function playNotificationSound(): void {
         const context = new AudioContextClass();
         const now = context.currentTime;
 
-        [880, 1320].forEach((frequency, index) => {
+        SOUND_PRESETS[sound].forEach(({ frequency, start, duration }) => {
             const oscillator = context.createOscillator();
             const gain = context.createGain();
             oscillator.type = 'sine';
             oscillator.frequency.value = frequency;
-            const start = now + index * 0.09;
-            gain.gain.setValueAtTime(0, start);
-            gain.gain.linearRampToValueAtTime(0.15, start + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+            const noteStart = now + start;
+            gain.gain.setValueAtTime(0, noteStart);
+            gain.gain.linearRampToValueAtTime(0.15, noteStart + 0.01);
+            gain.gain.exponentialRampToValueAtTime(
+                0.0001,
+                noteStart + duration,
+            );
             oscillator.connect(gain);
             gain.connect(context.destination);
-            oscillator.start(start);
-            oscillator.stop(start + 0.2);
+            oscillator.start(noteStart);
+            oscillator.stop(noteStart + duration + 0.02);
         });
 
-        setTimeout(() => context.close(), 500);
+        setTimeout(() => context.close(), 800);
     } catch {
         // Sin audio (autoplay bloqueado, navegador sin soporte) — no
         // es crítico, la notificación de escritorio sigue funcionando.

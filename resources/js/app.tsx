@@ -6,6 +6,7 @@ import { initializeTheme } from '@/hooks/use-appearance';
 import { initializeCustomization } from '@/hooks/use-customization';
 import { initializeLocale } from '@/hooks/use-locale';
 import { initializeNotificationPreferences } from '@/hooks/use-notification-preferences';
+import { initializePrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -77,6 +78,7 @@ initializeTheme();
 // del servidor, así que alcanza con aplicarlas acá.
 initializeCustomization();
 initializeNotificationPreferences();
+initializePrivacyPreferences();
 
 // This will set the ES/EN locale on load...
 initializeLocale();

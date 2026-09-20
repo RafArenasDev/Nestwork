@@ -139,13 +139,22 @@ class MessagesController extends Controller
      * exige que el más rezagado también lo haya visto. Null significa
      * "nadie más ha leído nada todavía" (ningún mensaje propio cuenta
      * como leído).
+     *
+     * Quien apagó "Confirmación de lectura" (Ajustes > Privacidad,
+     * `read_receipts_enabled`) no expone su avance a los demás — se
+     * excluye de este cálculo por completo, así que ningún emisor ve
+     * "leído" a partir de su lectura (mismo trato de ida y vuelta que
+     * Teams: si lo apagas, tampoco ves el de los demás — eso ya lo
+     * respeta MessageData al no exponer status de terceros).
      */
     private function readThresholdFor(Conversation $conversation, User $user): ?int
     {
-        $otherLastReadIds = $conversation->participants()
+        $otherParticipants = $conversation->participants()
             ->where('users.id', '!=', $user->id)
             ->get()
-            ->pluck('pivot.last_read_message_id');
+            ->filter(fn (User $participant) => $participant->read_receipts_enabled);
+
+        $otherLastReadIds = $otherParticipants->pluck('pivot.last_read_message_id');
 
         return $otherLastReadIds->isNotEmpty() && $otherLastReadIds->every(fn (?int $id) => $id !== null)
             ? $otherLastReadIds->min()
@@ -178,6 +187,12 @@ class MessagesController extends Controller
                 : null,
             'presence' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
                 ? $otherParticipant->presenceStatus()
+                : null,
+            'statusEmoji' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->status_emoji
+                : null,
+            'statusText' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
+                ? $otherParticipant->status_text
                 : null,
             'isArchived' => $pivot->isArchived(),
             'isMuted' => $pivot->isMuted(),
