@@ -41,11 +41,15 @@ const LivePresenceContext = createContext<Map<number, PresenceOverride>>(
  * BD (nombres, listas, lo que sea que dependa del mismo dato).
  */
 export function TeamPresenceProvider({
-    teamId,
+    teamSlug,
     reloadProps,
     children,
 }: {
-    teamId: number | null | undefined;
+    /** El canal se une por slug, no por id — `Team::getRouteKeyName()`
+     *  es "slug" y `routes/channels.php` usa binding implícito de
+     *  Team; unirse por id nunca resuelve el modelo y Reverb devuelve
+     *  403 en /broadcasting/auth. */
+    teamSlug: string | null | undefined;
     reloadProps: string[];
     children: ReactNode;
 }) {
@@ -54,10 +58,10 @@ export function TeamPresenceProvider({
     );
 
     useEchoPresence<PresenceUpdatedPayload>(
-        teamId ? `team.${teamId}` : '__no-team__',
+        teamSlug ? `team.${teamSlug}` : '__no-team__',
         '.PresenceUpdated',
         (payload) => {
-            if (!teamId) {
+            if (!teamSlug) {
                 return;
             }
 
@@ -75,7 +79,7 @@ export function TeamPresenceProvider({
             router.reload({ only: reloadProps });
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [teamId, reloadProps.join(',')],
+        [teamSlug, reloadProps.join(',')],
     );
 
     return (

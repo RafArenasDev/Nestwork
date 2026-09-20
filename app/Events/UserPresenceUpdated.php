@@ -34,8 +34,13 @@ class UserPresenceUpdated implements ShouldBroadcastNow
      */
     public function broadcastOn(): array
     {
+        // El canal usa binding implícito de Team (`routes/channels.php`),
+        // y `Team::getRouteKeyName()` es "slug" — armar esto con el id
+        // numérico hace que la suscripción real (que sí llega por slug,
+        // ver use-live-presence.tsx) nunca resuelva el modelo y el
+        // handshake de Reverb devuelva 403 en /broadcasting/auth.
         return $this->user->teams
-            ->map(fn ($team) => new PresenceChannel('team.'.$team->id))
+            ->map(fn ($team) => new PresenceChannel('team.'.$team->slug))
             ->all();
     }
 

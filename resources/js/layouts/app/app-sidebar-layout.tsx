@@ -201,7 +201,7 @@ export default function AppSidebarLayout({
 
     return (
         <TeamPresenceProvider
-            teamId={currentTeam?.id}
+            teamSlug={currentTeam?.slug}
             reloadProps={[
                 'teamMembers',
                 'conversations',
