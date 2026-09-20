@@ -92,13 +92,12 @@ class HandleInertiaRequests extends Middleware
             'discoverableChannels' => fn () => $user && $user->currentTeam
                 ? app(ListDiscoverableChannelsForUser::class)->handle($user, $user->currentTeam)
                 : [],
-            // "Inicio" — dos secciones reales, ninguna es la misma lista
-            // completa que Chats/Grupos/Canales: recientes de CUALQUIER
-            // tipo (sin filtrar por `types`, a diferencia de `conversations`)
-            // y favoritos.
-            'recentConversations' => fn () => $user && $user->currentTeam
-                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam)
-                : [],
+            // "Inicio" reusa conversations/groupConversations/
+            // channelConversations (cada uno ya separado por tipo,
+            // arriba) filtrados a lo que NO es favorito — nunca los
+            // mezcla en una sola lista ("Recientes" de chat+grupo+canal
+            // junto fue pedido explícito de deshacer, se sentía como
+            // "una melcocha").
             'favoriteConversations' => fn () => $user && $user->currentTeam
                 ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, favoritesOnly: true)
                 : [],

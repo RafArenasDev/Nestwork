@@ -3,8 +3,7 @@ import {
     BellIcon,
     BookmarkIcon,
     UserGroupIcon,
-    SpeakerWaveIcon,
-    VideoCameraIcon,
+    HashtagIcon,
 } from '@heroicons/react/24/outline';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
 
@@ -30,14 +29,9 @@ const COPY: Partial<
             'Elige un grupo de la lista, o crea uno nuevo con el botón de arriba.',
     },
     channels: {
-        icon: SpeakerWaveIcon,
+        icon: HashtagIcon,
         description:
             'Elige un canal de la lista, únete a uno público, o crea uno nuevo.',
-    },
-    meetings: {
-        icon: VideoCameraIcon,
-        description:
-            'Las videollamadas todavía no están disponibles — próxima novedad grande de Nestwork.',
     },
 };
 

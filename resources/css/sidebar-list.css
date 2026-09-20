@@ -83,15 +83,28 @@
     font-size: 0.825rem;
     font-weight: 600;
 }
+/* flex, no block: el ícono de tipo de mensaje (foto/video/código/…)
+   necesita alinearse con el texto por su centro, no por su baseline —
+   mezclado en el mismo nodo de texto (emoji unicode) quedaba más abajo
+   que las letras, según la fuente/OS. */
 .sidebar-row-preview {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.78rem;
+    color: var(--sidebar-fg-muted);
+    margin-top: 1px;
+}
+.sidebar-row-preview-icon {
+    flex-shrink: 0;
+}
+.sidebar-row-preview-text {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-size: 0.78rem;
-    color: var(--sidebar-fg-muted);
-    margin-top: 1px;
 }
 .sidebar-row-time {
     flex-shrink: 0;

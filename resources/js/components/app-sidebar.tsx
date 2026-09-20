@@ -2,20 +2,54 @@ import { router, usePage } from '@inertiajs/react';
 import {
     ArchiveRestore,
     Archive,
+    ArrowDownAZ,
     Bell,
     BellOff,
     Bookmark,
+    Check,
     ChevronDown,
+    Clock,
+    Code2,
     Eraser,
+    FileText,
+    Image as ImageIcon,
+    type LucideIcon,
+    Music,
+    Phone,
     Plus,
     Star,
     Trash2,
+    Video,
 } from 'lucide-react';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
 import { NewGroupModal } from '@/components/new-group-modal';
 import { NewChannelModal } from '@/components/new-channel-modal';
 import { PresenceDot } from '@/components/presence-dot';
+import {
+    createConversationTag,
+    deleteConversationTag,
+    toggleConversationInTag,
+    useConversationTags,
+    type ConversationTag,
+} from '@/hooks/use-conversation-tags';
+import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { show as showMessage } from '@/routes/messages';
 import { toggle as toggleSaveRoute } from '@/routes/messages/save';
 import {
@@ -59,6 +93,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { useLivePresence } from '@/hooks/use-live-presence';
 import { useOpenConversationUnseen } from '@/hooks/use-open-conversation-unseen';
 import { csrfHeaders } from '@/lib/csrf';
+import { documentStyleFor } from '@/lib/file-type-style';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
 import type {
     ActivityItem,
@@ -145,26 +180,50 @@ function formatSidebarTime(iso: string): string {
     return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 }
 
+type MessagePreview = { icon: LucideIcon | null; text: string };
+
 /** El body queda vacío cuando el mensaje es sólo un adjunto — sin esto
  *  la fila mostraba una segunda línea en blanco para fotos/videos/
  *  audios/documentos, en vez de decir qué se mandó (mismo criterio que
- *  WhatsApp/Telegram: "📷 Foto", no el cuerpo crudo). */
-function messagePreviewFor(conversation: ConversationSummary): string {
+ *  WhatsApp/Telegram). Ícono real (lucide), no un emoji mezclado en el
+ *  texto — un emoji unicode dentro del mismo nodo de texto quedaba más
+ *  abajo que las letras según fuente/OS, se veía desalineado.
+ *
+ * Un bloque de código (```lang…```, ver serializeToMarkdown en
+ * message-composer.tsx) se anuncia como "Código" en vez de mostrar las
+ * comillas invertidas crudas — ilegible truncado a una sola línea. El
+ * código en línea (`texto`) se limpia de sus comillas sueltas dentro
+ * del preview normal. */
+function messagePreviewFor(conversation: ConversationSummary): MessagePreview {
     switch (conversation.lastMessageType) {
         case 'image':
-            return '📷 Foto';
+            return { icon: ImageIcon, text: 'Foto' };
         case 'video':
-            return '🎥 Video';
+            return { icon: Video, text: 'Video' };
         case 'audio':
-            return '🎵 Audio';
-        case 'file':
-            return conversation.lastMessageAttachmentName
-                ? `📄 ${conversation.lastMessageAttachmentName}`
-                : '📄 Documento';
+            return { icon: Music, text: 'Audio' };
+        case 'file': {
+            const name = conversation.lastMessageAttachmentName;
+
+            return {
+                icon: name ? documentStyleFor(name).icon : FileText,
+                text: name ?? 'Documento',
+            };
+        }
         case 'call_log':
-            return '📞 Llamada';
-        default:
-            return conversation.lastMessageBody || ' ';
+            return { icon: Phone, text: 'Llamada' };
+        default: {
+            const body = conversation.lastMessageBody?.trim() ?? '';
+
+            if (body.startsWith('```')) {
+                return { icon: Code2, text: 'Código' };
+            }
+
+            return {
+                icon: null,
+                text: body.replace(/`([^`]+)`/g, '$1') || ' ',
+            };
+        }
     }
 }
 
@@ -202,30 +261,230 @@ export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
     return <HomeSidebarList activeModuleLabel={activeModuleLabel} />;
 }
 
-/** Encabezado de subsección dentro de un módulo (Recientes/Favoritos en
- *  Inicio, Descubrir en Canales) — mismo estilo en los dos lugares. */
-function SidebarSectionLabel({ children }: { children: string }) {
+/** Encabezado de subsección con orden (recientes/alfabético) y/o un
+ *  botón "+" opcional — mismo estilo para Recientes/Grupos/Canales/
+ *  Favoritos/Etiquetas en Inicio. */
+function SidebarSectionLabel({
+    children,
+    sort,
+    onSortChange,
+    addTrigger,
+    onRemoveSection,
+}: {
+    children: string;
+    sort?: SortMode;
+    onSortChange?: (mode: SortMode) => void;
+    /** Botón "+" ya armado por quien llama (con su propio
+     *  PopoverTrigger/DialogTrigger adentro) — así el trigger real de
+     *  Radix queda anclado a un botón visible de verdad, no a un
+     *  elemento invisible aparte controlado por estado externo (eso
+     *  hacía que el popover se posicionara mal). */
+    addTrigger?: React.ReactNode;
+    onRemoveSection?: () => void;
+}) {
     return (
-        <p className="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium tracking-wide uppercase">
-            {children}
-        </p>
+        <div className="flex items-center justify-between px-3 pt-3 pb-1">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                {children}
+            </p>
+            <div className="flex items-center gap-1">
+                {sort && onSortChange && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label={
+                                    sort === 'recent'
+                                        ? 'Ordenar alfabéticamente'
+                                        : 'Ordenar por más reciente'
+                                }
+                                onClick={() =>
+                                    onSortChange(
+                                        sort === 'recent' ? 'alpha' : 'recent',
+                                    )
+                                }
+                                className="text-muted-foreground hover:text-foreground rounded p-0.5"
+                            >
+                                {sort === 'recent' ? (
+                                    <Clock className="size-3.5" />
+                                ) : (
+                                    <ArrowDownAZ className="size-3.5" />
+                                )}
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                            {sort === 'recent'
+                                ? 'Más reciente primero'
+                                : 'Orden alfabético'}
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+                {addTrigger}
+                {onRemoveSection && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                aria-label="Borrar etiqueta"
+                                onClick={onRemoveSection}
+                                className="text-muted-foreground hover:text-destructive rounded p-0.5"
+                            >
+                                <Trash2 className="size-3.5" />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                            Borrar etiqueta
+                        </TooltipContent>
+                    </Tooltip>
+                )}
+            </div>
+        </div>
+    );
+}
+
+/** Botón "+" reusado por Favoritos/Etiquetas — SIEMPRE dentro de un
+ *  <Popover> como PopoverTrigger real (ver nota en SidebarSectionLabel). */
+function SectionAddButton({ label }: { label: string }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label={label}
+                        className="text-muted-foreground hover:text-foreground rounded p-0.5"
+                    >
+                        <Plus className="size-3.5" />
+                    </button>
+                </PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top">{label}</TooltipContent>
+        </Tooltip>
+    );
+}
+
+type SortMode = 'recent' | 'alpha';
+
+function sortConversations(
+    list: ConversationSummary[],
+    mode: SortMode,
+): ConversationSummary[] {
+    if (mode === 'alpha') {
+        return [...list].sort((a, b) =>
+            a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }),
+        );
+    }
+
+    // Ya vienen ordenadas por fecha desde el backend
+    // (ListConversationsForUser::handle) — nada que hacer.
+    return list;
+}
+
+/** Buscador + lista con check para agregar/quitar conversaciones de
+ *  una sección curada a mano (Favoritos, una Etiqueta) — cruza los
+ *  tres tipos (Chats/Grupos/Canales), a propósito: una etiqueta como
+ *  "API-Chat" agrupa gente y grupos por igual. */
+function SectionAddPicker({
+    isSelected,
+    onToggle,
+}: {
+    isSelected: (conversationId: number) => boolean;
+    onToggle: (conversation: ConversationSummary) => void;
+}) {
+    const page = usePage();
+    const [search, setSearch] = useState('');
+
+    const candidates = [
+        ...(page.props.conversations ?? []),
+        ...(page.props.groupConversations ?? []),
+        ...(page.props.channelConversations ?? []),
+    ].filter((conversation) =>
+        conversation.name.toLowerCase().includes(search.trim().toLowerCase()),
+    );
+
+    return (
+        <PopoverContent className="w-72 p-2" align="start">
+            <Input
+                autoFocus
+                placeholder="Buscar chat, grupo o canal…"
+                className="mb-2 rounded-full"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+            />
+            <ScrollArea className="h-56">
+                <ul className="flex flex-col gap-0.5 pr-2">
+                    {candidates.map((conversation) => (
+                        <li key={conversation.id}>
+                            <button
+                                type="button"
+                                onClick={() => onToggle(conversation)}
+                                className="hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
+                            >
+                                <span className="flex-1 truncate">
+                                    {conversation.name}
+                                </span>
+                                {isSelected(conversation.id) && (
+                                    <Check className="size-3.5 shrink-0 text-emerald-500" />
+                                )}
+                            </button>
+                        </li>
+                    ))}
+
+                    {candidates.length === 0 && (
+                        <p className="text-muted-foreground px-2 py-4 text-center text-sm">
+                            Nada con ese nombre.
+                        </p>
+                    )}
+                </ul>
+            </ScrollArea>
+        </PopoverContent>
     );
 }
 
 function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
     const page = usePage();
-    // Recientes = actividad real de CUALQUIER tipo de conversación
-    // (chat/grupo/canal), sin importar en qué módulo estés cuando
-    // llegue el mensaje — a diferencia de `conversations` (sólo
-    // Chats). Favoritos = lo que se fijó a mano con el menú de la fila.
-    // Antes esto mostraba exactamente la misma lista que Chats
-    // recortada a 8, lo que hacía redundantes los dos módulos.
-    const recentConversations = (page.props.recentConversations ?? []).slice(
-        0,
-        8,
-    );
-    const favoriteConversations = page.props.favoriteConversations ?? [];
     const currentTeam = page.props.currentTeam;
+    const tags = useConversationTags();
+    const [sort, setSort] = useState<SortMode>('recent');
+    const [newTagOpen, setNewTagOpen] = useState(false);
+    const [newTagName, setNewTagName] = useState('');
+
+    // Antes "Recientes" mezclaba chats/grupos/canales en una sola
+    // lista ("melcocha", pedido explícito de separar) y repetía lo
+    // que ya estuviera en Favoritos. Ahora cada tipo tiene su propia
+    // sección, ninguna incluye lo ya fijado como favorito, y un tope
+    // de 20 evita que la sidebar crezca sin límite — al llegar un
+    // mensaje nuevo el más viejo sale solo (slice tras ordenar por
+    // fecha, que es como ya vienen desde el backend).
+    const RECENT_LIMIT = 20;
+    const favoriteIds = new Set(
+        (page.props.favoriteConversations ?? []).map((c) => c.id),
+    );
+    const recentChats = sortConversations(
+        (page.props.conversations ?? []).filter((c) => !favoriteIds.has(c.id)),
+        sort,
+    ).slice(0, RECENT_LIMIT);
+    const recentGroups = sortConversations(
+        (page.props.groupConversations ?? []).filter(
+            (c) => !favoriteIds.has(c.id),
+        ),
+        sort,
+    ).slice(0, RECENT_LIMIT);
+    const recentChannels = sortConversations(
+        (page.props.channelConversations ?? []).filter(
+            (c) => !favoriteIds.has(c.id),
+        ),
+        sort,
+    ).slice(0, RECENT_LIMIT);
+    const favoriteConversations = page.props.favoriteConversations ?? [];
+
+    const allByid = new Map(
+        [
+            ...(page.props.conversations ?? []),
+            ...(page.props.groupConversations ?? []),
+            ...(page.props.channelConversations ?? []),
+        ].map((c) => [c.id, c]),
+    );
 
     return (
         <Sidebar
@@ -238,9 +497,11 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                 <SidebarModuleHeader title={activeModuleLabel} />
             </SidebarHeader>
             <SidebarContent>
-                <SidebarSectionLabel>Recientes</SidebarSectionLabel>
+                <SidebarSectionLabel sort={sort} onSortChange={setSort}>
+                    Recientes
+                </SidebarSectionLabel>
                 <ul className="sidebar-list">
-                    {recentConversations.map((conversation) => (
+                    {recentChats.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -248,14 +509,73 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                         />
                     ))}
 
-                    {recentConversations.length === 0 && (
+                    {recentChats.length === 0 && (
                         <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
-                            Todavía no tienes actividad reciente.
+                            Sin chats recientes todavía.
                         </p>
                     )}
                 </ul>
 
-                <SidebarSectionLabel>Favoritos</SidebarSectionLabel>
+                {recentGroups.length > 0 && (
+                    <>
+                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
+                            Grupos recientes
+                        </SidebarSectionLabel>
+                        <ul className="sidebar-list">
+                            {recentGroups.map((conversation) => (
+                                <ConversationRow
+                                    key={conversation.id}
+                                    conversation={conversation}
+                                    currentTeamSlug={currentTeam?.slug}
+                                />
+                            ))}
+                        </ul>
+                    </>
+                )}
+
+                {recentChannels.length > 0 && (
+                    <>
+                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
+                            Canales recientes
+                        </SidebarSectionLabel>
+                        <ul className="sidebar-list">
+                            {recentChannels.map((conversation) => (
+                                <ConversationRow
+                                    key={conversation.id}
+                                    conversation={conversation}
+                                    currentTeamSlug={currentTeam?.slug}
+                                />
+                            ))}
+                        </ul>
+                    </>
+                )}
+
+                <Popover>
+                    <SidebarSectionLabel
+                        addTrigger={
+                            <SectionAddButton label="Agregar a Favoritos" />
+                        }
+                    >
+                        Favoritos
+                    </SidebarSectionLabel>
+                    <SectionAddPicker
+                        isSelected={(id) => favoriteIds.has(id)}
+                        onToggle={(conversation) => {
+                            if (!currentTeam) {
+                                return;
+                            }
+
+                            router.patch(
+                                toggleFavorite([
+                                    currentTeam.slug,
+                                    conversation.id,
+                                ]).url,
+                                {},
+                                { preserveScroll: true },
+                            );
+                        }}
+                    />
+                </Popover>
                 <ul className="sidebar-list">
                     {favoriteConversations.map((conversation) => (
                         <ConversationRow
@@ -267,13 +587,127 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
 
                     {favoriteConversations.length === 0 && (
                         <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
-                            Marca "Fijar en Inicio" en el menú de un chat, grupo
-                            o canal para verlo acá.
+                            Nada fijado todavía — usa el "+" de arriba o el menú
+                            de cualquier fila.
                         </p>
                     )}
                 </ul>
+
+                {tags.map((tag) => {
+                    const tagConversations = tag.conversationIds
+                        .map((id) => allByid.get(id))
+                        .filter(
+                            (c): c is ConversationSummary => c !== undefined,
+                        );
+
+                    return (
+                        <TagSection
+                            key={tag.id}
+                            tag={tag}
+                            conversations={tagConversations}
+                            currentTeamSlug={currentTeam?.slug}
+                        />
+                    );
+                })}
+
+                <div className="px-3 pt-3 pb-2">
+                    <Dialog open={newTagOpen} onOpenChange={setNewTagOpen}>
+                        <DialogTrigger asChild>
+                            <button
+                                type="button"
+                                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium"
+                            >
+                                <Plus className="size-3.5" />
+                                Nueva etiqueta
+                            </button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-sm">
+                            <DialogHeader>
+                                <DialogTitle>Nueva etiqueta</DialogTitle>
+                                <DialogDescription>
+                                    Agrupa chats, grupos y canales bajo un
+                                    nombre propio — ej. "API-Chat" o "Frontend".
+                                </DialogDescription>
+                            </DialogHeader>
+                            <Input
+                                autoFocus
+                                placeholder="Nombre de la etiqueta"
+                                value={newTagName}
+                                onChange={(event) =>
+                                    setNewTagName(event.target.value)
+                                }
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                        createConversationTag(newTagName);
+                                        setNewTagName('');
+                                        setNewTagOpen(false);
+                                    }
+                                }}
+                            />
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    disabled={newTagName.trim() === ''}
+                                    onClick={() => {
+                                        createConversationTag(newTagName);
+                                        setNewTagName('');
+                                        setNewTagOpen(false);
+                                    }}
+                                >
+                                    Crear
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </SidebarContent>
         </Sidebar>
+    );
+}
+
+function TagSection({
+    tag,
+    conversations,
+    currentTeamSlug,
+}: {
+    tag: ConversationTag;
+    conversations: ConversationSummary[];
+    currentTeamSlug: string | undefined;
+}) {
+    return (
+        <>
+            <Popover>
+                <SidebarSectionLabel
+                    addTrigger={
+                        <SectionAddButton label={`Agregar a ${tag.name}`} />
+                    }
+                    onRemoveSection={() => deleteConversationTag(tag.id)}
+                >
+                    {tag.name}
+                </SidebarSectionLabel>
+                <SectionAddPicker
+                    isSelected={(id) => tag.conversationIds.includes(id)}
+                    onToggle={(conversation) =>
+                        toggleConversationInTag(tag.id, conversation.id)
+                    }
+                />
+            </Popover>
+            <ul className="sidebar-list">
+                {conversations.map((conversation) => (
+                    <ConversationRow
+                        key={conversation.id}
+                        conversation={conversation}
+                        currentTeamSlug={currentTeamSlug}
+                    />
+                ))}
+
+                {conversations.length === 0 && (
+                    <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                        Vacía todavía — usa el "+" de arriba.
+                    </p>
+                )}
+            </ul>
+        </>
     );
 }
 
@@ -497,6 +931,7 @@ function ConversationRow({
             : conversation.unreadCount;
 
     const live = useLivePresence(conversation.otherUserId, conversation);
+    const preview = messagePreviewFor(conversation);
 
     return (
         <li
@@ -585,7 +1020,12 @@ function ConversationRow({
                     </span>
                     <span className="flex items-center justify-between gap-2">
                         <span className="sidebar-row-preview">
-                            {messagePreviewFor(conversation)}
+                            {preview.icon && (
+                                <preview.icon className="sidebar-row-preview-icon size-3" />
+                            )}
+                            <span className="sidebar-row-preview-text">
+                                {preview.text}
+                            </span>
                         </span>
                         {unreadCount > 0 && (
                             <Badge
@@ -857,8 +1297,8 @@ function MeetingsSidebarList({
             </SidebarHeader>
             <SidebarContent>
                 <p className="px-3 text-sm text-[var(--sidebar-fg-muted)]">
-                    Las videollamadas todavía no están disponibles — próxima
-                    novedad grande de Nestwork.
+                    Vista previa — usa "Nueva reunión" para ver cómo se va a
+                    ver. Sin conexión de audio/video real todavía.
                 </p>
             </SidebarContent>
         </Sidebar>

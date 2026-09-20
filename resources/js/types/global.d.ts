@@ -28,7 +28,6 @@ declare module '@inertiajs/core' {
             groupConversations: ConversationSummary[];
             channelConversations: ConversationSummary[];
             discoverableChannels: ConversationSummary[];
-            recentConversations: ConversationSummary[];
             favoriteConversations: ConversationSummary[];
             savedMessages: SavedMessageSummary[];
             activityItems: ActivityItem[];

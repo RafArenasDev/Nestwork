@@ -13,6 +13,7 @@ import {
     type RailModuleKey,
 } from '@/components/curved-nav-rail';
 import { ModulePlaceholder } from '@/components/module-placeholder';
+import { MeetingsView } from '@/components/meetings-view';
 import {
     getNotificationPreferences,
     playNotificationSound,
@@ -141,16 +142,16 @@ export default function AppSidebarLayout({
                 : messagesIndex(currentTeam.slug).url;
 
             router.visit(url, {
-                // groupConversations/channelConversations/recentConversations:
-                // un mensaje nuevo en cualquiera de los tres módulos
-                // también tiene que reflejarse en "Recientes" de Inicio
-                // sin importar en qué módulo esté el usuario ahora mismo.
+                // groupConversations/channelConversations: un mensaje
+                // nuevo en cualquiera de los tres módulos también tiene
+                // que reflejarse en su sección de Inicio (Recientes/
+                // Grupos recientes/Canales recientes) sin importar en
+                // qué módulo esté el usuario ahora mismo.
                 only: [
                     'conversations',
                     'archivedConversations',
                     'groupConversations',
                     'channelConversations',
-                    'recentConversations',
                     'favoriteConversations',
                 ],
                 preserveScroll: true,
@@ -249,7 +250,9 @@ export default function AppSidebarLayout({
                                     : breadcrumbs
                             }
                         />
-                        {showModulePlaceholder ? (
+                        {activeModule === 'meetings' ? (
+                            <MeetingsView />
+                        ) : showModulePlaceholder ? (
                             <ModulePlaceholder module={activeModule} />
                         ) : (
                             children

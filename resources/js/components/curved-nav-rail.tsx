@@ -6,7 +6,7 @@ import {
     ChatBubbleLeftRightIcon,
     HomeIcon,
     UserGroupIcon,
-    SpeakerWaveIcon,
+    HashtagIcon,
     VideoCameraIcon,
 } from '@heroicons/react/24/outline';
 import {
@@ -16,7 +16,7 @@ import {
     ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
     HomeIcon as HomeIconSolid,
     UserGroupIcon as UserGroupIconSolid,
-    SpeakerWaveIcon as SpeakerWaveIconSolid,
+    HashtagIcon as HashtagIconSolid,
     VideoCameraIcon as VideoCameraIconSolid,
 } from '@heroicons/react/24/solid';
 import { LogOut, Settings, Sparkles, UserRound, X } from 'lucide-react';
@@ -76,8 +76,8 @@ const RAIL_MODULES = [
     {
         key: 'channels',
         label: 'Canales',
-        icon: SpeakerWaveIcon,
-        iconActive: SpeakerWaveIconSolid,
+        icon: HashtagIcon,
+        iconActive: HashtagIconSolid,
     },
     {
         key: 'meetings',

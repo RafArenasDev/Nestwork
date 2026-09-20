@@ -60,6 +60,7 @@ import {
 import { FOCUS_CONVERSATION_SEARCH_EVENT } from '@/components/global-search-bar';
 import { MessageAttachment } from '@/components/message-attachment';
 import { MessageCodeBlock } from '@/components/message-code-block';
+import { CallMockDialog } from '@/components/call-mock-dialog';
 import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
 import { ReactionPickerButton } from '@/components/reaction-picker';
@@ -651,6 +652,7 @@ function ConversationHeader({
     onClose: () => void;
 }) {
     const live = useLivePresence(conversation.otherUserId, conversation);
+    const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
 
     const handleToggleArchive = () => {
         if (!currentTeamSlug) {
@@ -804,14 +806,36 @@ function ConversationHeader({
                     </TooltipTrigger>
                     <TooltipContent>Buscar en este chat</TooltipContent>
                 </Tooltip>
-                <DisabledActionIcon
-                    icon={Phone}
-                    label="Llamada de audio (próximamente)"
-                />
-                <DisabledActionIcon
-                    icon={Video}
-                    label="Videollamada (próximamente)"
-                />
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Llamada de voz"
+                            onClick={() => setCallType('audio')}
+                        >
+                            <Phone className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Llamada de voz</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Videollamada"
+                            onClick={() => setCallType('video')}
+                        >
+                            <Video className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Videollamada</TooltipContent>
+                </Tooltip>
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -932,35 +956,17 @@ function ConversationHeader({
                     <TooltipContent>Cerrar chat</TooltipContent>
                 </Tooltip>
             </div>
-        </div>
-    );
-}
 
-function DisabledActionIcon({
-    icon: Icon,
-    label,
-}: {
-    icon: typeof Search;
-    label: string;
-}) {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <span tabIndex={-1}>
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-8 rounded-full"
-                        disabled
-                        aria-label={label}
-                    >
-                        <Icon className="size-4" />
-                    </Button>
-                </span>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
+            {callType && (
+                <CallMockDialog
+                    open
+                    onOpenChange={() => setCallType(null)}
+                    type={callType}
+                    contactName={conversation.name}
+                    contactAvatar={conversation.avatar}
+                />
+            )}
+        </div>
     );
 }
 
