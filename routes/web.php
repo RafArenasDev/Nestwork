@@ -3,6 +3,7 @@
 use App\Http\Controllers\ConversationsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MessagesController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Middleware\EnsureTeamMembership;
@@ -14,6 +15,7 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
+        Route::get('search', [SearchController::class, 'index'])->name('search');
 
         Route::get('messages', [MessagesController::class, 'index'])->name('messages.index');
         Route::get('messages/{conversation}', [MessagesController::class, 'show'])->name('messages.show');

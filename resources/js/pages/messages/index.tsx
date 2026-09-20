@@ -57,6 +57,7 @@ import {
     toggleHidden,
     toggleMute,
 } from '@/routes/conversations';
+import { FOCUS_CONVERSATION_SEARCH_EVENT } from '@/components/global-search-bar';
 import { MessageAttachment } from '@/components/message-attachment';
 import { MessageCodeBlock } from '@/components/message-code-block';
 import { MessageComposer } from '@/components/message-composer';
@@ -754,10 +755,27 @@ function ConversationHeader({
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
-                <DisabledActionIcon
-                    icon={Search}
-                    label="Buscar en el chat (próximamente)"
-                />
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Buscar en este chat"
+                            onClick={() =>
+                                window.dispatchEvent(
+                                    new CustomEvent(
+                                        FOCUS_CONVERSATION_SEARCH_EVENT,
+                                    ),
+                                )
+                            }
+                        >
+                            <Search className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Buscar en este chat</TooltipContent>
+                </Tooltip>
                 <DisabledActionIcon
                     icon={Phone}
                     label="Llamada de audio (próximamente)"
