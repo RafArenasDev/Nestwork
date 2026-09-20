@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Conversations\CreateGroupChat;
 use App\Actions\Conversations\StartConversationWithUser;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
+use App\Models\Favorite;
 use App\Models\MessageDeletion;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -14,10 +16,18 @@ use Illuminate\Validation\ValidationException;
 
 class ConversationsController extends Controller
 {
+    /**
+     * Un solo destinatario ⇒ DM (o el DM existente, si ya había uno).
+     * Varios ⇒ minichat nuevo siempre (a diferencia del DM, no busca
+     * uno existente con el mismo grupo de gente — pedirlo así sería
+     * ambiguo apenas alguien más arma otro grupo con las mismas
+     * personas). Ambos viven en "Chats", nunca en el módulo Grupos.
+     */
     public function store(
         Request $request,
         string $current_team,
         StartConversationWithUser $startConversation,
+        CreateGroupChat $createGroupChat,
     ): RedirectResponse {
         $user = $request->user();
         $team = $user->currentTeam;
@@ -25,8 +35,30 @@ class ConversationsController extends Controller
         abort_if(! $team, 404);
 
         $validated = $request->validate([
-            'user_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            'user_id' => ['required_without:user_ids', 'nullable', 'integer', Rule::exists('users', 'id')],
+            'user_ids' => ['required_without:user_id', 'nullable', 'array', 'min:2'],
+            'user_ids.*' => ['integer', Rule::exists('users', 'id')],
+            'name' => ['nullable', 'string', 'max:100'],
         ]);
+
+        if (isset($validated['user_ids'])) {
+            $memberIds = User::query()
+                ->whereIn('id', $validated['user_ids'])
+                ->get()
+                ->filter(fn (User $member) => $member->id !== $user->id && $member->belongsToTeam($team))
+                ->pluck('id')
+                ->all();
+
+            if (count($memberIds) < 2) {
+                throw ValidationException::withMessages([
+                    'user_ids' => 'Elige al menos dos personas del equipo.',
+                ]);
+            }
+
+            $conversation = $createGroupChat->handle($user, $memberIds, $team, $validated['name'] ?? null);
+
+            return redirect()->route('messages.show', [$team->slug, $conversation]);
+        }
 
         $other = User::query()->findOrFail((int) $validated['user_id']);
 
@@ -53,6 +85,36 @@ class ConversationsController extends Controller
         $conversation->participants()->updateExistingPivot($user->id, [
             'archived_at' => $pivot->isArchived() ? null : now(),
         ]);
+
+        return back();
+    }
+
+    /** "Inicio" muestra los favoritos, no la misma lista completa que
+     *  Chats/Grupos/Canales (ver ListConversationsForUser::$favoritesOnly) —
+     *  cualquier tipo de conversación se puede marcar. */
+    public function toggleFavorite(Request $request, string $current_team, Conversation $conversation): RedirectResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        $this->participantPivot($conversation, $user->id);
+
+        $favorite = Favorite::query()
+            ->where('user_id', $user->id)
+            ->where('favoritable_type', Conversation::class)
+            ->where('favoritable_id', $conversation->id)
+            ->first();
+
+        if ($favorite) {
+            $favorite->delete();
+        } else {
+            Favorite::query()->create([
+                'user_id' => $user->id,
+                'favoritable_type' => Conversation::class,
+                'favoritable_id' => $conversation->id,
+            ]);
+        }
 
         return back();
     }

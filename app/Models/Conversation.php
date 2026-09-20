@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ConversationParticipantRole;
 use App\Enums\ConversationType;
 use Database\Factories\ConversationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @property int $id
@@ -104,7 +106,9 @@ class Conversation extends Model
 
     /**
      * Get the display name of the conversation for the given viewer.
-     * DMs have no name of their own — it's the other participant's name.
+     * DMs (y un minichat sin nombre puesto) no tienen nombre propio: se
+     * arma con los otros participantes — uno solo (DM) es su nombre;
+     * varios (minichat) se listan separados por coma.
      */
     public function displayNameFor(User $viewer): string
     {
@@ -112,8 +116,33 @@ class Conversation extends Model
             return $this->name;
         }
 
-        $other = $this->participants->firstWhere('id', '!=', $viewer->id);
+        $others = $this->participants->where('id', '!=', $viewer->id);
 
-        return $other instanceof User ? $other->name : $viewer->name;
+        if ($others->isEmpty()) {
+            return $viewer->name;
+        }
+
+        return $others->pluck('name')->implode(', ');
+    }
+
+    /** Avatar propio de un group_chat/group/channel (los DM usan el
+     *  avatar del otro participante, resuelto aparte). */
+    public function avatarUrl(): ?string
+    {
+        return $this->avatar_path ? Storage::disk('public')->url($this->avatar_path) : null;
+    }
+
+    /** Rol del participante dado en ESTA conversación — null en DM/
+     *  minichat (`isFlatChat()`, sin jerarquía) o si no es participante. */
+    public function roleFor(User $user): ?ConversationParticipantRole
+    {
+        return $this->conversationParticipants
+            ->firstWhere('user_id', $user->id)
+            ?->role;
+    }
+
+    public function isAdmin(User $user): bool
+    {
+        return $this->created_by === $user->id || $this->roleFor($user) === ConversationParticipantRole::Admin;
     }
 }

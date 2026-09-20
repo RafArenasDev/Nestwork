@@ -19,11 +19,14 @@ readonly class ConversationSummary
          *  independiente de `presence`, ver User::statusText(). */
         public ?string $statusEmoji,
         public ?string $statusText,
+        /** Sólo group_chat/group/channel — cuántos participantes tiene. */
+        public ?int $memberCount,
         public ?string $lastMessageBody,
         public ?string $lastMessageAt,
         public int $unreadCount,
         public bool $isMuted,
         public bool $isArchived,
+        public bool $isFavorite = false,
         public bool $isCurrent = false,
     ) {
         //

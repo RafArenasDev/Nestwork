@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\ChannelsController;
 use App\Http\Controllers\ConversationsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GeoController;
+use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\MessagesController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
@@ -38,6 +40,10 @@ Route::prefix('{current_team}')
         Route::post('messages/{conversation}/{message}/pin', [MessagesController::class, 'togglePin'])->name('messages.pin.toggle');
 
         Route::post('conversations', [ConversationsController::class, 'store'])->name('conversations.store');
+        Route::post('groups', [GroupsController::class, 'store'])->name('groups.store');
+        Route::post('channels', [ChannelsController::class, 'store'])->name('channels.store');
+        Route::post('channels/{conversation}/join', [ChannelsController::class, 'join'])->name('channels.join');
+        Route::patch('conversations/{conversation}/favorite', [ConversationsController::class, 'toggleFavorite'])->name('conversations.toggle-favorite');
         Route::patch('conversations/{conversation}/archive', [ConversationsController::class, 'toggleArchive'])->name('conversations.toggle-archive');
         Route::patch('conversations/{conversation}/mute', [ConversationsController::class, 'toggleMute'])->name('conversations.toggle-mute');
         Route::patch('conversations/{conversation}/hide', [ConversationsController::class, 'toggleHidden'])->name('conversations.toggle-hidden');

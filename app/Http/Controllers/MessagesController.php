@@ -47,7 +47,7 @@ class MessagesController extends Controller
         abort_if(! $team, 404);
 
         return Inertia::render('messages/index', [
-            'conversations' => $this->listConversations->handle($user, $team),
+            'conversations' => $this->listConversations->handle($user, $team, types: [ConversationType::Dm, ConversationType::GroupChat]),
             'conversation' => null,
             'messages' => [],
         ]);
@@ -81,12 +81,21 @@ class MessagesController extends Controller
             // sin que el usuario realmente hubiera leído nada.
             'messages' => fn () => $this->loadMessages($conversation, $user),
             'conversation' => fn () => $this->buildConversationPayload($conversation, $user),
-            'conversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id),
+            'conversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Dm, ConversationType::GroupChat]),
             // Si la conversación abierta está archivada, no aparece en
             // la lista de arriba (se filtra) — necesita su propio
             // "isCurrent" acá para que la gotera también aplique en la
             // pestaña Archivado.
-            'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true),
+            'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true, types: [ConversationType::Dm, ConversationType::GroupChat]),
+            // Mismo "id actual" pasado a Grupos/Canales — sólo la lista
+            // cuyo tipo de verdad coincide con esta conversación va a
+            // tener una fila con ese id, así que marcar `isCurrent` acá
+            // en las cuatro listas es inofensivo (ver módulo de la
+            // navegación: se abre desde CUALQUIERA de las tres listas,
+            // siempre por la misma ruta `messages.show`).
+            'groupConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Group]),
+            'channelConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Channel]),
+            'favoriteConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, favoritesOnly: true),
             // Desde "Guardados" (u otro enlace externo al chat): salta al
             // mensaje puntual al abrir. Sólo funciona si ese mensaje cayó
             // dentro de la ventana inicial cargada (INITIAL_MESSAGE_LIMIT)
@@ -176,24 +185,19 @@ class MessagesController extends Controller
         $otherParticipant = $conversation->participants()
             ->where('users.id', '!=', $user->id)
             ->first();
+        $isDm = $conversation->type === ConversationType::Dm;
 
         return [
             'id' => $conversation->id,
             'name' => $conversation->displayNameFor($user),
             'type' => $conversation->type->value,
-            'avatar' => $otherParticipant instanceof User ? $otherParticipant->avatar : null,
-            'otherUserId' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->id
-                : null,
-            'presence' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->presenceStatus()
-                : null,
-            'statusEmoji' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->status_emoji
-                : null,
-            'statusText' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->status_text
-                : null,
+            'avatar' => $isDm && $otherParticipant instanceof User ? $otherParticipant->avatar : $conversation->avatarUrl(),
+            'otherUserId' => $isDm && $otherParticipant instanceof User ? $otherParticipant->id : null,
+            'presence' => $isDm && $otherParticipant instanceof User ? $otherParticipant->presenceStatus() : null,
+            'statusEmoji' => $isDm && $otherParticipant instanceof User ? $otherParticipant->status_emoji : null,
+            'statusText' => $isDm && $otherParticipant instanceof User ? $otherParticipant->status_text : null,
+            'memberCount' => $isDm ? null : $conversation->participants()->count(),
+            'isAdmin' => $conversation->isAdmin($user),
             'isArchived' => $pivot->isArchived(),
             'isMuted' => $pivot->isMuted(),
             // Valor DE ANTES de esta visita (loadMessages ya no lo pisa)
@@ -241,16 +245,27 @@ class MessagesController extends Controller
         /** @var UploadedFile|null $file */
         $file = $validated['attachment'] ?? null;
         $attachmentCategory = $validated['attachment_category'] ?? null;
+        $replyToMessageId = $validated['reply_to_message_id'] ?? null;
 
         if ($file && $attachmentCategory) {
             $this->assertAttachmentMatchesCategory($file, $attachmentCategory);
+        }
+
+        // Canal: sólo el admin/creador publica en la línea principal —
+        // el resto sólo puede responder dentro de un hilo ya abierto
+        // (reply_to_message_id obligatorio). Grupo/Chat no restringen
+        // nada acá.
+        if ($conversation->type->restrictsTopLevelPostingToAdmin()
+            && $replyToMessageId === null
+            && ! $conversation->isAdmin($user)) {
+            abort(403, 'Sólo quien administra este canal puede publicar. Puedes responder en un hilo.');
         }
 
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
             'body' => $validated['body'] ?? '',
             'type' => $file ? $this->messageTypeFor($this->attachmentTypeFor($file)) : MessageType::Text,
-            'reply_to_message_id' => $validated['reply_to_message_id'] ?? null,
+            'reply_to_message_id' => $replyToMessageId,
         ]);
 
         if ($file) {

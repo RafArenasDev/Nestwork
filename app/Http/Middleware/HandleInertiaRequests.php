@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Conversations\ListConversationsForUser;
+use App\Actions\Conversations\ListDiscoverableChannelsForUser;
 use App\Actions\Messages\ListSavedMessagesForUser;
 use App\Data\StatusPresetOption;
 use App\Data\TeamMemberOption;
+use App\Enums\ConversationType;
 use App\Models\StatusPreset;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -65,13 +67,34 @@ class HandleInertiaRequests extends Middleware
             // datos reales, sin importar en qué módulo esté el usuario.
             // Una página específica (messages/show) puede sobrescribirla
             // con su propia versión (con currentConversationId marcado).
+            // Sólo DM + minichat ("Chats") — Grupos y Canales son
+            // módulos aparte, con su propia lista (ver abajo), aunque
+            // comparten la misma tabla `conversations`.
             'conversations' => fn () => $user && $user->currentTeam
-                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam)
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Dm, ConversationType::GroupChat])
                 : [],
             // Mismo dato pero solo lo archivado — alimenta la pestaña
             // "Archivado" del mini-rail con datos reales.
             'archivedConversations' => fn () => $user && $user->currentTeam
-                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true)
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true, types: [ConversationType::Dm, ConversationType::GroupChat])
+                : [],
+            // Módulo "Grupos" — mismo listado, filtrado a `group`.
+            'groupConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Group])
+                : [],
+            // Módulo "Canales" — canales de los que YA soy participante
+            // (creados por mí o unido). Los públicos que todavía no uní
+            // van en `discoverableChannels`, aparte.
+            'channelConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Channel])
+                : [],
+            'discoverableChannels' => fn () => $user && $user->currentTeam
+                ? app(ListDiscoverableChannelsForUser::class)->handle($user, $user->currentTeam)
+                : [],
+            // "Inicio" — accesos rápidos reales (favoritos), no la
+            // misma lista completa que Chats/Grupos/Canales.
+            'favoriteConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, favoritesOnly: true)
                 : [],
             // Alimenta la pestaña "Guardados" del mini-rail — mismo
             // criterio que conversations/archivedConversations arriba

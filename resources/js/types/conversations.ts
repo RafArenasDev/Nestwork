@@ -1,17 +1,21 @@
+export type ConversationKind = 'dm' | 'group_chat' | 'group' | 'channel';
+
 export type ConversationSummary = {
     id: number;
-    type: 'dm' | 'group';
+    type: ConversationKind;
     name: string;
     avatar: string | null;
     otherUserId: number | null;
     presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
     statusEmoji: string | null;
     statusText: string | null;
+    memberCount: number | null;
     lastMessageBody: string | null;
     lastMessageAt: string | null;
     unreadCount: number;
     isMuted: boolean;
     isArchived: boolean;
+    isFavorite: boolean;
     isCurrent: boolean;
 };
 
@@ -58,12 +62,16 @@ export type MessageData = {
 export type ActiveConversation = {
     id: number;
     name: string;
-    type: 'dm' | 'group';
+    type: ConversationKind;
     avatar: string | null;
     otherUserId: number | null;
     presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
     statusEmoji: string | null;
     statusText: string | null;
+    memberCount: number | null;
+    /** Sólo relevante en group/channel — DM y minichat no tienen
+     *  jerarquía (ConversationType::isFlatChat()). */
+    isAdmin: boolean;
     isArchived: boolean;
     isMuted: boolean;
     viewerLastReadMessageId: number | null;

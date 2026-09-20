@@ -24,6 +24,10 @@ declare module '@inertiajs/core' {
             teams: Team[];
             conversations: ConversationSummary[];
             archivedConversations: ConversationSummary[];
+            groupConversations: ConversationSummary[];
+            channelConversations: ConversationSummary[];
+            discoverableChannels: ConversationSummary[];
+            favoriteConversations: ConversationSummary[];
             savedMessages: SavedMessageSummary[];
             teamMembers: TeamMemberOption[];
             presencePresets: StatusPresetOption[];
