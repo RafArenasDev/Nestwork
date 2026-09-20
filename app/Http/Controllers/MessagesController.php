@@ -95,6 +95,7 @@ class MessagesController extends Controller
             // siempre por la misma ruta `messages.show`).
             'groupConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Group]),
             'channelConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Channel]),
+            'recentConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id),
             'favoriteConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, favoritesOnly: true),
             // Desde "Guardados" (u otro enlace externo al chat): salta al
             // mensaje puntual al abrir. Sólo funciona si ese mensaje cayó

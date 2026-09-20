@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Conversations\ListActivityForUser;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Actions\Conversations\ListDiscoverableChannelsForUser;
 use App\Actions\Messages\ListSavedMessagesForUser;
@@ -91,10 +92,20 @@ class HandleInertiaRequests extends Middleware
             'discoverableChannels' => fn () => $user && $user->currentTeam
                 ? app(ListDiscoverableChannelsForUser::class)->handle($user, $user->currentTeam)
                 : [],
-            // "Inicio" — accesos rápidos reales (favoritos), no la
-            // misma lista completa que Chats/Grupos/Canales.
+            // "Inicio" — dos secciones reales, ninguna es la misma lista
+            // completa que Chats/Grupos/Canales: recientes de CUALQUIER
+            // tipo (sin filtrar por `types`, a diferencia de `conversations`)
+            // y favoritos.
+            'recentConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam)
+                : [],
             'favoriteConversations' => fn () => $user && $user->currentTeam
                 ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, favoritesOnly: true)
+                : [],
+            // "Actividad" — reacciones reales recibidas, no la lista de
+            // conversaciones reordenada (ver ListActivityForUser).
+            'activityItems' => fn () => $user && $user->currentTeam
+                ? app(ListActivityForUser::class)->handle($user, $user->currentTeam)
                 : [],
             // Alimenta la pestaña "Guardados" del mini-rail — mismo
             // criterio que conversations/archivedConversations arriba

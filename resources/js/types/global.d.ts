@@ -1,5 +1,6 @@
 import type { Auth } from '@/types/auth';
 import type {
+    ActivityItem,
     ConversationSummary,
     SavedMessageSummary,
     TeamMemberOption,
@@ -27,8 +28,10 @@ declare module '@inertiajs/core' {
             groupConversations: ConversationSummary[];
             channelConversations: ConversationSummary[];
             discoverableChannels: ConversationSummary[];
+            recentConversations: ConversationSummary[];
             favoriteConversations: ConversationSummary[];
             savedMessages: SavedMessageSummary[];
+            activityItems: ActivityItem[];
             teamMembers: TeamMemberOption[];
             presencePresets: StatusPresetOption[];
             statusPresets: StatusPresetOption[];

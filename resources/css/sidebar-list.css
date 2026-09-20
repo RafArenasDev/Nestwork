@@ -80,7 +80,7 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-size: 0.875rem;
+    font-size: 0.825rem;
     font-weight: 600;
 }
 .sidebar-row-preview {
@@ -100,15 +100,17 @@
     font-weight: 400;
 }
 
-/* Fila con una acción extra (desarchivar, en Archivado): flota SOBRE
-   la fila en vez de empujar el layout — mismo criterio que antes. */
+/* El menú de opciones (⋯/chevron) flota SOBRE la fila, en el MISMO
+   cupo donde va la hora (no centrado en toda la fila — eso era lo que
+   se veía encimado con la hora/el badge de no leídos antes). Comparten
+   posición vía visibility (no display), así el swap hover no mueve
+   nada. */
 .sidebar-row-link--actionable {
     padding-right: 34px;
 }
 .sidebar-row-action {
     position: absolute;
-    top: 50%;
-    right: 10px;
+    top: 11px;
+    right: 12px;
     z-index: 3;
-    transform: translateY(-50%);
 }

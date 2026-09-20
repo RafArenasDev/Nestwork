@@ -1,5 +1,16 @@
 import { router, usePage } from '@inertiajs/react';
-import { ArchiveRestore, Bookmark, Plus, Star } from 'lucide-react';
+import {
+    ArchiveRestore,
+    Archive,
+    Bell,
+    BellOff,
+    Bookmark,
+    ChevronDown,
+    Eraser,
+    Plus,
+    Star,
+    Trash2,
+} from 'lucide-react';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
 import { NewGroupModal } from '@/components/new-group-modal';
@@ -7,7 +18,13 @@ import { NewChannelModal } from '@/components/new-channel-modal';
 import { PresenceDot } from '@/components/presence-dot';
 import { show as showMessage } from '@/routes/messages';
 import { toggle as toggleSaveRoute } from '@/routes/messages/save';
-import { toggleArchive, toggleFavorite } from '@/routes/conversations';
+import {
+    clear as clearChat,
+    toggleArchive,
+    toggleFavorite,
+    toggleHidden,
+    toggleMute,
+} from '@/routes/conversations';
 import { join as joinChannel } from '@/routes/channels';
 import {
     Sidebar,
@@ -16,6 +33,23 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Tooltip,
     TooltipContent,
@@ -27,6 +61,7 @@ import { useOpenConversationUnseen } from '@/hooks/use-open-conversation-unseen'
 import { csrfHeaders } from '@/lib/csrf';
 import type { RailModuleKey } from '@/components/curved-nav-rail';
 import type {
+    ActivityItem,
     ConversationSummary,
     SavedMessageSummary,
 } from '@/types/conversations';
@@ -110,6 +145,29 @@ function formatSidebarTime(iso: string): string {
     return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 }
 
+/** El body queda vacío cuando el mensaje es sólo un adjunto — sin esto
+ *  la fila mostraba una segunda línea en blanco para fotos/videos/
+ *  audios/documentos, en vez de decir qué se mandó (mismo criterio que
+ *  WhatsApp/Telegram: "📷 Foto", no el cuerpo crudo). */
+function messagePreviewFor(conversation: ConversationSummary): string {
+    switch (conversation.lastMessageType) {
+        case 'image':
+            return '📷 Foto';
+        case 'video':
+            return '🎥 Video';
+        case 'audio':
+            return '🎵 Audio';
+        case 'file':
+            return conversation.lastMessageAttachmentName
+                ? `📄 ${conversation.lastMessageAttachmentName}`
+                : '📄 Documento';
+        case 'call_log':
+            return '📞 Llamada';
+        default:
+            return conversation.lastMessageBody || ' ';
+    }
+}
+
 export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
     if (activeModule === 'messages') {
         return <MessagesSidebarList activeModuleLabel={activeModuleLabel} />;
@@ -144,16 +202,31 @@ export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
     return <HomeSidebarList activeModuleLabel={activeModuleLabel} />;
 }
 
+/** Encabezado de subsección dentro de un módulo (Recientes/Favoritos en
+ *  Inicio, Descubrir en Canales) — mismo estilo en los dos lugares. */
+function SidebarSectionLabel({ children }: { children: string }) {
+    return (
+        <p className="text-muted-foreground px-3 pt-3 pb-1 text-xs font-medium tracking-wide uppercase">
+            {children}
+        </p>
+    );
+}
+
 function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
     const page = usePage();
+    // Recientes = actividad real de CUALQUIER tipo de conversación
+    // (chat/grupo/canal), sin importar en qué módulo estés cuando
+    // llegue el mensaje — a diferencia de `conversations` (sólo
+    // Chats). Favoritos = lo que se fijó a mano con el menú de la fila.
+    // Antes esto mostraba exactamente la misma lista que Chats
+    // recortada a 8, lo que hacía redundantes los dos módulos.
+    const recentConversations = (page.props.recentConversations ?? []).slice(
+        0,
+        8,
+    );
     const favoriteConversations = page.props.favoriteConversations ?? [];
     const currentTeam = page.props.currentTeam;
 
-    // "Inicio" = tus accesos fijados (favoritos), NO la misma lista
-    // completa que Chats — antes mostraba exactamente lo mismo que
-    // Mensajes recortado a 8, lo que hacía redundantes los dos
-    // módulos. Marca cualquier chat/grupo/canal con la estrella de su
-    // fila para que aparezca acá.
     return (
         <Sidebar
             collapsible="none"
@@ -165,6 +238,24 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                 <SidebarModuleHeader title={activeModuleLabel} />
             </SidebarHeader>
             <SidebarContent>
+                <SidebarSectionLabel>Recientes</SidebarSectionLabel>
+                <ul className="sidebar-list">
+                    {recentConversations.map((conversation) => (
+                        <ConversationRow
+                            key={conversation.id}
+                            conversation={conversation}
+                            currentTeamSlug={currentTeam?.slug}
+                        />
+                    ))}
+
+                    {recentConversations.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            Todavía no tienes actividad reciente.
+                        </p>
+                    )}
+                </ul>
+
+                <SidebarSectionLabel>Favoritos</SidebarSectionLabel>
                 <ul className="sidebar-list">
                     {favoriteConversations.map((conversation) => (
                         <ConversationRow
@@ -176,8 +267,8 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
 
                     {favoriteConversations.length === 0 && (
                         <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
-                            Marca la estrella de un chat, grupo o canal para
-                            fijarlo acá.
+                            Marca "Fijar en Inicio" en el menú de un chat, grupo
+                            o canal para verlo acá.
                         </p>
                     )}
                 </ul>
@@ -186,40 +277,215 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
     );
 }
 
-/** Qué contarle al usuario sobre esta conversación en el tooltip de
- *  Actividad — real, a partir del mismo dato que ya tenemos. */
-function activitySummary(conversation: ConversationSummary): string {
-    if (conversation.unreadCount > 1) {
-        return `Tienes ${conversation.unreadCount} mensajes sin leer`;
-    }
+/** Menú de opciones de una fila (favorito/archivar/silenciar/limpiar/
+ *  eliminar) — antes era un ícono de estrella siempre visible, mal
+ *  posicionado (centrado en toda la fila, se veía encimado con la hora
+ *  y con el badge de no-leídos). Ahora vive en el mismo cupo que la
+ *  hora: la hora se ve por defecto, el chevron aparece al pasar el
+ *  mouse (o si el menú sigue abierto) y la reemplaza en el mismo
+ *  lugar, en vez de flotar encima. */
+function ConversationRowMenu({
+    conversation,
+    currentTeamSlug,
+    showUnarchive,
+    onOpenChange,
+}: {
+    conversation: ConversationSummary;
+    currentTeamSlug: string;
+    showUnarchive: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const [confirmAction, setConfirmAction] = useState<
+        'clear' | 'delete' | null
+    >(null);
 
-    if (conversation.unreadCount === 1) {
-        return conversation.lastMessageBody
-            ? `Nuevo mensaje: "${conversation.lastMessageBody}"`
-            : 'Tienes 1 mensaje sin leer';
-    }
+    const patch = (url: string) =>
+        router.patch(url, {}, { preserveScroll: true });
 
-    return conversation.lastMessageBody
-        ? `Último mensaje: "${conversation.lastMessageBody}"`
-        : 'Sin mensajes nuevos';
+    return (
+        <>
+            <DropdownMenu onOpenChange={onOpenChange}>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        aria-label="Más opciones"
+                        className="text-[var(--sidebar-fg-muted)] transition-colors hover:text-[var(--sidebar-fg)]"
+                    >
+                        <ChevronDown className="size-3.5" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem
+                        onClick={() =>
+                            patch(
+                                toggleFavorite([
+                                    currentTeamSlug,
+                                    conversation.id,
+                                ]).url,
+                            )
+                        }
+                    >
+                        <Star
+                            className={
+                                conversation.isFavorite ? 'text-amber-400' : ''
+                            }
+                            fill={
+                                conversation.isFavorite
+                                    ? 'currentColor'
+                                    : 'none'
+                            }
+                        />
+                        {conversation.isFavorite
+                            ? 'Quitar de Inicio'
+                            : 'Fijar en Inicio'}
+                    </DropdownMenuItem>
+                    {showUnarchive ? (
+                        <DropdownMenuItem
+                            onClick={() =>
+                                patch(
+                                    toggleArchive([
+                                        currentTeamSlug,
+                                        conversation.id,
+                                    ]).url,
+                                )
+                            }
+                        >
+                            <ArchiveRestore />
+                            Desarchivar
+                        </DropdownMenuItem>
+                    ) : (
+                        <DropdownMenuItem
+                            onClick={() =>
+                                patch(
+                                    toggleArchive([
+                                        currentTeamSlug,
+                                        conversation.id,
+                                    ]).url,
+                                )
+                            }
+                        >
+                            <Archive />
+                            Archivar
+                        </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                        onClick={() =>
+                            patch(
+                                toggleMute([currentTeamSlug, conversation.id])
+                                    .url,
+                            )
+                        }
+                    >
+                        {conversation.isMuted ? <Bell /> : <BellOff />}
+                        {conversation.isMuted
+                            ? 'Activar notificaciones'
+                            : 'Silenciar'}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setConfirmAction('clear')}
+                    >
+                        <Eraser />
+                        Limpiar chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        variant="destructive"
+                        onClick={() => setConfirmAction('delete')}
+                    >
+                        <Trash2 />
+                        Eliminar chat
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <AlertDialog
+                open={confirmAction !== null}
+                onOpenChange={(open) => !open && setConfirmAction(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmAction === 'clear'
+                                ? 'Limpiar chat'
+                                : 'Eliminar conversación'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmAction === 'clear'
+                                ? 'Solo para ti — la otra persona sigue viendo todo igual, y los mensajes nuevos vuelven a aparecer normal. ¿Ocultar solo los de hoy, o todo el historial hasta ahora?'
+                                : 'La conversación desaparece de tu lista hasta que la busques a propósito, y tu historial hasta ahora se oculta contigo. No se borra ningún mensaje ni afecta a los demás.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        {confirmAction === 'clear' ? (
+                            <>
+                                <AlertDialogAction
+                                    onClick={() => {
+                                        router.patch(
+                                            clearChat([
+                                                currentTeamSlug,
+                                                conversation.id,
+                                            ]).url,
+                                            { scope: 'today' },
+                                            { preserveScroll: true },
+                                        );
+                                        setConfirmAction(null);
+                                    }}
+                                >
+                                    Solo hoy
+                                </AlertDialogAction>
+                                <AlertDialogAction
+                                    onClick={() => {
+                                        router.patch(
+                                            clearChat([
+                                                currentTeamSlug,
+                                                conversation.id,
+                                            ]).url,
+                                            { scope: 'all' },
+                                            { preserveScroll: true },
+                                        );
+                                        setConfirmAction(null);
+                                    }}
+                                >
+                                    Todo el historial
+                                </AlertDialogAction>
+                            </>
+                        ) : (
+                            <AlertDialogAction
+                                onClick={() => {
+                                    router.patch(
+                                        toggleHidden([
+                                            currentTeamSlug,
+                                            conversation.id,
+                                        ]).url,
+                                    );
+                                    setConfirmAction(null);
+                                }}
+                            >
+                                Eliminar
+                            </AlertDialogAction>
+                        )}
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
 }
 
 function ConversationRow({
     conversation,
     currentTeamSlug,
     showUnarchive = false,
-    tooltip,
 }: {
     conversation: ConversationSummary;
     currentTeamSlug: string | undefined;
     /** Sólo en Archivado: desarchivar sin tener que abrir el chat. */
     showUnarchive?: boolean;
-    /** Sólo en Actividad: qué pasó, sin agregar una segunda línea a la
-     *  fila (la altura del pill de la gotera nunca cambia). */
-    tooltip?: string;
 }) {
     const getInitials = useInitials();
     const openUnseen = useOpenConversationUnseen();
+    const [menuOpen, setMenuOpen] = useState(false);
     // Mientras este chat está abierto y seleccionado, Thread ya sabe en
     // el momento cuántos mensajes sin leer hay (mismo número del botón
     // flotante "N mensajes nuevos") — se usa ese en vez del que trae el
@@ -232,9 +498,9 @@ function ConversationRow({
 
     const live = useLivePresence(conversation.otherUserId, conversation);
 
-    const row = (
+    return (
         <li
-            className={`sidebar-row${conversation.isCurrent ? ' sidebar-row--active' : ''}`}
+            className={`sidebar-row group${conversation.isCurrent ? ' sidebar-row--active' : ''}`}
         >
             <button
                 type="button"
@@ -262,7 +528,7 @@ function ConversationRow({
                         },
                     );
                 }}
-                className={`sidebar-row-link${showUnarchive ? ' sidebar-row-link--actionable' : ''}`}
+                className={`sidebar-row-link${currentTeamSlug ? ' sidebar-row-link--actionable' : ''}`}
             >
                 <span className="relative inline-flex shrink-0">
                     <Avatar className="size-9">
@@ -304,16 +570,22 @@ function ConversationRow({
                     <span className="flex items-center justify-between gap-2">
                         <span className="sidebar-row-label">
                             {conversation.name}
+                            {conversation.isFavorite && (
+                                <Star
+                                    className="ml-1 inline-block size-2.5 align-middle text-amber-400"
+                                    fill="currentColor"
+                                />
+                            )}
                         </span>
                         {conversation.lastMessageAt && (
-                            <span className="sidebar-row-time">
+                            <span className="sidebar-row-time group-hover:invisible">
                                 {formatSidebarTime(conversation.lastMessageAt)}
                             </span>
                         )}
                     </span>
                     <span className="flex items-center justify-between gap-2">
                         <span className="sidebar-row-preview">
-                            {conversation.lastMessageBody ?? ' '}
+                            {messagePreviewFor(conversation)}
                         </span>
                         {unreadCount > 0 && (
                             <Badge
@@ -330,87 +602,18 @@ function ConversationRow({
                 </span>
             </button>
             {currentTeamSlug && (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            aria-label={
-                                conversation.isFavorite
-                                    ? 'Quitar de Inicio'
-                                    : 'Fijar en Inicio'
-                            }
-                            className={`sidebar-row-action rounded-full p-1 transition-colors hover:bg-white/10 ${
-                                conversation.isFavorite
-                                    ? 'text-amber-400'
-                                    : 'text-[var(--sidebar-fg-muted)] hover:text-[var(--sidebar-fg)]'
-                            }`}
-                            onClick={() =>
-                                router.patch(
-                                    toggleFavorite([
-                                        currentTeamSlug,
-                                        conversation.id,
-                                    ]).url,
-                                    {},
-                                    { preserveScroll: true },
-                                )
-                            }
-                        >
-                            <Star
-                                className="size-3.5"
-                                fill={
-                                    conversation.isFavorite
-                                        ? 'currentColor'
-                                        : 'none'
-                                }
-                            />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                        {conversation.isFavorite
-                            ? 'Quitar de Inicio'
-                            : 'Fijar en Inicio'}
-                    </TooltipContent>
-                </Tooltip>
-            )}
-            {showUnarchive && currentTeamSlug && (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <button
-                            type="button"
-                            aria-label="Desarchivar"
-                            // Tokens de tema (no blanco fijo): la sidebar de
-                            // conversaciones ahora sigue el tema (--bg-elevated,
-                            // ver sidebar-list.css), ya no es oscura fija.
-                            className="sidebar-row-action rounded-full p-1 text-[var(--sidebar-fg-muted)] transition-colors hover:bg-white/10 hover:text-[var(--sidebar-fg)]"
-                            onClick={() =>
-                                router.patch(
-                                    toggleArchive([
-                                        currentTeamSlug,
-                                        conversation.id,
-                                    ]).url,
-                                    {},
-                                    { preserveScroll: true },
-                                )
-                            }
-                        >
-                            <ArchiveRestore className="size-3.5" />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">Desarchivar</TooltipContent>
-                </Tooltip>
+                <span
+                    className={`sidebar-row-action ${menuOpen ? '' : 'invisible group-hover:visible'}`}
+                >
+                    <ConversationRowMenu
+                        conversation={conversation}
+                        currentTeamSlug={currentTeamSlug}
+                        showUnarchive={showUnarchive}
+                        onOpenChange={setMenuOpen}
+                    />
+                </span>
             )}
         </li>
-    );
-
-    if (!tooltip) {
-        return row;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>{row}</TooltipTrigger>
-            <TooltipContent side="right">{tooltip}</TooltipContent>
-        </Tooltip>
     );
 }
 
@@ -858,6 +1061,86 @@ function SavedMessagesSidebarList({
     );
 }
 
+/** Fila de actividad real (reacciones recibidas por ahora — ver
+ *  ListActivityForUser sobre por qué menciones/ediciones/cambios de
+ *  estado de compañeros todavía no están acá). Mismo mecanismo de
+ *  salto que SavedMessageRow. */
+function ActivityRow({
+    item,
+    currentTeamSlug,
+}: {
+    item: ActivityItem;
+    currentTeamSlug: string | undefined;
+}) {
+    const getInitials = useInitials();
+
+    return (
+        <li className="sidebar-row">
+            <button
+                type="button"
+                onClick={() => {
+                    if (!currentTeamSlug) {
+                        return;
+                    }
+
+                    router.visit(
+                        showMessage([currentTeamSlug, item.conversationId], {
+                            query: { message: item.messageId },
+                        }).url,
+                        {
+                            preserveUrl: true,
+                            preserveScroll: true,
+                            only: [
+                                'conversation',
+                                'messages',
+                                'conversations',
+                                'archivedConversations',
+                                'jumpToMessageId',
+                            ],
+                        },
+                    );
+                }}
+                className="sidebar-row-link sidebar-row-link--actionable"
+            >
+                <span className="relative shrink-0">
+                    <Avatar className="size-9">
+                        {item.actorAvatar && (
+                            <AvatarImage
+                                src={item.actorAvatar}
+                                alt={item.actorName}
+                            />
+                        )}
+                        <AvatarFallback className="bg-[var(--sidebar-accent)] text-[11px] text-[var(--sidebar-accent-foreground)]">
+                            {getInitials(item.actorName)}
+                        </AvatarFallback>
+                    </Avatar>
+                    {item.emoji && (
+                        <span
+                            className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none"
+                            style={{ backgroundColor: 'var(--bg-elevated)' }}
+                        >
+                            {item.emoji}
+                        </span>
+                    )}
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                        <span className="sidebar-row-label">
+                            {item.actorName} reaccionó a tu mensaje
+                        </span>
+                        <span className="sidebar-row-time">
+                            {relativeSavedLabel(item.createdAt)}
+                        </span>
+                    </span>
+                    <span className="sidebar-row-preview">
+                        {item.conversationName} — “{item.messageExcerpt}”
+                    </span>
+                </span>
+            </button>
+        </li>
+    );
+}
+
 function ActivitySidebarList({
     activeModuleLabel,
 }: {
@@ -865,14 +1148,7 @@ function ActivitySidebarList({
 }) {
     const page = usePage();
     const currentTeam = page.props.currentTeam;
-
-    // "Actividad" = todas las conversaciones con al menos un mensaje,
-    // más recientes primero (mismo orden que ya trae `conversations`) —
-    // leer una NO la saca de la lista, sólo le apaga el badge. Dato
-    // real, no una tabla nueva de eventos.
-    const recentActivity = (page.props.conversations ?? []).filter(
-        (conversation) => conversation.lastMessageAt !== null,
-    );
+    const activityItems = page.props.activityItems ?? [];
 
     return (
         <Sidebar
@@ -887,18 +1163,18 @@ function ActivitySidebarList({
 
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {recentActivity.map((conversation) => (
-                        <ConversationRow
-                            key={conversation.id}
-                            conversation={conversation}
+                    {activityItems.map((item) => (
+                        <ActivityRow
+                            key={item.id}
+                            item={item}
                             currentTeamSlug={currentTeam?.slug}
-                            tooltip={activitySummary(conversation)}
                         />
                     ))}
 
-                    {recentActivity.length === 0 && (
+                    {activityItems.length === 0 && (
                         <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
-                            Sin actividad reciente.
+                            Sin actividad reciente — acá vas a ver cuando
+                            alguien reaccione a tus mensajes.
                         </p>
                     )}
                 </ul>

@@ -141,7 +141,18 @@ export default function AppSidebarLayout({
                 : messagesIndex(currentTeam.slug).url;
 
             router.visit(url, {
-                only: ['conversations', 'archivedConversations'],
+                // groupConversations/channelConversations/recentConversations:
+                // un mensaje nuevo en cualquiera de los tres módulos
+                // también tiene que reflejarse en "Recientes" de Inicio
+                // sin importar en qué módulo esté el usuario ahora mismo.
+                only: [
+                    'conversations',
+                    'archivedConversations',
+                    'groupConversations',
+                    'channelConversations',
+                    'recentConversations',
+                    'favoriteConversations',
+                ],
                 preserveScroll: true,
                 preserveState: true,
                 preserveUrl: true,

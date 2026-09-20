@@ -61,6 +61,7 @@ class ListConversationsForUser
 
         $lastMessage = Message::query()
             ->where('conversation_id', $conversation->id)
+            ->with('attachments')
             ->latest('id')
             ->first();
 
@@ -87,6 +88,8 @@ class ListConversationsForUser
             statusText: $isDm && $otherParticipant instanceof User ? $otherParticipant->status_text : null,
             memberCount: $isDm ? null : $conversation->participants()->count(),
             lastMessageBody: $lastMessage?->body,
+            lastMessageType: $lastMessage?->type->value,
+            lastMessageAttachmentName: $lastMessage?->attachments->first()?->original_name,
             lastMessageAt: $lastMessage instanceof Message ? $this->isoString($lastMessage->created_at) : null,
             unreadCount: $unreadCount,
             isMuted: $pivot->isMuted(),

@@ -11,6 +11,17 @@ export type ConversationSummary = {
     statusText: string | null;
     memberCount: number | null;
     lastMessageBody: string | null;
+    lastMessageType:
+        | 'text'
+        | 'image'
+        | 'video'
+        | 'audio'
+        | 'file'
+        | 'code'
+        | 'system'
+        | 'call_log'
+        | null;
+    lastMessageAttachmentName: string | null;
     lastMessageAt: string | null;
     unreadCount: number;
     isMuted: boolean;
@@ -98,4 +109,17 @@ export type SavedMessageSummary = {
     messageCreatedAt: string;
     savedAt: string;
     isMine: boolean;
+};
+
+export type ActivityItem = {
+    id: string;
+    type: 'reaction';
+    conversationId: number;
+    conversationName: string;
+    messageId: number;
+    messageExcerpt: string;
+    actorName: string;
+    actorAvatar: string | null;
+    emoji: string | null;
+    createdAt: string;
 };

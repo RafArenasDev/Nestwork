@@ -22,6 +22,12 @@ readonly class ConversationSummary
         /** Sólo group_chat/group/channel — cuántos participantes tiene. */
         public ?int $memberCount,
         public ?string $lastMessageBody,
+        /** @var 'text'|'image'|'video'|'audio'|'file'|'code'|'system'|'call_log'|null */
+        public ?string $lastMessageType,
+        /** Sólo si el último mensaje es un adjunto sin texto — para el
+         *  preview de la fila ("📄 informe.pdf" en vez de un cuerpo
+         *  vacío). */
+        public ?string $lastMessageAttachmentName,
         public ?string $lastMessageAt,
         public int $unreadCount,
         public bool $isMuted,

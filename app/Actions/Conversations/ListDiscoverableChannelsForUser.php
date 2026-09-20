@@ -40,6 +40,8 @@ class ListDiscoverableChannelsForUser
                 statusText: null,
                 memberCount: $conversation->participants->count(),
                 lastMessageBody: null,
+                lastMessageType: null,
+                lastMessageAttachmentName: null,
                 lastMessageAt: null,
                 unreadCount: 0,
                 isMuted: false,
