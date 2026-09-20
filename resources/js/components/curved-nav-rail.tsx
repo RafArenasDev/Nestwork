@@ -5,6 +5,9 @@ import {
     BookmarkIcon,
     ChatBubbleLeftRightIcon,
     HomeIcon,
+    UserGroupIcon,
+    SpeakerWaveIcon,
+    VideoCameraIcon,
 } from '@heroicons/react/24/outline';
 import {
     ArchiveBoxIcon as ArchiveBoxIconSolid,
@@ -12,6 +15,9 @@ import {
     BookmarkIcon as BookmarkIconSolid,
     ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
     HomeIcon as HomeIconSolid,
+    UserGroupIcon as UserGroupIconSolid,
+    SpeakerWaveIcon as SpeakerWaveIconSolid,
+    VideoCameraIcon as VideoCameraIconSolid,
 } from '@heroicons/react/24/solid';
 import { LogOut, Settings, Sparkles, UserRound, X } from 'lucide-react';
 import { useState } from 'react';
@@ -57,9 +63,27 @@ const RAIL_MODULES = [
     },
     {
         key: 'messages',
-        label: 'Mensajes',
+        label: 'Chats',
         icon: ChatBubbleLeftRightIcon,
         iconActive: ChatBubbleLeftRightIconSolid,
+    },
+    {
+        key: 'groups',
+        label: 'Grupos',
+        icon: UserGroupIcon,
+        iconActive: UserGroupIconSolid,
+    },
+    {
+        key: 'channels',
+        label: 'Canales',
+        icon: SpeakerWaveIcon,
+        iconActive: SpeakerWaveIconSolid,
+    },
+    {
+        key: 'meetings',
+        label: 'Reuniones',
+        icon: VideoCameraIcon,
+        iconActive: VideoCameraIconSolid,
     },
     {
         key: 'activity',
@@ -124,6 +148,8 @@ export function CurvedNavRail({ active, onChange }: Props) {
         auth,
         conversations,
         archivedConversations,
+        groupConversations,
+        channelConversations,
         presencePresets,
         statusPresets,
     } = usePage().props;
@@ -150,10 +176,26 @@ export function CurvedNavRail({ active, onChange }: Props) {
         (total, conversation) => total + conversation.unreadCount,
         0,
     );
+    const unreadGroupCount = groupConversations.reduce(
+        (total, conversation) => total + conversation.unreadCount,
+        0,
+    );
+    const unreadChannelCount = channelConversations.reduce(
+        (total, conversation) => total + conversation.unreadCount,
+        0,
+    );
 
     const badgeCountFor = (key: RailModuleKey): number => {
         if (key === 'messages') {
             return unreadMessageCount;
+        }
+
+        if (key === 'groups') {
+            return unreadGroupCount;
+        }
+
+        if (key === 'channels') {
+            return unreadChannelCount;
         }
 
         if (key === 'activity') {

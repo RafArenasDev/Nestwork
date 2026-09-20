@@ -110,5 +110,11 @@ export function useLivePresence<
 
         return override ? { ...fallback, ...override } : fallback;
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId, overrides, fallback.presence, fallback.statusEmoji, fallback.statusText]);
+    }, [
+        userId,
+        overrides,
+        fallback.presence,
+        fallback.statusEmoji,
+        fallback.statusText,
+    ]);
 }

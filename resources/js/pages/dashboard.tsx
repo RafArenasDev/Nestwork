@@ -97,7 +97,10 @@ function TeammateRow({ member }: { member: TeamMemberOption }) {
                         {getInitials(member.name)}
                     </AvatarFallback>
                 </Avatar>
-                <PresenceDot presence={live.presence} surfaceTone="var(--card)" />
+                <PresenceDot
+                    presence={live.presence}
+                    surfaceTone="var(--card)"
+                />
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">

@@ -1,11 +1,14 @@
 import { router, usePage } from '@inertiajs/react';
-import { ArchiveRestore, Bookmark, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ArchiveRestore, Bookmark, Plus, Star } from 'lucide-react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import { NewConversationModal } from '@/components/new-conversation-modal';
+import { NewGroupModal } from '@/components/new-group-modal';
+import { NewChannelModal } from '@/components/new-channel-modal';
 import { PresenceDot } from '@/components/presence-dot';
 import { show as showMessage } from '@/routes/messages';
 import { toggle as toggleSaveRoute } from '@/routes/messages/save';
-import { toggleArchive } from '@/routes/conversations';
+import { toggleArchive, toggleFavorite } from '@/routes/conversations';
+import { join as joinChannel } from '@/routes/channels';
 import {
     Sidebar,
     SidebarContent,
@@ -54,21 +57,32 @@ function SidebarTintLayer() {
  * toggle de tema vive SOLO en el modal de Ajustes (dropdown del
  * avatar) — dos controles para lo mismo era redundante.
  */
-function SidebarModuleHeader({ title }: { title: string }) {
+function SidebarModuleHeader({
+    title,
+    createLabel = 'Nuevo chat',
+    CreateModal = NewConversationModal,
+}: {
+    title: string;
+    createLabel?: string;
+    /** Grupos/Canales usan su propio modal de creación — Home/Chats/
+     *  Actividad/Archivo/Guardados siguen compartiendo "Nuevo chat"
+     *  (arranca un DM o, si eliges varios, un minichat). */
+    CreateModal?: (props: PropsWithChildren) => React.JSX.Element;
+}) {
     return (
         <div className="relative z-10 flex h-8 items-center justify-between gap-2 px-3 pt-[21px] pb-3">
             <span className="truncate text-lg font-semibold tracking-tight">
                 {title}
             </span>
-            <NewConversationModal>
+            <CreateModal>
                 <button
                     type="button"
-                    aria-label="Nuevo chat"
+                    aria-label={createLabel}
                     className="flex size-8 shrink-0 items-center justify-center rounded-[10px] border border-[var(--sidebar-hairline)] bg-white/5 text-[var(--sidebar-fg-muted)] transition-[background-color,color,transform] duration-150 hover:bg-white/10 hover:text-[var(--sidebar-fg)] active:scale-90"
                 >
                     <Plus className="size-4" />
                 </button>
-            </NewConversationModal>
+            </CreateModal>
         </div>
     );
 }
@@ -101,6 +115,18 @@ export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
         return <MessagesSidebarList activeModuleLabel={activeModuleLabel} />;
     }
 
+    if (activeModule === 'groups') {
+        return <GroupsSidebarList activeModuleLabel={activeModuleLabel} />;
+    }
+
+    if (activeModule === 'channels') {
+        return <ChannelsSidebarList activeModuleLabel={activeModuleLabel} />;
+    }
+
+    if (activeModule === 'meetings') {
+        return <MeetingsSidebarList activeModuleLabel={activeModuleLabel} />;
+    }
+
     if (activeModule === 'activity') {
         return <ActivitySidebarList activeModuleLabel={activeModuleLabel} />;
     }
@@ -120,13 +146,14 @@ export function AppSidebar({ activeModule, activeModuleLabel }: Props) {
 
 function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
     const page = usePage();
-    const conversations = page.props.conversations ?? [];
+    const favoriteConversations = page.props.favoriteConversations ?? [];
     const currentTeam = page.props.currentTeam;
-    const recent = conversations.slice(0, 8);
 
-    // "Inicio" = acceso rápido a tus chats recientes, mismo dato real
-    // que Mensajes (nada quemado en pantalla) — de acá saltás directo a
-    // la conversación.
+    // "Inicio" = tus accesos fijados (favoritos), NO la misma lista
+    // completa que Chats — antes mostraba exactamente lo mismo que
+    // Mensajes recortado a 8, lo que hacía redundantes los dos
+    // módulos. Marca cualquier chat/grupo/canal con la estrella de su
+    // fila para que aparezca acá.
     return (
         <Sidebar
             collapsible="none"
@@ -139,7 +166,7 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
             </SidebarHeader>
             <SidebarContent>
                 <ul className="sidebar-list">
-                    {recent.map((conversation) => (
+                    {favoriteConversations.map((conversation) => (
                         <ConversationRow
                             key={conversation.id}
                             conversation={conversation}
@@ -147,9 +174,10 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                         />
                     ))}
 
-                    {recent.length === 0 && (
+                    {favoriteConversations.length === 0 && (
                         <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
-                            No tienes conversaciones todavía.
+                            Marca la estrella de un chat, grupo o canal para
+                            fijarlo acá.
                         </p>
                     )}
                 </ul>
@@ -301,6 +329,49 @@ function ConversationRow({
                     </span>
                 </span>
             </button>
+            {currentTeamSlug && (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            aria-label={
+                                conversation.isFavorite
+                                    ? 'Quitar de Inicio'
+                                    : 'Fijar en Inicio'
+                            }
+                            className={`sidebar-row-action rounded-full p-1 transition-colors hover:bg-white/10 ${
+                                conversation.isFavorite
+                                    ? 'text-amber-400'
+                                    : 'text-[var(--sidebar-fg-muted)] hover:text-[var(--sidebar-fg)]'
+                            }`}
+                            onClick={() =>
+                                router.patch(
+                                    toggleFavorite([
+                                        currentTeamSlug,
+                                        conversation.id,
+                                    ]).url,
+                                    {},
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            <Star
+                                className="size-3.5"
+                                fill={
+                                    conversation.isFavorite
+                                        ? 'currentColor'
+                                        : 'none'
+                                }
+                            />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">
+                        {conversation.isFavorite
+                            ? 'Quitar de Inicio'
+                            : 'Fijar en Inicio'}
+                    </TooltipContent>
+                </Tooltip>
+            )}
             {showUnarchive && currentTeamSlug && (
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -421,6 +492,171 @@ function ArchivedSidebarList({
                         </p>
                     )}
                 </ul>
+            </SidebarContent>
+        </Sidebar>
+    );
+}
+
+function GroupsSidebarList({
+    activeModuleLabel,
+}: {
+    activeModuleLabel: string;
+}) {
+    const page = usePage();
+    const groupConversations = page.props.groupConversations ?? [];
+    const currentTeam = page.props.currentTeam;
+
+    return (
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
+            <SidebarHeader>
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    createLabel="Nuevo grupo"
+                    CreateModal={NewGroupModal}
+                />
+            </SidebarHeader>
+
+            <SidebarContent>
+                <ul className="sidebar-list">
+                    {groupConversations.map((conversation) => (
+                        <ConversationRow
+                            key={conversation.id}
+                            conversation={conversation}
+                            currentTeamSlug={currentTeam?.slug}
+                        />
+                    ))}
+
+                    {groupConversations.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            Todavía no perteneces a ningún grupo. Crea uno con
+                            el botón de arriba.
+                        </p>
+                    )}
+                </ul>
+            </SidebarContent>
+        </Sidebar>
+    );
+}
+
+function ChannelsSidebarList({
+    activeModuleLabel,
+}: {
+    activeModuleLabel: string;
+}) {
+    const page = usePage();
+    const channelConversations = page.props.channelConversations ?? [];
+    const discoverableChannels = page.props.discoverableChannels ?? [];
+    const currentTeam = page.props.currentTeam;
+
+    return (
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
+            <SidebarHeader>
+                <SidebarModuleHeader
+                    title={activeModuleLabel}
+                    createLabel="Nuevo canal"
+                    CreateModal={NewChannelModal}
+                />
+            </SidebarHeader>
+
+            <SidebarContent>
+                <ul className="sidebar-list">
+                    {channelConversations.map((conversation) => (
+                        <ConversationRow
+                            key={conversation.id}
+                            conversation={conversation}
+                            currentTeamSlug={currentTeam?.slug}
+                        />
+                    ))}
+
+                    {channelConversations.length === 0 && (
+                        <p className="px-2 text-sm text-[var(--sidebar-fg-muted)]">
+                            Todavía no te uniste a ningún canal.
+                        </p>
+                    )}
+                </ul>
+
+                {discoverableChannels.length > 0 && (
+                    <div className="mt-2">
+                        <p className="text-muted-foreground px-3 pb-1 text-xs font-medium tracking-wide uppercase">
+                            Descubrir
+                        </p>
+                        <ul className="sidebar-list">
+                            {discoverableChannels.map((channel) => (
+                                <li key={channel.id} className="sidebar-row">
+                                    <button
+                                        type="button"
+                                        className="sidebar-row-link"
+                                        onClick={() => {
+                                            if (!currentTeam) {
+                                                return;
+                                            }
+
+                                            router.post(
+                                                joinChannel([
+                                                    currentTeam.slug,
+                                                    channel.id,
+                                                ]).url,
+                                            );
+                                        }}
+                                    >
+                                        <span className="min-w-0 flex-1">
+                                            <span className="sidebar-row-label">
+                                                {channel.name}
+                                            </span>
+                                            <span className="sidebar-row-preview">
+                                                {channel.memberCount ?? 0}{' '}
+                                                miembros — unirse
+                                            </span>
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </SidebarContent>
+        </Sidebar>
+    );
+}
+
+/** Reuniones/videollamadas — pedido explícito, sin backend todavía
+ *  (WebRTC/SFU real es infraestructura nueva grande, ver PENDING-WORK.md).
+ *  Módulo visual completo para que la navegación ya muestre todo lo
+ *  que la app va a tener, marcado como pendiente en vez de ausente. */
+function MeetingsSidebarList({
+    activeModuleLabel,
+}: {
+    activeModuleLabel: string;
+}) {
+    return (
+        <Sidebar
+            collapsible="none"
+            variant="sidebar"
+            className={SIDEBAR_PANEL_CLASS}
+        >
+            <SidebarTintLayer />
+            <SidebarHeader>
+                <div className="relative z-10 flex h-8 items-center px-3 pt-[21px] pb-3">
+                    <span className="truncate text-lg font-semibold tracking-tight">
+                        {activeModuleLabel}
+                    </span>
+                </div>
+            </SidebarHeader>
+            <SidebarContent>
+                <p className="px-3 text-sm text-[var(--sidebar-fg-muted)]">
+                    Las videollamadas todavía no están disponibles — próxima
+                    novedad grande de Nestwork.
+                </p>
             </SidebarContent>
         </Sidebar>
     );
