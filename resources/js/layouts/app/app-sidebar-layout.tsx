@@ -11,6 +11,10 @@ import {
     RAIL_MODULES,
     type RailModuleKey,
 } from '@/components/curved-nav-rail';
+import {
+    getNotificationPreferences,
+    playNotificationSound,
+} from '@/hooks/use-notification-preferences';
 import { updateFaviconBadge } from '@/lib/favicon-badge';
 import { dashboard } from '@/routes';
 import {
@@ -18,6 +22,7 @@ import {
     show as messagesShow,
 } from '@/routes/messages';
 import type { ActiveConversation, AppLayoutProps } from '@/types';
+import type { MessageData } from '@/types/conversations';
 
 /** Módulos que ya tienen una página real (el resto sigue como pestaña
  * local de solo lectura hasta que se construyan). */
@@ -25,6 +30,39 @@ const ROUTED_MODULES: Partial<Record<RailModuleKey, true>> = {
     home: true,
     messages: true,
 };
+
+/** Notificación de escritorio real (Ajustes > Notificaciones): pide
+ *  permiso una sola vez desde el toggle (nunca acá, sin gesto del
+ *  usuario el navegador la ignora), acá sólo dispara si ya está
+ *  concedido. Silenciosa si el toggle está apagado o el navegador no
+ *  soporta la API. */
+function notifyNewMessage(message: MessageData): void {
+    const prefs = getNotificationPreferences();
+
+    if (prefs.soundEnabled) {
+        playNotificationSound();
+    }
+
+    if (
+        !prefs.desktopEnabled ||
+        typeof Notification === 'undefined' ||
+        Notification.permission !== 'granted' ||
+        !document.hidden
+    ) {
+        return;
+    }
+
+    const notification = new Notification(message.userName, {
+        body: prefs.showPreview ? message.body : 'Nuevo mensaje',
+        icon: message.userAvatar ?? '/favicon.svg',
+        tag: `nestwork-message-${message.id}`,
+    });
+
+    notification.onclick = () => {
+        window.focus();
+        notification.close();
+    };
+}
 
 export default function AppSidebarLayout({
     children,
@@ -59,7 +97,7 @@ export default function AppSidebarLayout({
     useEcho(
         `App.Models.User.${authUserId}`,
         '.MessageSent',
-        () => {
+        (event: { conversationId: number; message: MessageData }) => {
             if (!currentTeam) {
                 return;
             }
@@ -68,6 +106,17 @@ export default function AppSidebarLayout({
                 | ActiveConversation
                 | null
                 | undefined;
+
+            // Notificación de escritorio: sólo si la conversación de
+            // este mensaje NO es la que está abierta ahora mismo (ese
+            // caso ya se ve en pantalla, avisar sería redundante) — ver
+            // Ajustes > Notificaciones para el toggle real.
+            if (
+                event.message.userId !== authUserId &&
+                event.conversationId !== openConversation?.id
+            ) {
+                notifyNewMessage(event.message);
+            }
 
             const url = openConversation
                 ? messagesShow([currentTeam.slug, openConversation.id]).url

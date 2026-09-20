@@ -94,11 +94,25 @@ class HandleInertiaRequests extends Middleware
                         avatar: $member->avatar,
                     ))
                 : [],
-            // Catálogo de estados del dropdown de perfil (sección 3.2/10
-            // del prompt v2) — reemplaza los arrays que antes vivían
-            // quemados en curved-nav-rail.tsx.
+            // Presencia (disponible/ausente/ocupado/no molestar) y
+            // estado personalizado (almorzando, en una reunión...) son
+            // conceptos distintos con su propia UI — separados acá
+            // (StatusPreset::PRESENCE_KEYS) en vez de un solo catálogo
+            // mezclado como antes.
+            'presencePresets' => fn () => StatusPreset::query()
+                ->where('is_enabled', true)
+                ->whereIn('key', StatusPreset::PRESENCE_KEYS)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn (StatusPreset $preset) => new StatusPresetOption(
+                    key: $preset->key,
+                    emoji: $preset->emoji,
+                    label: App::getLocale() === 'en' ? $preset->label_en : $preset->label_es,
+                    defaultDurationMinutes: $preset->default_duration_minutes,
+                )),
             'statusPresets' => fn () => StatusPreset::query()
                 ->where('is_enabled', true)
+                ->whereNotIn('key', StatusPreset::PRESENCE_KEYS)
                 ->orderBy('sort_order')
                 ->get()
                 ->map(fn (StatusPreset $preset) => new StatusPresetOption(

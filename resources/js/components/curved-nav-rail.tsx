@@ -13,11 +13,12 @@ import {
     ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
     HomeIcon as HomeIconSolid,
 } from '@heroicons/react/24/solid';
-import { Circle, LogOut, Settings, UserRound, X } from 'lucide-react';
+import { LogOut, Settings, Sparkles, UserRound, X } from 'lucide-react';
 import { useState } from 'react';
 import { ProfileModal } from '@/components/profile-modal';
 import { SettingsModal } from '@/components/settings-modal';
 import { PresenceDot } from '@/components/presence-dot';
+import { PresenceMenu } from '@/components/status-editor';
 import { TeamSwitcher } from '@/components/team-switcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -27,9 +28,6 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuSub,
-    DropdownMenuSubContent,
-    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -41,10 +39,7 @@ import { useInitials } from '@/hooks/use-initials';
 import { useLocale } from '@/hooks/use-locale';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { logout } from '@/routes';
-import {
-    update as updateStatus,
-    destroy as clearStatus,
-} from '@/routes/user-status';
+import { destroy as clearStatus } from '@/routes/user-status';
 
 const RAIL_MODULES = [
     {
@@ -95,15 +90,30 @@ function formatBadgeCount(count: number): string {
     return count > 99 ? '99+' : String(count);
 }
 
+const PRESENCE_LABEL: Record<string, string> = {
+    available: 'Disponible',
+    away: 'Ausente',
+    busy: 'Ocupado',
+    offline: 'Desconectado',
+};
+
 export function CurvedNavRail({ active, onChange }: Props) {
-    const { auth, conversations, archivedConversations, statusPresets } =
+    const { auth, conversations, archivedConversations, presencePresets } =
         usePage().props;
     const getInitials = useInitials();
     const { t } = useLocale();
     const cleanup = useMobileNavigation();
     const [profileOpen, setProfileOpen] = useState(false);
-    const [customizationOpen, setCustomizationOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settingsTab, setSettingsTab] = useState<'status' | 'appearance'>(
+        'appearance',
+    );
     const showAvatar = Boolean(auth.user.avatar && auth.user.avatar !== '');
+
+    const openSettings = (tab: 'status' | 'appearance') => {
+        setSettingsTab(tab);
+        setSettingsOpen(true);
+    };
 
     const unreadMessageCount = conversations.reduce(
         (total, conversation) => total + conversation.unreadCount,
@@ -235,77 +245,86 @@ export function CurvedNavRail({ active, onChange }: Props) {
                         </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-56"
+                        className="w-72"
                         side="right"
                         align="end"
                         sideOffset={8}
                     >
                         <DropdownMenuLabel className="font-normal">
-                            <div className="flex flex-col text-left text-sm">
-                                <span className="truncate font-medium">
-                                    {auth.user.name}
+                            <div className="flex items-center gap-3 py-1 text-left">
+                                <span className="relative inline-flex shrink-0">
+                                    <Avatar className="size-11">
+                                        {showAvatar ? (
+                                            <AvatarImage
+                                                src={auth.user.avatar}
+                                                alt={auth.user.name}
+                                            />
+                                        ) : null}
+                                        <AvatarFallback className="text-sm">
+                                            {getInitials(auth.user.name)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <PresenceDot
+                                        presence={auth.user.presence}
+                                        surfaceTone="var(--popover)"
+                                        className="-top-0.5 -right-0.5 size-3"
+                                    />
                                 </span>
-                                <span className="text-muted-foreground truncate text-xs">
-                                    {auth.user.email}
-                                </span>
-                                {auth.user.status_text && (
-                                    <span className="truncate text-xs">
-                                        {auth.user.status_emoji}{' '}
+                                <div className="min-w-0 flex-1 text-sm">
+                                    <span className="block truncate font-semibold">
+                                        {auth.user.name}
+                                    </span>
+                                    <span className="text-muted-foreground block truncate text-xs">
+                                        {PRESENCE_LABEL[auth.user.presence]}
+                                    </span>
+                                </div>
+                            </div>
+                            {auth.user.status_text && (
+                                <div className="border-border/50 mt-2 flex items-center gap-2 rounded-lg border px-2.5 py-1.5">
+                                    <span>{auth.user.status_emoji}</span>
+                                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
                                         {auth.user.status_text}
                                     </span>
-                                )}
-                            </div>
+                                    <button
+                                        type="button"
+                                        aria-label="Borrar estado"
+                                        onClick={() =>
+                                            router.delete(clearStatus().url, {
+                                                preserveScroll: true,
+                                            })
+                                        }
+                                        className="text-muted-foreground hover:text-foreground shrink-0"
+                                    >
+                                        <X className="size-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                                <Circle className="mr-2 size-3.5" />
-                                Cambiar estado
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
-                                {statusPresets.map(({ key, emoji, label }) => (
-                                    <DropdownMenuItem
-                                        key={key}
-                                        onClick={() =>
-                                            router.patch(
-                                                updateStatus().url,
-                                                { preset: key },
-                                                { preserveScroll: true },
-                                            )
-                                        }
-                                    >
-                                        <span>{emoji}</span>
-                                        {label}
-                                    </DropdownMenuItem>
-                                ))}
-                                {(auth.user.status_preset ||
-                                    auth.user.status_text) && (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            onClick={() =>
-                                                router.delete(
-                                                    clearStatus().url,
-                                                    {
-                                                        preserveScroll: true,
-                                                    },
-                                                )
-                                            }
-                                        >
-                                            <X className="mr-2" />
-                                            Borrar estado
-                                        </DropdownMenuItem>
-                                    </>
-                                )}
-                            </DropdownMenuSubContent>
-                        </DropdownMenuSub>
+                        <div className="px-1 py-1">
+                            <span className="text-muted-foreground block px-1.5 pb-1 text-xs font-medium">
+                                Presencia
+                            </span>
+                            <PresenceMenu
+                                presets={presencePresets}
+                                currentPreset={auth.user.status_preset}
+                            />
+                        </div>
                         <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            onClick={() => openSettings('status')}
+                        >
+                            <Sparkles className="mr-2" />
+                            {auth.user.status_text
+                                ? 'Cambiar estado personalizado'
+                                : 'Establecer un estado'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                             <UserRound className="mr-2" />
                             {t.userMenu.profile}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                            onClick={() => setCustomizationOpen(true)}
+                            onClick={() => openSettings('appearance')}
                         >
                             <Settings className="mr-2" />
                             Ajustes
@@ -329,8 +348,9 @@ export function CurvedNavRail({ active, onChange }: Props) {
 
             <ProfileModal open={profileOpen} onOpenChange={setProfileOpen} />
             <SettingsModal
-                open={customizationOpen}
-                onOpenChange={setCustomizationOpen}
+                open={settingsOpen}
+                onOpenChange={setSettingsOpen}
+                initialTab={settingsTab}
             />
         </nav>
     );

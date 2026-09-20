@@ -18,6 +18,7 @@ test('profile name can be updated', function () {
 
     $response = $this
         ->actingAs($user)
+        ->from(route('profile.edit'))
         ->patch(route('profile.update'), [
             'name' => 'Test User',
         ]);

@@ -26,6 +26,7 @@ declare module '@inertiajs/core' {
             archivedConversations: ConversationSummary[];
             savedMessages: SavedMessageSummary[];
             teamMembers: TeamMemberOption[];
+            presencePresets: StatusPresetOption[];
             statusPresets: StatusPresetOption[];
             [key: string]: unknown;
         };

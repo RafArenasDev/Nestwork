@@ -1,32 +1,33 @@
-import { router, usePage } from '@inertiajs/react';
-import { Palette, Sparkles, X } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
+import { Bell, Palette, Sparkles } from 'lucide-react';
 import { useState } from 'react';
-import { ReactionPickerButton } from '@/components/reaction-picker';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { PresenceMenu, CustomStatusEditor } from '@/components/status-editor';
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { useAppearance, type Appearance } from '@/hooks/use-appearance';
 import {
     useCustomization,
     type MessageDensity,
     type UiScale,
 } from '@/hooks/use-customization';
+import {
+    playNotificationSound,
+    useNotificationPreferences,
+} from '@/hooks/use-notification-preferences';
 import { COLOR_PRESETS } from '@/lib/color-presets';
 import { cn } from '@/lib/utils';
-import {
-    update as updateStatus,
-    destroy as clearStatus,
-} from '@/routes/user-status';
 
-type Tab = 'status' | 'appearance';
+type Tab = 'status' | 'appearance' | 'notifications';
 
 const TABS: { key: Tab; label: string; icon: typeof Sparkles }[] = [
     { key: 'status', label: 'Estado', icon: Sparkles },
     { key: 'appearance', label: 'Apariencia', icon: Palette },
+    { key: 'notifications', label: 'Notificaciones', icon: Bell },
 ];
 
 const THEME_TILES: { value: Appearance; label: string }[] = [
@@ -46,30 +47,6 @@ const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
     { value: 'medium', label: 'Mediano' },
     { value: 'large', label: 'Grande' },
 ];
-
-const DURATION_OPTIONS: ComboboxOption[] = [
-    { value: '', label: 'No vence' },
-    { value: '15', label: '15 minutos' },
-    { value: '30', label: '30 minutos' },
-    { value: '60', label: '1 hora' },
-    { value: '120', label: '2 horas' },
-    { value: '240', label: '4 horas' },
-    { value: 'today', label: 'Hasta hoy a la noche' },
-    { value: '1440', label: '1 día' },
-    { value: '10080', label: '1 semana' },
-    { value: 'custom', label: 'Fecha y hora personalizada…' },
-];
-
-function minutesUntilMidnight(): number {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(23, 59, 0, 0);
-
-    return Math.max(
-        1,
-        Math.round((midnight.getTime() - now.getTime()) / 60000),
-    );
-}
 
 function SegmentedControl<T extends string>({
     options,
@@ -261,136 +238,26 @@ function ColorPresetGrid({
 function StatusTab() {
     const page = usePage();
     const auth = page.props.auth;
+    const presencePresets = page.props.presencePresets;
     const statusPresets = page.props.statusPresets;
 
-    const [statusText, setStatusText] = useState(auth.user.status_text ?? '');
-    const [statusEmoji, setStatusEmoji] = useState(
-        auth.user.status_emoji ?? '💬',
-    );
-    const [duration, setDuration] = useState('');
-    const [customUntil, setCustomUntil] = useState('');
-
-    const hasCustomStatus = Boolean(
-        auth.user.status_preset || auth.user.status_text,
-    );
-
-    const submitStatus = (
-        payload:
-            | { preset: string }
-            | { emoji: string; text: string; duration_minutes?: number },
-    ) => {
-        router.patch(updateStatus().url, payload, { preserveScroll: true });
-    };
-
-    const handleApply = () => {
-        let minutes: number | undefined;
-
-        if (duration === 'today') {
-            minutes = minutesUntilMidnight();
-        } else if (duration === 'custom' && customUntil) {
-            const target = new Date(customUntil).getTime();
-            minutes = Math.max(1, Math.round((target - Date.now()) / 60000));
-        } else if (duration) {
-            minutes = Number(duration);
-        }
-
-        submitStatus({
-            emoji: statusEmoji,
-            text: statusText.trim(),
-            duration_minutes: minutes,
-        });
-    };
-
     return (
-        <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-2">
-                <ReactionPickerButton
-                    onPick={setStatusEmoji}
-                    side="bottom"
-                    align="start"
-                    trigger={
-                        <button
-                            type="button"
-                            aria-label="Elegir emoji del estado"
-                            className="border-border/60 hover:bg-foreground/5 flex size-11 shrink-0 items-center justify-center rounded-xl border text-lg transition-colors"
-                        >
-                            {statusEmoji}
-                        </button>
-                    }
-                />
-                <input
-                    type="text"
-                    value={statusText}
-                    onChange={(event) => setStatusText(event.target.value)}
-                    placeholder="Escribe tu estado…"
-                    maxLength={100}
-                    className="border-border/60 h-11 flex-1 rounded-xl border bg-transparent px-3 text-sm transition-colors outline-none focus:border-[var(--accent-1)]"
+        <div className="flex flex-col gap-6">
+            <div>
+                <span className="text-muted-foreground mb-2 block text-xs font-medium">
+                    Presencia
+                </span>
+                <PresenceMenu
+                    presets={presencePresets}
+                    currentPreset={auth.user.status_preset}
                 />
             </div>
 
-            <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-xs font-medium">
-                    Vence en
+            <div className="border-border/50 border-t pt-5">
+                <span className="text-muted-foreground mb-2 block text-xs font-medium">
+                    Estado personalizado
                 </span>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                        <Combobox
-                            options={DURATION_OPTIONS}
-                            value={duration}
-                            onChange={setDuration}
-                            placeholder="No vence"
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        disabled={!statusText.trim()}
-                        onClick={handleApply}
-                        className="bg-foreground text-background h-11 shrink-0 rounded-full px-5 text-xs font-semibold transition-transform active:scale-95 disabled:opacity-40"
-                    >
-                        Aplicar
-                    </button>
-                </div>
-                {duration === 'custom' && (
-                    <input
-                        type="datetime-local"
-                        value={customUntil}
-                        onChange={(event) => setCustomUntil(event.target.value)}
-                        className="border-border/60 h-10 rounded-xl border bg-transparent px-3 text-sm transition-colors outline-none focus:border-[var(--accent-1)]"
-                    />
-                )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-xs font-medium">
-                    Rápido
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                    {statusPresets.map((preset) => (
-                        <button
-                            key={preset.key}
-                            type="button"
-                            onClick={() => submitStatus({ preset: preset.key })}
-                            className="border-border/60 hover:bg-foreground/5 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors"
-                        >
-                            <span>{preset.emoji}</span>
-                            {preset.label}
-                        </button>
-                    ))}
-                    {hasCustomStatus && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                router.delete(clearStatus().url, {
-                                    preserveScroll: true,
-                                })
-                            }
-                            className="text-muted-foreground hover:bg-foreground/5 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs transition-colors"
-                        >
-                            <X className="size-3" />
-                            Borrar estado
-                        </button>
-                    )}
-                </div>
+                <CustomStatusEditor presets={statusPresets} />
             </div>
         </div>
     );
@@ -474,17 +341,131 @@ function AppearanceTab() {
     );
 }
 
+function NotificationToggleRow({
+    label,
+    description,
+    checked,
+    onChange,
+    disabled,
+}: {
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 py-2.5">
+            <div className="min-w-0">
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-muted-foreground text-xs">{description}</p>
+            </div>
+            <Switch
+                checked={checked}
+                onCheckedChange={onChange}
+                disabled={disabled}
+            />
+        </div>
+    );
+}
+
+function NotificationsTab() {
+    const { desktopEnabled, soundEnabled, showPreview, update } =
+        useNotificationPreferences();
+    const [permission, setPermission] = useState<
+        NotificationPermission | 'unsupported'
+    >(
+        typeof Notification === 'undefined'
+            ? 'unsupported'
+            : Notification.permission,
+    );
+
+    const handleDesktopToggle = async (checked: boolean) => {
+        if (!checked) {
+            update({ desktopEnabled: false });
+
+            return;
+        }
+
+        if (permission === 'unsupported') {
+            return;
+        }
+
+        if (permission === 'granted') {
+            update({ desktopEnabled: true });
+
+            return;
+        }
+
+        const result = await Notification.requestPermission();
+        setPermission(result);
+        update({ desktopEnabled: result === 'granted' });
+    };
+
+    return (
+        <div className="flex flex-col divide-y divide-[var(--border)]/50">
+            <NotificationToggleRow
+                label="Notificaciones de escritorio"
+                description={
+                    permission === 'denied'
+                        ? 'Bloqueadas por el navegador — habilítalas en los ajustes del sitio.'
+                        : permission === 'unsupported'
+                          ? 'Tu navegador no soporta notificaciones de escritorio.'
+                          : 'Avisa cuando llega un mensaje y esta pestaña no está a la vista.'
+                }
+                checked={desktopEnabled && permission === 'granted'}
+                onChange={handleDesktopToggle}
+                disabled={
+                    permission === 'denied' || permission === 'unsupported'
+                }
+            />
+            <NotificationToggleRow
+                label="Mostrar vista previa"
+                description="Incluye el texto del mensaje en la notificación, no sólo el nombre."
+                checked={showPreview}
+                onChange={(checked) => update({ showPreview: checked })}
+            />
+            <NotificationToggleRow
+                label="Sonido"
+                description="Un tono corto al recibir un mensaje nuevo."
+                checked={soundEnabled}
+                onChange={(checked) => update({ soundEnabled: checked })}
+            />
+            <div className="pt-4">
+                <button
+                    type="button"
+                    onClick={() => playNotificationSound()}
+                    className="border-border/60 hover:bg-foreground/5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+                >
+                    Probar sonido
+                </button>
+            </div>
+        </div>
+    );
+}
+
 export function SettingsModal({
     open,
     onOpenChange,
+    initialTab = 'status',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    initialTab?: Tab;
 }) {
-    const [tab, setTab] = useState<Tab>('status');
+    const [tab, setTab] = useState<Tab>(initialTab);
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                onOpenChange(next);
+
+                if (next) {
+                    setTab(initialTab);
+                }
+            }}
+        >
             <DialogContent className="flex h-[560px] max-h-[85vh] w-[calc(100%-2rem)] max-w-3xl gap-0 overflow-hidden p-0 sm:max-w-3xl">
                 <div className="border-border/40 flex w-44 shrink-0 flex-col gap-1 border-r p-3">
                     <DialogHeader className="mb-2 px-1">
@@ -511,7 +492,9 @@ export function SettingsModal({
                 </div>
 
                 <div className="min-w-0 flex-1 overflow-y-auto p-6">
-                    {tab === 'status' ? <StatusTab /> : <AppearanceTab />}
+                    {tab === 'status' && <StatusTab />}
+                    {tab === 'appearance' && <AppearanceTab />}
+                    {tab === 'notifications' && <NotificationsTab />}
                 </div>
             </DialogContent>
         </Dialog>

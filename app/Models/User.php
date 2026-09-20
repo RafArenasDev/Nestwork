@@ -81,42 +81,27 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * "busy"/"dnd" manuales pisan la presencia automática; si expiraron
-     * o nunca se configuraron, no aplica y se usa last_seen_at.
-     */
-    public function activeStatusPreset(): ?string
-    {
-        if ($this->status_preset === null) {
-            return null;
-        }
-
-        if ($this->status_expires_at && $this->status_expires_at->isPast()) {
-            return null;
-        }
-
-        return $this->status_preset;
-    }
-
-    /**
      * Presencia real: un preset manual (disponible/ausente/ocupado/no
-     * molestar) pisa todo mientras no expire; si no hay uno activo, se
-     * deriva de `last_seen_at`.
+     * molestar, `status_preset`) pisa todo hasta que se cambie a mano
+     * — NO vence solo (a diferencia del estado personalizado, ver
+     * `statusText()`/`statusEmoji()` abajo); si no hay uno activo, se
+     * deriva de `last_seen_at`. Presencia y estado personalizado son
+     * dos cosas independientes: cambiar una nunca toca la otra (ver
+     * UserStatusController vs UserPresenceController).
      *
      * @return 'available'|'away'|'busy'|'offline'
      */
     public function presenceStatus(): string
     {
-        $preset = $this->activeStatusPreset();
-
-        if ($preset === 'busy' || $preset === 'dnd') {
+        if ($this->status_preset === 'busy' || $this->status_preset === 'dnd') {
             return 'busy';
         }
 
-        if ($preset === 'available') {
+        if ($this->status_preset === 'available') {
             return 'available';
         }
 
-        if ($preset === 'away') {
+        if ($this->status_preset === 'away') {
             return 'away';
         }
 
@@ -131,6 +116,37 @@ class User extends Authenticatable implements MustVerifyEmail
             $minutesAgo < 30 => 'away',
             default => 'offline',
         };
+    }
+
+    /**
+     * El estado personalizado (emoji + texto) sí vence solo —
+     * `status_expires_at` sólo aplica a él, la presencia (arriba) no
+     * tiene vencimiento. Attribute sobre una columna ya existente: se
+     * resuelve acá mismo (una sola fuente de verdad), no en cada sitio
+     * del frontend que lee `status_text`/`status_emoji`.
+     *
+     * @return Attribute<string|null, never>
+     */
+    protected function statusText(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $this->isCustomStatusExpired() ? null : $value,
+        );
+    }
+
+    /**
+     * @return Attribute<string|null, never>
+     */
+    protected function statusEmoji(): Attribute
+    {
+        return Attribute::make(
+            get: fn (?string $value) => $this->isCustomStatusExpired() ? null : $value,
+        );
+    }
+
+    private function isCustomStatusExpired(): bool
+    {
+        return $this->status_expires_at !== null && $this->status_expires_at->isPast();
     }
 
     /**

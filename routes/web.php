@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MessagesController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
+use App\Http\Controllers\UserPresenceController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +47,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::patch('user/status', [UserStatusController::class, 'update'])->name('user-status.update');
     Route::delete('user/status', [UserStatusController::class, 'destroy'])->name('user-status.destroy');
+    Route::patch('user/presence', [UserPresenceController::class, 'update'])->name('user-presence.update');
 });
 
 require __DIR__.'/auth.php';
