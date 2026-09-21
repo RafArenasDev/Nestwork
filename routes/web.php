@@ -46,6 +46,7 @@ Route::prefix('{current_team}')
         Route::patch('conversations/{conversation}/favorite', [ConversationsController::class, 'toggleFavorite'])->name('conversations.toggle-favorite');
         Route::patch('conversations/{conversation}/archive', [ConversationsController::class, 'toggleArchive'])->name('conversations.toggle-archive');
         Route::patch('conversations/{conversation}/mute', [ConversationsController::class, 'toggleMute'])->name('conversations.toggle-mute');
+        Route::patch('conversations/{conversation}/mark-unread', [ConversationsController::class, 'markUnread'])->name('conversations.mark-unread');
         Route::patch('conversations/{conversation}/hide', [ConversationsController::class, 'toggleHidden'])->name('conversations.toggle-hidden');
         Route::patch('conversations/{conversation}/clear', [ConversationsController::class, 'clearChat'])->name('conversations.clear');
     });

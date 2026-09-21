@@ -243,13 +243,11 @@ export default function AppSidebarLayout({
                         variant="sidebar"
                         className="bg-background min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
                     >
-                        <AppSidebarHeader
-                            breadcrumbs={
-                                showModulePlaceholder
-                                    ? [{ title: activeModuleLabel, href: '#' }]
-                                    : breadcrumbs
-                            }
-                        />
+                        {/* Nunca repetir el título del módulo acá — ya
+                            se ve en el header de la sidebar
+                            (SidebarModuleHeader). Pedido explícito:
+                            esa redundancia molesta. */}
+                        <AppSidebarHeader breadcrumbs={breadcrumbs} />
                         {activeModule === 'meetings' ? (
                             <MeetingsView />
                         ) : showModulePlaceholder ? (

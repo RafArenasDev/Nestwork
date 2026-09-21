@@ -99,7 +99,7 @@ export function MeetingsView() {
     };
 
     return (
-        <div className="mx-auto flex h-full w-full max-w-2xl flex-col gap-6 overflow-y-auto p-6">
+        <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-6 overflow-y-auto p-8">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-semibold tracking-tight">
@@ -314,7 +314,7 @@ export function MeetingsView() {
                     </p>
                 </div>
             ) : (
-                <ul className="flex flex-col gap-2">
+                <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {meetings.map((meeting) => (
                         <li
                             key={meeting.id}

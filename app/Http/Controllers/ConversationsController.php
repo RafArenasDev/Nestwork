@@ -135,6 +135,24 @@ class ConversationsController extends Controller
         return back();
     }
 
+    /** "Marcar como no leído" — vuelve a contar TODO lo que mandaron
+     *  los demás como no leído, sin tocar nada del lado del otro
+     *  participante (mismo criterio que Gmail/WhatsApp). */
+    public function markUnread(Request $request, string $current_team, Conversation $conversation): RedirectResponse
+    {
+        $user = $request->user();
+        $team = $user->currentTeam;
+
+        abort_if(! $team || $conversation->team_id !== $team->id, 404);
+        $this->participantPivot($conversation, $user->id);
+
+        $conversation->participants()->updateExistingPivot($user->id, [
+            'last_read_message_id' => null,
+        ]);
+
+        return back();
+    }
+
     /**
      * "Eliminar conversación" — distinto de archivar (ver
      * migración `hidden_at`): desaparece de TODOS los listados

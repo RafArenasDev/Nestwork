@@ -142,7 +142,7 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                 open={pendingInvitations.length > 0 && showInvitations}
                 onOpenChange={setShowInvitations}
             />
-            <div className="mx-auto flex h-full w-full max-w-2xl flex-1 flex-col gap-6 overflow-y-auto p-6">
+            <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-6 overflow-y-auto p-8">
                 <div>
                     <h1 className="text-3xl font-semibold tracking-tight">
                         Hola, {auth.user.name.split(' ')[0]}

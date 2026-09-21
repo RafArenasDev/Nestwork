@@ -14,6 +14,7 @@ import {
     FileText,
     Image as ImageIcon,
     type LucideIcon,
+    MailOpen,
     Music,
     Phone,
     Plus,
@@ -54,6 +55,7 @@ import { show as showMessage } from '@/routes/messages';
 import { toggle as toggleSaveRoute } from '@/routes/messages/save';
 import {
     clear as clearChat,
+    markUnread,
     toggleArchive,
     toggleFavorite,
     toggleHidden,
@@ -516,40 +518,6 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                     )}
                 </ul>
 
-                {recentGroups.length > 0 && (
-                    <>
-                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
-                            Grupos recientes
-                        </SidebarSectionLabel>
-                        <ul className="sidebar-list">
-                            {recentGroups.map((conversation) => (
-                                <ConversationRow
-                                    key={conversation.id}
-                                    conversation={conversation}
-                                    currentTeamSlug={currentTeam?.slug}
-                                />
-                            ))}
-                        </ul>
-                    </>
-                )}
-
-                {recentChannels.length > 0 && (
-                    <>
-                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
-                            Canales recientes
-                        </SidebarSectionLabel>
-                        <ul className="sidebar-list">
-                            {recentChannels.map((conversation) => (
-                                <ConversationRow
-                                    key={conversation.id}
-                                    conversation={conversation}
-                                    currentTeamSlug={currentTeam?.slug}
-                                />
-                            ))}
-                        </ul>
-                    </>
-                )}
-
                 <Popover>
                     <SidebarSectionLabel
                         addTrigger={
@@ -593,6 +561,108 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                     )}
                 </ul>
 
+                {recentGroups.length > 0 && (
+                    <>
+                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
+                            Grupos recientes
+                        </SidebarSectionLabel>
+                        <ul className="sidebar-list">
+                            {recentGroups.map((conversation) => (
+                                <ConversationRow
+                                    key={conversation.id}
+                                    conversation={conversation}
+                                    currentTeamSlug={currentTeam?.slug}
+                                />
+                            ))}
+                        </ul>
+                    </>
+                )}
+
+                {recentChannels.length > 0 && (
+                    <>
+                        <SidebarSectionLabel sort={sort} onSortChange={setSort}>
+                            Canales recientes
+                        </SidebarSectionLabel>
+                        <ul className="sidebar-list">
+                            {recentChannels.map((conversation) => (
+                                <ConversationRow
+                                    key={conversation.id}
+                                    conversation={conversation}
+                                    currentTeamSlug={currentTeam?.slug}
+                                />
+                            ))}
+                        </ul>
+                    </>
+                )}
+
+                <Dialog open={newTagOpen} onOpenChange={setNewTagOpen}>
+                    <SidebarSectionLabel
+                        addTrigger={
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <DialogTrigger asChild>
+                                        <button
+                                            type="button"
+                                            aria-label="Nueva etiqueta"
+                                            className="text-muted-foreground hover:text-foreground rounded p-0.5"
+                                        >
+                                            <Plus className="size-3.5" />
+                                        </button>
+                                    </DialogTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                    Nueva etiqueta
+                                </TooltipContent>
+                            </Tooltip>
+                        }
+                    >
+                        Etiquetas
+                    </SidebarSectionLabel>
+                    <DialogContent className="sm:max-w-sm">
+                        <DialogHeader>
+                            <DialogTitle>Nueva etiqueta</DialogTitle>
+                            <DialogDescription>
+                                Agrupa chats, grupos y canales bajo un nombre
+                                propio — ej. "API-Chat" o "Frontend".
+                            </DialogDescription>
+                        </DialogHeader>
+                        <Input
+                            autoFocus
+                            placeholder="Nombre de la etiqueta"
+                            value={newTagName}
+                            onChange={(event) =>
+                                setNewTagName(event.target.value)
+                            }
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    createConversationTag(newTagName);
+                                    setNewTagName('');
+                                    setNewTagOpen(false);
+                                }
+                            }}
+                        />
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                disabled={newTagName.trim() === ''}
+                                onClick={() => {
+                                    createConversationTag(newTagName);
+                                    setNewTagName('');
+                                    setNewTagOpen(false);
+                                }}
+                            >
+                                Crear
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {tags.length === 0 && (
+                    <p className="px-3 text-sm text-[var(--sidebar-fg-muted)]">
+                        Sin etiquetas todavía — usa el "+" de arriba.
+                    </p>
+                )}
+
                 {tags.map((tag) => {
                     const tagConversations = tag.conversationIds
                         .map((id) => allByid.get(id))
@@ -609,57 +679,6 @@ function HomeSidebarList({ activeModuleLabel }: { activeModuleLabel: string }) {
                         />
                     );
                 })}
-
-                <div className="px-3 pt-3 pb-2">
-                    <Dialog open={newTagOpen} onOpenChange={setNewTagOpen}>
-                        <DialogTrigger asChild>
-                            <button
-                                type="button"
-                                className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-xs font-medium"
-                            >
-                                <Plus className="size-3.5" />
-                                Nueva etiqueta
-                            </button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-sm">
-                            <DialogHeader>
-                                <DialogTitle>Nueva etiqueta</DialogTitle>
-                                <DialogDescription>
-                                    Agrupa chats, grupos y canales bajo un
-                                    nombre propio — ej. "API-Chat" o "Frontend".
-                                </DialogDescription>
-                            </DialogHeader>
-                            <Input
-                                autoFocus
-                                placeholder="Nombre de la etiqueta"
-                                value={newTagName}
-                                onChange={(event) =>
-                                    setNewTagName(event.target.value)
-                                }
-                                onKeyDown={(event) => {
-                                    if (event.key === 'Enter') {
-                                        createConversationTag(newTagName);
-                                        setNewTagName('');
-                                        setNewTagOpen(false);
-                                    }
-                                }}
-                            />
-                            <DialogFooter>
-                                <Button
-                                    type="button"
-                                    disabled={newTagName.trim() === ''}
-                                    onClick={() => {
-                                        createConversationTag(newTagName);
-                                        setNewTagName('');
-                                        setNewTagOpen(false);
-                                    }}
-                                >
-                                    Crear
-                                </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-                </div>
             </SidebarContent>
         </Sidebar>
     );
@@ -770,8 +789,19 @@ function ConversationRowMenu({
                             }
                         />
                         {conversation.isFavorite
-                            ? 'Quitar de Inicio'
-                            : 'Fijar en Inicio'}
+                            ? 'Quitar de favoritos'
+                            : 'Agregar a favoritos'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={() =>
+                            patch(
+                                markUnread([currentTeamSlug, conversation.id])
+                                    .url,
+                            )
+                        }
+                    >
+                        <MailOpen />
+                        Marcar como no leído
                     </DropdownMenuItem>
                     {showUnarchive ? (
                         <DropdownMenuItem
@@ -1542,38 +1572,31 @@ function ActivityRow({
                 }}
                 className="sidebar-row-link sidebar-row-link--actionable"
             >
-                <span className="relative shrink-0">
-                    <Avatar className="size-9">
-                        {item.actorAvatar && (
-                            <AvatarImage
-                                src={item.actorAvatar}
-                                alt={item.actorName}
-                            />
-                        )}
-                        <AvatarFallback className="bg-[var(--sidebar-accent)] text-[11px] text-[var(--sidebar-accent-foreground)]">
-                            {getInitials(item.actorName)}
-                        </AvatarFallback>
-                    </Avatar>
-                    {item.emoji && (
-                        <span
-                            className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none"
-                            style={{ backgroundColor: 'var(--bg-elevated)' }}
-                        >
-                            {item.emoji}
-                        </span>
+                <Avatar className="size-9 shrink-0">
+                    {item.actorAvatar && (
+                        <AvatarImage
+                            src={item.actorAvatar}
+                            alt={item.actorName}
+                        />
                     )}
-                </span>
+                    <AvatarFallback className="bg-[var(--sidebar-accent)] text-[11px] text-[var(--sidebar-accent-foreground)]">
+                        {getInitials(item.actorName)}
+                    </AvatarFallback>
+                </Avatar>
                 <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
                         <span className="sidebar-row-label">
-                            {item.actorName} reaccionó a tu mensaje
+                            {item.actorName}
                         </span>
                         <span className="sidebar-row-time">
                             {relativeSavedLabel(item.createdAt)}
                         </span>
                     </span>
                     <span className="sidebar-row-preview">
-                        {item.conversationName} — “{item.messageExcerpt}”
+                        <span className="sidebar-row-preview-text">
+                            reaccionó con {item.emoji} · {item.conversationName}{' '}
+                            — “{item.messageExcerpt}”
+                        </span>
                     </span>
                 </span>
             </button>
