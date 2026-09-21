@@ -1,9 +1,16 @@
 <?php
 
+use App\Http\Controllers\ChannelsController;
 use App\Http\Controllers\ConversationsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GeoController;
+use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\MessagesController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Teams\TeamInvitationController;
+use App\Http\Controllers\UserPreferencesController;
+use App\Http\Controllers\UserPresenceController;
+use App\Http\Controllers\UserSecurityController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -14,6 +21,7 @@ Route::prefix('{current_team}')
     ->middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
         Route::get('dashboard', DashboardController::class)->name('dashboard');
+        Route::get('search', [SearchController::class, 'index'])->name('search');
 
         Route::get('messages', [MessagesController::class, 'index'])->name('messages.index');
         Route::get('messages/{conversation}', [MessagesController::class, 'show'])->name('messages.show');
@@ -32,8 +40,13 @@ Route::prefix('{current_team}')
         Route::post('messages/{conversation}/{message}/pin', [MessagesController::class, 'togglePin'])->name('messages.pin.toggle');
 
         Route::post('conversations', [ConversationsController::class, 'store'])->name('conversations.store');
+        Route::post('groups', [GroupsController::class, 'store'])->name('groups.store');
+        Route::post('channels', [ChannelsController::class, 'store'])->name('channels.store');
+        Route::post('channels/{conversation}/join', [ChannelsController::class, 'join'])->name('channels.join');
+        Route::patch('conversations/{conversation}/favorite', [ConversationsController::class, 'toggleFavorite'])->name('conversations.toggle-favorite');
         Route::patch('conversations/{conversation}/archive', [ConversationsController::class, 'toggleArchive'])->name('conversations.toggle-archive');
         Route::patch('conversations/{conversation}/mute', [ConversationsController::class, 'toggleMute'])->name('conversations.toggle-mute');
+        Route::patch('conversations/{conversation}/mark-unread', [ConversationsController::class, 'markUnread'])->name('conversations.mark-unread');
         Route::patch('conversations/{conversation}/hide', [ConversationsController::class, 'toggleHidden'])->name('conversations.toggle-hidden');
         Route::patch('conversations/{conversation}/clear', [ConversationsController::class, 'clearChat'])->name('conversations.clear');
     });
@@ -44,6 +57,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::patch('user/status', [UserStatusController::class, 'update'])->name('user-status.update');
     Route::delete('user/status', [UserStatusController::class, 'destroy'])->name('user-status.destroy');
+    Route::patch('user/presence', [UserPresenceController::class, 'update'])->name('user-presence.update');
+    Route::patch('user/preferences', [UserPreferencesController::class, 'update'])->name('user-preferences.update');
+    Route::delete('user/sessions', [UserSecurityController::class, 'logoutOtherDevices'])->name('user-security.logout-other-devices');
+
+    Route::get('geo/countries', [GeoController::class, 'countries'])->name('geo.countries');
+    Route::get('geo/states', [GeoController::class, 'states'])->name('geo.states');
+    Route::get('geo/cities', [GeoController::class, 'cities'])->name('geo.cities');
 });
 
 require __DIR__.'/auth.php';

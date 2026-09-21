@@ -1,32 +1,46 @@
 import { router, usePage } from '@inertiajs/react';
-import { Palette, Sparkles, X } from 'lucide-react';
+import { Bell, Palette, ShieldCheck, ShieldEllipsis } from 'lucide-react';
 import { useState } from 'react';
-import { ReactionPickerButton } from '@/components/reaction-picker';
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useAppearance, type Appearance } from '@/hooks/use-appearance';
 import {
     useCustomization,
     type MessageDensity,
     type UiScale,
 } from '@/hooks/use-customization';
+import {
+    playNotificationSound,
+    SOUND_OPTIONS,
+    useNotificationPreferences,
+} from '@/hooks/use-notification-preferences';
+import { usePrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import { COLOR_PRESETS } from '@/lib/color-presets';
 import { cn } from '@/lib/utils';
-import {
-    update as updateStatus,
-    destroy as clearStatus,
-} from '@/routes/user-status';
+import { destroy as deleteAccount } from '@/routes/profile';
+import { update as updatePreferences } from '@/routes/user-preferences';
+import { logoutOtherDevices } from '@/routes/user-security';
 
-type Tab = 'status' | 'appearance';
+type Tab = 'appearance' | 'notifications' | 'privacy' | 'security';
 
-const TABS: { key: Tab; label: string; icon: typeof Sparkles }[] = [
-    { key: 'status', label: 'Estado', icon: Sparkles },
+const TABS: { key: Tab; label: string; icon: typeof Bell }[] = [
     { key: 'appearance', label: 'Apariencia', icon: Palette },
+    { key: 'notifications', label: 'Notificaciones', icon: Bell },
+    { key: 'privacy', label: 'Privacidad', icon: ShieldEllipsis },
+    { key: 'security', label: 'Seguridad', icon: ShieldCheck },
 ];
 
 const THEME_TILES: { value: Appearance; label: string }[] = [
@@ -46,30 +60,6 @@ const UI_SCALE_OPTIONS: { value: UiScale; label: string }[] = [
     { value: 'medium', label: 'Mediano' },
     { value: 'large', label: 'Grande' },
 ];
-
-const DURATION_OPTIONS: ComboboxOption[] = [
-    { value: '', label: 'No vence' },
-    { value: '15', label: '15 minutos' },
-    { value: '30', label: '30 minutos' },
-    { value: '60', label: '1 hora' },
-    { value: '120', label: '2 horas' },
-    { value: '240', label: '4 horas' },
-    { value: 'today', label: 'Hasta hoy a la noche' },
-    { value: '1440', label: '1 día' },
-    { value: '10080', label: '1 semana' },
-    { value: 'custom', label: 'Fecha y hora personalizada…' },
-];
-
-function minutesUntilMidnight(): number {
-    const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(23, 59, 0, 0);
-
-    return Math.max(
-        1,
-        Math.round((midnight.getTime() - now.getTime()) / 60000),
-    );
-}
 
 function SegmentedControl<T extends string>({
     options,
@@ -258,144 +248,6 @@ function ColorPresetGrid({
     );
 }
 
-function StatusTab() {
-    const page = usePage();
-    const auth = page.props.auth;
-    const statusPresets = page.props.statusPresets;
-
-    const [statusText, setStatusText] = useState(auth.user.status_text ?? '');
-    const [statusEmoji, setStatusEmoji] = useState(
-        auth.user.status_emoji ?? '💬',
-    );
-    const [duration, setDuration] = useState('');
-    const [customUntil, setCustomUntil] = useState('');
-
-    const hasCustomStatus = Boolean(
-        auth.user.status_preset || auth.user.status_text,
-    );
-
-    const submitStatus = (
-        payload:
-            | { preset: string }
-            | { emoji: string; text: string; duration_minutes?: number },
-    ) => {
-        router.patch(updateStatus().url, payload, { preserveScroll: true });
-    };
-
-    const handleApply = () => {
-        let minutes: number | undefined;
-
-        if (duration === 'today') {
-            minutes = minutesUntilMidnight();
-        } else if (duration === 'custom' && customUntil) {
-            const target = new Date(customUntil).getTime();
-            minutes = Math.max(1, Math.round((target - Date.now()) / 60000));
-        } else if (duration) {
-            minutes = Number(duration);
-        }
-
-        submitStatus({
-            emoji: statusEmoji,
-            text: statusText.trim(),
-            duration_minutes: minutes,
-        });
-    };
-
-    return (
-        <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-2">
-                <ReactionPickerButton
-                    onPick={setStatusEmoji}
-                    side="bottom"
-                    align="start"
-                    trigger={
-                        <button
-                            type="button"
-                            aria-label="Elegir emoji del estado"
-                            className="border-border/60 hover:bg-foreground/5 flex size-11 shrink-0 items-center justify-center rounded-xl border text-lg transition-colors"
-                        >
-                            {statusEmoji}
-                        </button>
-                    }
-                />
-                <input
-                    type="text"
-                    value={statusText}
-                    onChange={(event) => setStatusText(event.target.value)}
-                    placeholder="Escribe tu estado…"
-                    maxLength={100}
-                    className="border-border/60 h-11 flex-1 rounded-xl border bg-transparent px-3 text-sm transition-colors outline-none focus:border-[var(--accent-1)]"
-                />
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-xs font-medium">
-                    Vence en
-                </span>
-                <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                        <Combobox
-                            options={DURATION_OPTIONS}
-                            value={duration}
-                            onChange={setDuration}
-                            placeholder="No vence"
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        disabled={!statusText.trim()}
-                        onClick={handleApply}
-                        className="bg-foreground text-background h-11 shrink-0 rounded-full px-5 text-xs font-semibold transition-transform active:scale-95 disabled:opacity-40"
-                    >
-                        Aplicar
-                    </button>
-                </div>
-                {duration === 'custom' && (
-                    <input
-                        type="datetime-local"
-                        value={customUntil}
-                        onChange={(event) => setCustomUntil(event.target.value)}
-                        className="border-border/60 h-10 rounded-xl border bg-transparent px-3 text-sm transition-colors outline-none focus:border-[var(--accent-1)]"
-                    />
-                )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground text-xs font-medium">
-                    Rápido
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                    {statusPresets.map((preset) => (
-                        <button
-                            key={preset.key}
-                            type="button"
-                            onClick={() => submitStatus({ preset: preset.key })}
-                            className="border-border/60 hover:bg-foreground/5 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors"
-                        >
-                            <span>{preset.emoji}</span>
-                            {preset.label}
-                        </button>
-                    ))}
-                    {hasCustomStatus && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                router.delete(clearStatus().url, {
-                                    preserveScroll: true,
-                                })
-                            }
-                            className="text-muted-foreground hover:bg-foreground/5 flex items-center gap-1 rounded-full px-3 py-1.5 text-xs transition-colors"
-                        >
-                            <X className="size-3" />
-                            Borrar estado
-                        </button>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function AppearanceTab() {
     const { appearance, updateAppearance } = useAppearance();
     const {
@@ -474,17 +326,276 @@ function AppearanceTab() {
     );
 }
 
+function NotificationToggleRow({
+    label,
+    description,
+    checked,
+    onChange,
+    disabled,
+}: {
+    label: string;
+    description: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    disabled?: boolean;
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 py-2.5">
+            <div className="min-w-0">
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-muted-foreground text-xs">{description}</p>
+            </div>
+            <Switch
+                checked={checked}
+                onCheckedChange={onChange}
+                disabled={disabled}
+            />
+        </div>
+    );
+}
+
+function NotificationsTab() {
+    const { desktopEnabled, soundEnabled, sound, showPreview, update } =
+        useNotificationPreferences();
+    const [permission, setPermission] = useState<
+        NotificationPermission | 'unsupported'
+    >(
+        typeof Notification === 'undefined'
+            ? 'unsupported'
+            : Notification.permission,
+    );
+
+    const handleDesktopToggle = async (checked: boolean) => {
+        if (!checked) {
+            update({ desktopEnabled: false });
+
+            return;
+        }
+
+        if (permission === 'unsupported') {
+            return;
+        }
+
+        if (permission === 'granted') {
+            update({ desktopEnabled: true });
+
+            return;
+        }
+
+        const result = await Notification.requestPermission();
+        setPermission(result);
+        update({ desktopEnabled: result === 'granted' });
+    };
+
+    return (
+        <div className="flex flex-col divide-y divide-[var(--border)]/50">
+            <NotificationToggleRow
+                label="Notificaciones de escritorio"
+                description={
+                    permission === 'denied'
+                        ? 'Bloqueadas por el navegador — habilítalas en los ajustes del sitio.'
+                        : permission === 'unsupported'
+                          ? 'Tu navegador no soporta notificaciones de escritorio.'
+                          : 'Avisa cuando llega un mensaje y esta pestaña no está a la vista.'
+                }
+                checked={desktopEnabled && permission === 'granted'}
+                onChange={handleDesktopToggle}
+                disabled={
+                    permission === 'denied' || permission === 'unsupported'
+                }
+            />
+            <NotificationToggleRow
+                label="Mostrar vista previa"
+                description="Incluye el texto del mensaje en la notificación, no sólo el nombre."
+                checked={showPreview}
+                onChange={(checked) => update({ showPreview: checked })}
+            />
+            <NotificationToggleRow
+                label="Sonido"
+                description="Un tono corto al recibir un mensaje nuevo."
+                checked={soundEnabled}
+                onChange={(checked) => update({ soundEnabled: checked })}
+            />
+            <div className="flex items-center justify-between gap-4 py-2.5">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">Tono</p>
+                    <p className="text-muted-foreground text-xs">
+                        Cuál sonido usar.
+                    </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    <Select
+                        value={sound}
+                        disabled={!soundEnabled}
+                        onValueChange={(value) =>
+                            update({ sound: value as typeof sound })
+                        }
+                    >
+                        <SelectTrigger size="sm" className="w-32 rounded-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {SOUND_OPTIONS.map((option) => (
+                                <SelectItem
+                                    key={option.value}
+                                    value={option.value}
+                                >
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <button
+                        type="button"
+                        disabled={!soundEnabled}
+                        onClick={() => playNotificationSound(sound)}
+                        className="border-border/60 hover:bg-foreground/5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
+                    >
+                        Probar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function PrivacyTab() {
+    const page = usePage();
+    const auth = page.props.auth;
+    const { showTypingIndicator, update } = usePrivacyPreferences();
+
+    return (
+        <div className="flex flex-col divide-y divide-[var(--border)]/50">
+            <NotificationToggleRow
+                label="Confirmación de lectura"
+                description="Deja que los demás vean cuándo leíste sus mensajes. Si la apagas, tampoco ves la de ellos."
+                checked={auth.user.read_receipts_enabled}
+                onChange={(checked) =>
+                    router.patch(
+                        updatePreferences().url,
+                        { read_receipts_enabled: checked },
+                        { preserveScroll: true },
+                    )
+                }
+            />
+            <NotificationToggleRow
+                label="Mostrar “escribiendo…”"
+                description="Avisa a los demás en tiempo real cuando estás escribiendo un mensaje."
+                checked={showTypingIndicator}
+                onChange={(checked) => update({ showTypingIndicator: checked })}
+            />
+        </div>
+    );
+}
+
+function SecurityTab() {
+    const [loggingOut, setLoggingOut] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between gap-4 py-2.5">
+                <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                        Cerrar sesión en todos los dispositivos
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        Esta pestaña sigue activa; el resto se desconecta.
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={loggingOut}
+                    onClick={() => {
+                        setLoggingOut(true);
+                        router.delete(logoutOtherDevices().url, {
+                            preserveScroll: true,
+                            onFinish: () => setLoggingOut(false),
+                        });
+                    }}
+                >
+                    {loggingOut ? 'Cerrando…' : 'Cerrar sesiones'}
+                </Button>
+            </div>
+
+            <div className="border-destructive/30 bg-destructive/5 flex flex-col gap-3 rounded-xl border p-4">
+                <div>
+                    <p className="text-destructive text-sm font-medium">
+                        Eliminar cuenta
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        Borra tu cuenta y todo lo asociado a ella. No se puede
+                        deshacer.
+                    </p>
+                </div>
+                {confirmingDelete ? (
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={deleting}
+                            onClick={() => {
+                                setDeleting(true);
+                                router.delete(deleteAccount().url, {
+                                    onFinish: () => setDeleting(false),
+                                });
+                            }}
+                        >
+                            {deleting
+                                ? 'Eliminando…'
+                                : 'Sí, eliminar mi cuenta'}
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmingDelete(false)}
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="w-fit"
+                        onClick={() => setConfirmingDelete(true)}
+                    >
+                        Eliminar cuenta
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function SettingsModal({
     open,
     onOpenChange,
+    initialTab = 'appearance',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    initialTab?: Tab;
 }) {
-    const [tab, setTab] = useState<Tab>('status');
+    const [tab, setTab] = useState<Tab>(initialTab);
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog
+            open={open}
+            onOpenChange={(next) => {
+                onOpenChange(next);
+
+                if (next) {
+                    setTab(initialTab);
+                }
+            }}
+        >
             <DialogContent className="flex h-[560px] max-h-[85vh] w-[calc(100%-2rem)] max-w-3xl gap-0 overflow-hidden p-0 sm:max-w-3xl">
                 <div className="border-border/40 flex w-44 shrink-0 flex-col gap-1 border-r p-3">
                     <DialogHeader className="mb-2 px-1">
@@ -510,8 +621,15 @@ export function SettingsModal({
                     ))}
                 </div>
 
-                <div className="min-w-0 flex-1 overflow-y-auto p-6">
-                    {tab === 'status' ? <StatusTab /> : <AppearanceTab />}
+                {/* pt-11: el botón de cerrar del Dialog (top-4 right-4,
+                    ver ui/dialog.tsx) flota sobre ESTE panel — sin este
+                    espacio, cualquier control pegado arriba (el select
+                    de tono, un switch) quedaba debajo/tapado por la X. */}
+                <div className="min-w-0 flex-1 overflow-y-auto px-6 pt-11 pb-6">
+                    {tab === 'appearance' && <AppearanceTab />}
+                    {tab === 'notifications' && <NotificationsTab />}
+                    {tab === 'privacy' && <PrivacyTab />}
+                    {tab === 'security' && <SecurityTab />}
                 </div>
             </DialogContent>
         </Dialog>

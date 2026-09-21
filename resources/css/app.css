@@ -554,77 +554,6 @@
         inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Efecto "genio" de macOS (abrir/cerrar un chat) — aproximación web con
-   clip-path + transform, no un mesh-warp real (eso requiere geometría
-   de malla tipo SpriteKit, inviable en CSS/DOM). La idea: el panel se
-   angosta en un embudo hacia el ícono de "Mensajes" del rail mientras
-   se achica y se traslada hacia ahí, en vez de solo encogerse/desvanecer
-   parejo. `--genie-tx`/`--genie-ty` los calcula JS (distancia real del
-   panel al ícono) antes de aplicar la clase. Respeta
-   prefers-reduced-motion con un fade simple. */
-@keyframes genie-close {
-    0% {
-        clip-path: inset(0% 0% 0% 0% round 1rem);
-        transform: translate(0, 0) scale(1, 1);
-        opacity: 1;
-    }
-    55% {
-        clip-path: polygon(0% 0%, 100% 0%, 62% 100%, 38% 100%);
-        transform: translate(
-                calc(var(--genie-tx, 0px) * 0.2),
-                calc(var(--genie-ty, 0px) * 0.35)
-            )
-            scale(0.86, 0.9);
-        opacity: 1;
-    }
-    100% {
-        clip-path: polygon(0% 0%, 100% 0%, 50.5% 100%, 49.5% 100%);
-        transform: translate(var(--genie-tx, 0px), var(--genie-ty, 0px))
-            scale(0.04, 0.05);
-        opacity: 0;
-    }
-}
-@keyframes genie-open {
-    0% {
-        clip-path: polygon(0% 0%, 100% 0%, 50.5% 100%, 49.5% 100%);
-        transform: translate(var(--genie-tx, 0px), var(--genie-ty, 0px))
-            scale(0.04, 0.05);
-        opacity: 0;
-    }
-    45% {
-        clip-path: polygon(0% 0%, 100% 0%, 62% 100%, 38% 100%);
-        transform: translate(
-                calc(var(--genie-tx, 0px) * 0.2),
-                calc(var(--genie-ty, 0px) * 0.35)
-            )
-            scale(0.86, 0.9);
-        opacity: 1;
-    }
-    100% {
-        clip-path: inset(0% 0% 0% 0% round 1rem);
-        transform: translate(0, 0) scale(1, 1);
-        opacity: 1;
-    }
-}
-.genie-panel--closing {
-    transform-origin: 8% 100%;
-    animation: genie-close 420ms cubic-bezier(0.4, 0, 0.7, 1) forwards;
-}
-.genie-panel--opening {
-    transform-origin: 8% 100%;
-    animation: genie-open 420ms cubic-bezier(0.16, 0.9, 0.3, 1) forwards;
-}
-@media (prefers-reduced-motion: reduce) {
-    .genie-panel--closing,
-    .genie-panel--opening {
-        animation: none;
-        transition: opacity 150ms ease;
-    }
-    .genie-panel--closing {
-        opacity: 0;
-    }
-}
-
 /* Volumen de la card negra/blanca de login-registro en los 4 bordes:
    un resplandor blanco difuminado (se nota en la card NEGRA, casi no
    se ve en la blanca) + una sombra oscura difuminada (al revés: se
@@ -978,4 +907,174 @@
 }
 .hljs-strong {
     font-weight: bold;
+}
+
+/* Buscador global del header del contenido */
+.global-search-input {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid var(--sidebar-hairline, var(--border));
+    background: rgba(0, 0, 0, 0.04);
+    transition:
+        border-color 0.15s ease,
+        background-color 0.15s ease;
+}
+.dark .global-search-input {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+.global-search-input:focus-within {
+    border-color: var(--accent-1);
+}
+.global-search-input svg:first-child {
+    position: absolute;
+    left: 13px;
+    width: 15px;
+    height: 15px;
+    color: var(--muted-foreground);
+    pointer-events: none;
+}
+.global-search-input input {
+    width: 100%;
+    height: 100%;
+    padding: 0 62px 0 36px;
+    background: transparent;
+    border: 0;
+    outline: none;
+    font-size: 0.8125rem;
+    color: var(--foreground);
+}
+.global-search-input input::placeholder {
+    color: var(--muted-foreground);
+}
+.global-search-clear {
+    position: absolute;
+    right: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    color: var(--muted-foreground);
+    transition: background-color 0.15s ease;
+}
+.global-search-clear:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--foreground);
+}
+.dark .global-search-clear:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.global-search-filter {
+    position: absolute;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    color: var(--muted-foreground);
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+.global-search-filter:hover,
+.global-search-filter[data-active='true'] {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--foreground);
+}
+.dark .global-search-filter:hover,
+.dark .global-search-filter[data-active='true'] {
+    background: rgba(255, 255, 255, 0.1);
+}
+.global-search-filter[data-active='true'] {
+    color: var(--accent-1);
+}
+
+.global-search-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    max-height: min(60vh, 420px);
+    overflow-y: auto;
+    border-radius: 16px;
+    padding: 6px;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.16),
+        0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.global-search-group + .global-search-group {
+    margin-top: 4px;
+}
+.global-search-group-label {
+    display: block;
+    padding: 6px 8px 2px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--muted-foreground);
+}
+
+.global-search-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 8px;
+    border-radius: 10px;
+    text-align: left;
+    color: var(--foreground);
+    transition: background-color 0.15s ease;
+}
+.global-search-row:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+.dark .global-search-row:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+.global-search-row--message {
+    align-items: flex-start;
+}
+
+.global-search-filter-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 4px;
+    width: 220px;
+}
+.global-search-filter-section-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--muted-foreground);
+}
+.global-search-filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    text-align: left;
+    color: var(--foreground);
+}
+.global-search-filter-option:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+.dark .global-search-filter-option:hover {
+    background: rgba(255, 255, 255, 0.07);
 }

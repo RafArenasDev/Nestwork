@@ -2,10 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Conversations\ListActivityForUser;
 use App\Actions\Conversations\ListConversationsForUser;
+use App\Actions\Conversations\ListDiscoverableChannelsForUser;
 use App\Actions\Messages\ListSavedMessagesForUser;
 use App\Data\StatusPresetOption;
 use App\Data\TeamMemberOption;
+use App\Enums\ConversationType;
 use App\Models\StatusPreset;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -65,13 +68,43 @@ class HandleInertiaRequests extends Middleware
             // datos reales, sin importar en qué módulo esté el usuario.
             // Una página específica (messages/show) puede sobrescribirla
             // con su propia versión (con currentConversationId marcado).
+            // Sólo DM + minichat ("Chats") — Grupos y Canales son
+            // módulos aparte, con su propia lista (ver abajo), aunque
+            // comparten la misma tabla `conversations`.
             'conversations' => fn () => $user && $user->currentTeam
-                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam)
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Dm, ConversationType::GroupChat])
                 : [],
             // Mismo dato pero solo lo archivado — alimenta la pestaña
             // "Archivado" del mini-rail con datos reales.
             'archivedConversations' => fn () => $user && $user->currentTeam
-                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true)
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, archivedOnly: true, types: [ConversationType::Dm, ConversationType::GroupChat])
+                : [],
+            // Módulo "Grupos" — mismo listado, filtrado a `group`.
+            'groupConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Group])
+                : [],
+            // Módulo "Canales" — canales de los que YA soy participante
+            // (creados por mí o unido). Los públicos que todavía no uní
+            // van en `discoverableChannels`, aparte.
+            'channelConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, types: [ConversationType::Channel])
+                : [],
+            'discoverableChannels' => fn () => $user && $user->currentTeam
+                ? app(ListDiscoverableChannelsForUser::class)->handle($user, $user->currentTeam)
+                : [],
+            // "Inicio" reusa conversations/groupConversations/
+            // channelConversations (cada uno ya separado por tipo,
+            // arriba) filtrados a lo que NO es favorito — nunca los
+            // mezcla en una sola lista ("Recientes" de chat+grupo+canal
+            // junto fue pedido explícito de deshacer, se sentía como
+            // "una melcocha").
+            'favoriteConversations' => fn () => $user && $user->currentTeam
+                ? app(ListConversationsForUser::class)->handle($user, $user->currentTeam, favoritesOnly: true)
+                : [],
+            // "Actividad" — reacciones reales recibidas, no la lista de
+            // conversaciones reordenada (ver ListActivityForUser).
+            'activityItems' => fn () => $user && $user->currentTeam
+                ? app(ListActivityForUser::class)->handle($user, $user->currentTeam)
                 : [],
             // Alimenta la pestaña "Guardados" del mini-rail — mismo
             // criterio que conversations/archivedConversations arriba
@@ -92,13 +125,30 @@ class HandleInertiaRequests extends Middleware
                         name: $member->name,
                         username: $member->username,
                         avatar: $member->avatar,
+                        presence: $member->presenceStatus(),
+                        statusEmoji: $member->status_emoji,
+                        statusText: $member->status_text,
                     ))
                 : [],
-            // Catálogo de estados del dropdown de perfil (sección 3.2/10
-            // del prompt v2) — reemplaza los arrays que antes vivían
-            // quemados en curved-nav-rail.tsx.
+            // Presencia (disponible/ausente/ocupado/no molestar) y
+            // estado personalizado (almorzando, en una reunión...) son
+            // conceptos distintos con su propia UI — separados acá
+            // (StatusPreset::PRESENCE_KEYS) en vez de un solo catálogo
+            // mezclado como antes.
+            'presencePresets' => fn () => StatusPreset::query()
+                ->where('is_enabled', true)
+                ->whereIn('key', StatusPreset::PRESENCE_KEYS)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(fn (StatusPreset $preset) => new StatusPresetOption(
+                    key: $preset->key,
+                    emoji: $preset->emoji,
+                    label: App::getLocale() === 'en' ? $preset->label_en : $preset->label_es,
+                    defaultDurationMinutes: $preset->default_duration_minutes,
+                )),
             'statusPresets' => fn () => StatusPreset::query()
                 ->where('is_enabled', true)
+                ->whereNotIn('key', StatusPreset::PRESENCE_KEYS)
                 ->orderBy('sort_order')
                 ->get()
                 ->map(fn (StatusPreset $preset) => new StatusPresetOption(

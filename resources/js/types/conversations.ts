@@ -1,14 +1,32 @@
+export type ConversationKind = 'dm' | 'group_chat' | 'group' | 'channel';
+
 export type ConversationSummary = {
     id: number;
-    type: 'dm' | 'group';
+    type: ConversationKind;
     name: string;
     avatar: string | null;
-    presence: 'available' | 'away' | 'busy' | 'offline' | null;
+    otherUserId: number | null;
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
+    statusEmoji: string | null;
+    statusText: string | null;
+    memberCount: number | null;
     lastMessageBody: string | null;
+    lastMessageType:
+        | 'text'
+        | 'image'
+        | 'video'
+        | 'audio'
+        | 'file'
+        | 'code'
+        | 'system'
+        | 'call_log'
+        | null;
+    lastMessageAttachmentName: string | null;
     lastMessageAt: string | null;
     unreadCount: number;
     isMuted: boolean;
     isArchived: boolean;
+    isFavorite: boolean;
     isCurrent: boolean;
 };
 
@@ -55,10 +73,16 @@ export type MessageData = {
 export type ActiveConversation = {
     id: number;
     name: string;
-    type: 'dm' | 'group';
+    type: ConversationKind;
     avatar: string | null;
     otherUserId: number | null;
-    presence: 'available' | 'away' | 'busy' | 'offline' | null;
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline' | null;
+    statusEmoji: string | null;
+    statusText: string | null;
+    memberCount: number | null;
+    /** Sólo relevante en group/channel — DM y minichat no tienen
+     *  jerarquía (ConversationType::isFlatChat()). */
+    isAdmin: boolean;
     isArchived: boolean;
     isMuted: boolean;
     viewerLastReadMessageId: number | null;
@@ -70,6 +94,9 @@ export type TeamMemberOption = {
     name: string;
     username: string;
     avatar: string | null;
+    presence: 'available' | 'away' | 'busy' | 'dnd' | 'offline';
+    statusEmoji: string | null;
+    statusText: string | null;
 };
 
 export type SavedMessageSummary = {
@@ -82,4 +109,17 @@ export type SavedMessageSummary = {
     messageCreatedAt: string;
     savedAt: string;
     isMine: boolean;
+};
+
+export type ActivityItem = {
+    id: string;
+    type: 'reaction';
+    conversationId: number;
+    conversationName: string;
+    messageId: number;
+    messageExcerpt: string;
+    actorName: string;
+    actorAvatar: string | null;
+    emoji: string | null;
+    createdAt: string;
 };

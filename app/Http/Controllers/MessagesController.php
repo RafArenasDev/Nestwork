@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Attachments\GenerateAttachmentPreview;
 use App\Actions\Conversations\ListConversationsForUser;
 use App\Data\MessageData;
 use App\Data\ReactionData;
@@ -13,6 +12,7 @@ use App\Events\ConversationPinChanged;
 use App\Events\MessageRead;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
+use App\Jobs\GenerateAttachmentPreviewJob;
 use App\Models\Attachment;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -47,7 +47,7 @@ class MessagesController extends Controller
         abort_if(! $team, 404);
 
         return Inertia::render('messages/index', [
-            'conversations' => $this->listConversations->handle($user, $team),
+            'conversations' => $this->listConversations->handle($user, $team, types: [ConversationType::Dm, ConversationType::GroupChat]),
             'conversation' => null,
             'messages' => [],
         ]);
@@ -81,12 +81,21 @@ class MessagesController extends Controller
             // sin que el usuario realmente hubiera leído nada.
             'messages' => fn () => $this->loadMessages($conversation, $user),
             'conversation' => fn () => $this->buildConversationPayload($conversation, $user),
-            'conversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id),
+            'conversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Dm, ConversationType::GroupChat]),
             // Si la conversación abierta está archivada, no aparece en
             // la lista de arriba (se filtra) — necesita su propio
             // "isCurrent" acá para que la gotera también aplique en la
             // pestaña Archivado.
-            'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true),
+            'archivedConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, archivedOnly: true, types: [ConversationType::Dm, ConversationType::GroupChat]),
+            // Mismo "id actual" pasado a Grupos/Canales — sólo la lista
+            // cuyo tipo de verdad coincide con esta conversación va a
+            // tener una fila con ese id, así que marcar `isCurrent` acá
+            // en las cuatro listas es inofensivo (ver módulo de la
+            // navegación: se abre desde CUALQUIERA de las tres listas,
+            // siempre por la misma ruta `messages.show`).
+            'groupConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Group]),
+            'channelConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, types: [ConversationType::Channel]),
+            'favoriteConversations' => fn () => $this->listConversations->handle($user, $team, $conversation->id, favoritesOnly: true),
             // Desde "Guardados" (u otro enlace externo al chat): salta al
             // mensaje puntual al abrir. Sólo funciona si ese mensaje cayó
             // dentro de la ventana inicial cargada (INITIAL_MESSAGE_LIMIT)
@@ -139,13 +148,22 @@ class MessagesController extends Controller
      * exige que el más rezagado también lo haya visto. Null significa
      * "nadie más ha leído nada todavía" (ningún mensaje propio cuenta
      * como leído).
+     *
+     * Quien apagó "Confirmación de lectura" (Ajustes > Privacidad,
+     * `read_receipts_enabled`) no expone su avance a los demás — se
+     * excluye de este cálculo por completo, así que ningún emisor ve
+     * "leído" a partir de su lectura (mismo trato de ida y vuelta que
+     * Teams: si lo apagas, tampoco ves el de los demás — eso ya lo
+     * respeta MessageData al no exponer status de terceros).
      */
     private function readThresholdFor(Conversation $conversation, User $user): ?int
     {
-        $otherLastReadIds = $conversation->participants()
+        $otherParticipants = $conversation->participants()
             ->where('users.id', '!=', $user->id)
             ->get()
-            ->pluck('pivot.last_read_message_id');
+            ->filter(fn (User $participant) => $participant->read_receipts_enabled);
+
+        $otherLastReadIds = $otherParticipants->pluck('pivot.last_read_message_id');
 
         return $otherLastReadIds->isNotEmpty() && $otherLastReadIds->every(fn (?int $id) => $id !== null)
             ? $otherLastReadIds->min()
@@ -167,18 +185,19 @@ class MessagesController extends Controller
         $otherParticipant = $conversation->participants()
             ->where('users.id', '!=', $user->id)
             ->first();
+        $isDm = $conversation->type === ConversationType::Dm;
 
         return [
             'id' => $conversation->id,
             'name' => $conversation->displayNameFor($user),
             'type' => $conversation->type->value,
-            'avatar' => $otherParticipant instanceof User ? $otherParticipant->avatar : null,
-            'otherUserId' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->id
-                : null,
-            'presence' => $conversation->type === ConversationType::Dm && $otherParticipant instanceof User
-                ? $otherParticipant->presenceStatus()
-                : null,
+            'avatar' => $isDm && $otherParticipant instanceof User ? $otherParticipant->avatar : $conversation->avatarUrl(),
+            'otherUserId' => $isDm && $otherParticipant instanceof User ? $otherParticipant->id : null,
+            'presence' => $isDm && $otherParticipant instanceof User ? $otherParticipant->presenceStatus() : null,
+            'statusEmoji' => $isDm && $otherParticipant instanceof User ? $otherParticipant->status_emoji : null,
+            'statusText' => $isDm && $otherParticipant instanceof User ? $otherParticipant->status_text : null,
+            'memberCount' => $isDm ? null : $conversation->participants()->count(),
+            'isAdmin' => $conversation->isAdmin($user),
             'isArchived' => $pivot->isArchived(),
             'isMuted' => $pivot->isMuted(),
             // Valor DE ANTES de esta visita (loadMessages ya no lo pisa)
@@ -226,16 +245,27 @@ class MessagesController extends Controller
         /** @var UploadedFile|null $file */
         $file = $validated['attachment'] ?? null;
         $attachmentCategory = $validated['attachment_category'] ?? null;
+        $replyToMessageId = $validated['reply_to_message_id'] ?? null;
 
         if ($file && $attachmentCategory) {
             $this->assertAttachmentMatchesCategory($file, $attachmentCategory);
+        }
+
+        // Canal: sólo el admin/creador publica en la línea principal —
+        // el resto sólo puede responder dentro de un hilo ya abierto
+        // (reply_to_message_id obligatorio). Grupo/Chat no restringen
+        // nada acá.
+        if ($conversation->type->restrictsTopLevelPostingToAdmin()
+            && $replyToMessageId === null
+            && ! $conversation->isAdmin($user)) {
+            abort(403, 'Sólo quien administra este canal puede publicar. Puedes responder en un hilo.');
         }
 
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
             'body' => $validated['body'] ?? '',
             'type' => $file ? $this->messageTypeFor($this->attachmentTypeFor($file)) : MessageType::Text,
-            'reply_to_message_id' => $validated['reply_to_message_id'] ?? null,
+            'reply_to_message_id' => $replyToMessageId,
         ]);
 
         if ($file) {
@@ -362,11 +392,11 @@ class MessagesController extends Controller
             'height' => $height,
         ]);
 
-        // Síncrono a propósito — pedido explícito: "la preview de la
-        // primera página la quiero desde la miniatura que se carga, no
-        // al rato". La propia Action decide si el tipo de archivo
-        // aplica (pdf/doc/docx/xls/xlsx/txt) antes de convertir.
-        app(GenerateAttachmentPreview::class)->handle($attachment);
+        // En cola, no síncrono (ver GenerateAttachmentPreviewJob para el
+        // porqué: correrlo dentro del request causaba 503 reales por
+        // timeout del proxy). La propia Action decide si el tipo de
+        // archivo aplica (pdf/doc/docx/xls/xlsx/txt) antes de convertir.
+        GenerateAttachmentPreviewJob::dispatch($attachment);
     }
 
     /**

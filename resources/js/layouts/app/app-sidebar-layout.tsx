@@ -9,8 +9,16 @@ import {
     CURVED_RAIL_WIDTH,
     CurvedNavRail,
     RAIL_MODULES,
+    SWITCH_MODULE_EVENT,
     type RailModuleKey,
 } from '@/components/curved-nav-rail';
+import { ModulePlaceholder } from '@/components/module-placeholder';
+import { MeetingsView } from '@/components/meetings-view';
+import {
+    getNotificationPreferences,
+    playNotificationSound,
+} from '@/hooks/use-notification-preferences';
+import { TeamPresenceProvider } from '@/hooks/use-live-presence';
 import { updateFaviconBadge } from '@/lib/favicon-badge';
 import { dashboard } from '@/routes';
 import {
@@ -18,6 +26,7 @@ import {
     show as messagesShow,
 } from '@/routes/messages';
 import type { ActiveConversation, AppLayoutProps } from '@/types';
+import type { MessageData } from '@/types/conversations';
 
 /** Módulos que ya tienen una página real (el resto sigue como pestaña
  * local de solo lectura hasta que se construyan). */
@@ -25,6 +34,39 @@ const ROUTED_MODULES: Partial<Record<RailModuleKey, true>> = {
     home: true,
     messages: true,
 };
+
+/** Notificación de escritorio real (Ajustes > Notificaciones): pide
+ *  permiso una sola vez desde el toggle (nunca acá, sin gesto del
+ *  usuario el navegador la ignora), acá sólo dispara si ya está
+ *  concedido. Silenciosa si el toggle está apagado o el navegador no
+ *  soporta la API. */
+function notifyNewMessage(message: MessageData): void {
+    const prefs = getNotificationPreferences();
+
+    if (prefs.soundEnabled) {
+        playNotificationSound(prefs.sound);
+    }
+
+    if (
+        !prefs.desktopEnabled ||
+        typeof Notification === 'undefined' ||
+        Notification.permission !== 'granted' ||
+        !document.hidden
+    ) {
+        return;
+    }
+
+    const notification = new Notification(message.userName, {
+        body: prefs.showPreview ? message.body : 'Nuevo mensaje',
+        icon: message.userAvatar ?? '/favicon.svg',
+        tag: `nestwork-message-${message.id}`,
+    });
+
+    notification.onclick = () => {
+        window.focus();
+        notification.close();
+    };
+}
 
 export default function AppSidebarLayout({
     children,
@@ -40,6 +82,21 @@ export default function AppSidebarLayout({
     const [manualModule, setManualModule] = useState<RailModuleKey | null>(
         null,
     );
+
+    // Los accesos rápidos del Home (Guardados/Archivo/Actividad) no
+    // pueden usar un <Link> normal — el módulo activo es este estado
+    // local, no una URL — así que avisan por evento en vez de eso.
+    useEffect(() => {
+        function handleSwitchModule(event: Event) {
+            const key = (event as CustomEvent<RailModuleKey>).detail;
+            setManualModule(key);
+        }
+
+        window.addEventListener(SWITCH_MODULE_EVENT, handleSwitchModule);
+
+        return () =>
+            window.removeEventListener(SWITCH_MODULE_EVENT, handleSwitchModule);
+    }, []);
 
     // Tiempo real (Reverb): un mensaje nuevo en cualquier conversación
     // propia refresca sólo el contador de no-leídos del sidebar — el
@@ -59,7 +116,7 @@ export default function AppSidebarLayout({
     useEcho(
         `App.Models.User.${authUserId}`,
         '.MessageSent',
-        () => {
+        (event: { conversationId: number; message: MessageData }) => {
             if (!currentTeam) {
                 return;
             }
@@ -69,12 +126,34 @@ export default function AppSidebarLayout({
                 | null
                 | undefined;
 
+            // Notificación de escritorio: sólo si la conversación de
+            // este mensaje NO es la que está abierta ahora mismo (ese
+            // caso ya se ve en pantalla, avisar sería redundante) — ver
+            // Ajustes > Notificaciones para el toggle real.
+            if (
+                event.message.userId !== authUserId &&
+                event.conversationId !== openConversation?.id
+            ) {
+                notifyNewMessage(event.message);
+            }
+
             const url = openConversation
                 ? messagesShow([currentTeam.slug, openConversation.id]).url
                 : messagesIndex(currentTeam.slug).url;
 
             router.visit(url, {
-                only: ['conversations', 'archivedConversations'],
+                // groupConversations/channelConversations: un mensaje
+                // nuevo en cualquiera de los tres módulos también tiene
+                // que reflejarse en su sección de Inicio (Recientes/
+                // Grupos recientes/Canales recientes) sin importar en
+                // qué módulo esté el usuario ahora mismo.
+                only: [
+                    'conversations',
+                    'archivedConversations',
+                    'groupConversations',
+                    'channelConversations',
+                    'favoriteConversations',
+                ],
                 preserveScroll: true,
                 preserveState: true,
                 preserveUrl: true,
@@ -103,6 +182,18 @@ export default function AppSidebarLayout({
     const activeModuleLabel =
         RAIL_MODULES.find((module) => module.key === activeModule)?.label ?? '';
 
+    // Actividad/Archivo/Guardados no navegan hasta que se elige una
+    // conversación puntual de la lista (eso sí navega de verdad, ver
+    // ConversationRow en app-sidebar.tsx) — mientras tanto, mostrar el
+    // contenido de la página anterior (ej. Home) quedaba desactualizado
+    // y confuso. `conversation` sólo llega en messages/show.
+    const openConversation = page.props.conversation as
+        | ActiveConversation
+        | null
+        | undefined;
+    const showModulePlaceholder =
+        !ROUTED_MODULES[activeModule] && !openConversation;
+
     const handleModuleChange = (key: RailModuleKey) => {
         if (ROUTED_MODULES[key] && currentTeam) {
             setManualModule(null);
@@ -121,7 +212,15 @@ export default function AppSidebarLayout({
     };
 
     return (
-        <>
+        <TeamPresenceProvider
+            teamSlug={currentTeam?.slug}
+            reloadProps={[
+                'teamMembers',
+                'conversations',
+                'archivedConversations',
+                'conversation',
+            ]}
+        >
             <CurvedNavRail
                 active={activeModule}
                 onChange={handleModuleChange}
@@ -144,11 +243,21 @@ export default function AppSidebarLayout({
                         variant="sidebar"
                         className="bg-background min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
                     >
+                        {/* Nunca repetir el título del módulo acá — ya
+                            se ve en el header de la sidebar
+                            (SidebarModuleHeader). Pedido explícito:
+                            esa redundancia molesta. */}
                         <AppSidebarHeader breadcrumbs={breadcrumbs} />
-                        {children}
+                        {activeModule === 'meetings' ? (
+                            <MeetingsView />
+                        ) : showModulePlaceholder ? (
+                            <ModulePlaceholder module={activeModule} />
+                        ) : (
+                            children
+                        )}
                     </AppContent>
                 </AppShell>
             </div>
-        </>
+        </TeamPresenceProvider>
     );
 }

@@ -2,31 +2,35 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\StatusPreset;
+use App\Events\UserPresenceUpdated;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Illuminate\Validation\Rule;
 
+/**
+ * Estado PERSONALIZADO (emoji + texto libre, con vencimiento
+ * opcional) — independiente de la presencia (disponible/ausente/
+ * ocupado/no molestar), que vive en UserPresenceController. Cambiar
+ * uno nunca toca al otro: acá nunca se lee ni se escribe
+ * `status_preset`.
+ */
 class UserStatusController extends Controller
 {
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'preset' => ['nullable', Rule::in(
-                StatusPreset::query()->where('is_enabled', true)->pluck('key')->all()
-            )],
             'emoji' => ['nullable', 'string', 'max:8'],
             'text' => ['nullable', 'string', 'max:100'],
             // Minutos hasta que el estado se borre solo — null/ausente
-            // significa "sin vencimiento" (mismo criterio que antes de
-            // este campo). El modelo ya sabe leer status_expires_at
-            // (ver User::activeStatusPreset()), esto sólo lo alimenta.
+            // significa "sin vencimiento". El modelo lee
+            // `status_expires_at` para tratar el texto/emoji como
+            // vencidos (ver User::statusText()/statusEmoji()).
             'duration_minutes' => ['nullable', 'integer', 'min:1', 'max:10080'],
         ]);
 
-        $request->user()->forceFill([
-            'status_preset' => $validated['preset'] ?? null,
+        $user = $request->user();
+
+        $user->forceFill([
             'status_emoji' => $validated['emoji'] ?? null,
             'status_text' => $validated['text'] ?? null,
             'status_expires_at' => isset($validated['duration_minutes'])
@@ -34,17 +38,22 @@ class UserStatusController extends Controller
                 : null,
         ])->save();
 
+        broadcast(new UserPresenceUpdated($user))->toOthers();
+
         return back();
     }
 
     public function destroy(Request $request): RedirectResponse
     {
-        $request->user()->forceFill([
-            'status_preset' => null,
+        $user = $request->user();
+
+        $user->forceFill([
             'status_emoji' => null,
             'status_text' => null,
             'status_expires_at' => null,
         ])->save();
+
+        broadcast(new UserPresenceUpdated($user))->toOthers();
 
         return back();
     }

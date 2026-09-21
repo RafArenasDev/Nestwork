@@ -3,8 +3,11 @@ import { RouteLoadingOverlay } from '@/components/route-loading-overlay';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
+import { initializeConversationTags } from '@/hooks/use-conversation-tags';
 import { initializeCustomization } from '@/hooks/use-customization';
 import { initializeLocale } from '@/hooks/use-locale';
+import { initializeNotificationPreferences } from '@/hooks/use-notification-preferences';
+import { initializePrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
@@ -75,6 +78,9 @@ initializeTheme();
 // sin cookie/SSR (a diferencia del tema): no afectan el primer render
 // del servidor, así que alcanza con aplicarlas acá.
 initializeCustomization();
+initializeConversationTags();
+initializeNotificationPreferences();
+initializePrivacyPreferences();
 
 // This will set the ES/EN locale on load...
 initializeLocale();

@@ -1,83 +1,118 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import { MessageCircle, MessagesSquare } from 'lucide-react';
-import { useState } from 'react';
+import { Head, router, usePage } from '@inertiajs/react';
+import {
+    ArchiveBoxIcon,
+    BellIcon,
+    BookmarkIcon,
+} from '@heroicons/react/24/outline';
 import PendingInvitationsModal from '@/components/pending-invitations-modal';
 import { PresenceDot } from '@/components/presence-dot';
+import {
+    SWITCH_MODULE_EVENT,
+    type RailModuleKey,
+} from '@/components/curved-nav-rail';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { useInitials } from '@/hooks/use-initials';
+import { useLivePresence } from '@/hooks/use-live-presence';
 import { dashboard } from '@/routes';
-import { show as showMessage } from '@/routes/messages';
+import { store as startConversation } from '@/routes/conversations';
 import type { DashboardInvitation } from '@/types';
+import type { TeamMemberOption } from '@/types/conversations';
+import { useState } from 'react';
 
 type Props = {
     pendingInvitations?: DashboardInvitation[];
 };
 
-/** "Hace 5 min" / "Hace 3 h" / "Ayer" / "12 sep" — sin librería de
- *  fechas, sólo lo que necesita esta lista (nunca más de unos días de
- *  antigüedad en "recientes"). */
-function formatRelativeTime(iso: string): string {
-    const date = new Date(iso);
-    const diffMs = Date.now() - date.getTime();
-    const minutes = Math.floor(diffMs / 60000);
+const PRESENCE_LABEL: Record<TeamMemberOption['presence'], string> = {
+    available: 'Disponible',
+    away: 'Ausente',
+    busy: 'Ocupado',
+    dnd: 'No molestar',
+    offline: 'Desconectado',
+};
 
-    if (minutes < 1) {
-        return 'Ahora';
-    }
+const QUICK_ACCESS: {
+    key: RailModuleKey;
+    label: string;
+    description: string;
+    icon: typeof BellIcon;
+}[] = [
+    {
+        key: 'activity',
+        label: 'Actividad',
+        description: 'Novedades en tus conversaciones',
+        icon: BellIcon,
+    },
+    {
+        key: 'saved',
+        label: 'Guardados',
+        description: 'Mensajes que marcaste para después',
+        icon: BookmarkIcon,
+    },
+    {
+        key: 'archived',
+        label: 'Archivo',
+        description: 'Chats que sacaste de tu lista',
+        icon: ArchiveBoxIcon,
+    },
+];
 
-    if (minutes < 60) {
-        return `Hace ${minutes} min`;
-    }
-
-    const hours = Math.floor(minutes / 60);
-
-    if (hours < 24) {
-        return `Hace ${hours} h`;
-    }
-
-    const days = Math.floor(hours / 24);
-
-    if (days === 1) {
-        return 'Ayer';
-    }
-
-    if (days < 7) {
-        return `Hace ${days} d`;
-    }
-
-    return date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+function switchModule(key: RailModuleKey): void {
+    window.dispatchEvent(new CustomEvent(SWITCH_MODULE_EVENT, { detail: key }));
 }
 
-/** Misma tarjeta para las dos métricas — ícono en una placa tenue,
- *  número grande con tabular-nums (para que no "baile" el ancho si
- *  cambia en vivo) y la misma sombra en dos capas que ya usan las
- *  burbujas de mensaje (ver MessageBubble en messages/index.tsx), así
- *  el Home comparte el mismo material que el resto de la app en vez de
- *  quedar con el borde plano por defecto de shadcn. */
-function StatCard({
-    icon: Icon,
-    label,
-    value,
-}: {
-    icon: typeof MessageCircle;
-    label: string;
-    value: number;
-}) {
+function TeammateRow({ member }: { member: TeamMemberOption }) {
+    const getInitials = useInitials();
+    const [starting, setStarting] = useState(false);
+    const page = usePage();
+    const currentTeam = page.props.currentTeam;
+    const live = useLivePresence(member.id, member);
+
+    const handleClick = () => {
+        if (!currentTeam || starting) {
+            return;
+        }
+
+        setStarting(true);
+        router.post(
+            startConversation(currentTeam.slug).url,
+            { user_id: member.id },
+            { onFinish: () => setStarting(false) },
+        );
+    };
+
     return (
-        <div className="bg-card border-border/60 flex items-center gap-4 rounded-2xl border p-5 shadow-[0_1px_2px_rgba(0,0,0,0.12),0_6px_16px_rgba(0,0,0,0.16)] transition-transform duration-150 ease-out hover:-translate-y-0.5 dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_6px_18px_rgba(0,0,0,0.5)]">
-            <span className="bg-foreground/5 text-foreground flex size-11 shrink-0 items-center justify-center rounded-xl">
-                <Icon className="size-5" strokeWidth={1.8} />
+        <button
+            type="button"
+            onClick={handleClick}
+            disabled={starting}
+            className="hover:bg-foreground/5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-150 disabled:opacity-60"
+        >
+            <span className="relative shrink-0">
+                <Avatar className="size-9">
+                    {member.avatar && (
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                    )}
+                    <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
+                        {getInitials(member.name)}
+                    </AvatarFallback>
+                </Avatar>
+                <PresenceDot
+                    presence={live.presence}
+                    surfaceTone="var(--card)"
+                />
             </span>
-            <span className="min-w-0">
-                <span className="text-muted-foreground block text-xs">
-                    {label}
+            <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">
+                    {member.name}
                 </span>
-                <span className="block text-3xl font-semibold tracking-tight tabular-nums">
-                    {value}
+                <span className="text-muted-foreground block truncate text-xs">
+                    {live.statusText
+                        ? `${live.statusEmoji ?? ''} ${live.statusText}`.trim()
+                        : PRESENCE_LABEL[live.presence]}
                 </span>
             </span>
-        </div>
+        </button>
     );
 }
 
@@ -85,17 +120,19 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
     const page = usePage();
     const auth = page.props.auth;
     const currentTeam = page.props.currentTeam;
-    const conversations = page.props.conversations ?? [];
-    const getInitials = useInitials();
+    const teamMembers = page.props.teamMembers ?? [];
+    // Ni Slack ni Teams ponen un directorio completo del equipo en su
+    // landing — acá sólo tiene sentido mostrar quién está activo AHORA
+    // (información que de verdad cambia), nunca la lista entera con la
+    // mayoría "Desconectado" (eso ya está, con búsqueda, en "Nuevo
+    // chat"). Tope de 8: si hay más gente conectada que eso, ya no es
+    // un vistazo rápido.
+    const onlineMembers = teamMembers
+        .filter((member) => member.presence !== 'offline')
+        .slice(0, 8);
     const [showInvitations, setShowInvitations] = useState(
         pendingInvitations.length > 0,
     );
-
-    const unreadTotal = conversations.reduce(
-        (total, conversation) => total + conversation.unreadCount,
-        0,
-    );
-    const recentConversations = conversations.slice(0, 6);
 
     return (
         <>
@@ -105,7 +142,7 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                 open={pendingInvitations.length > 0 && showInvitations}
                 onOpenChange={setShowInvitations}
             />
-            <div className="flex h-full flex-1 flex-col gap-6 overflow-y-auto p-6">
+            <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-6 overflow-y-auto p-8">
                 <div>
                     <h1 className="text-3xl font-semibold tracking-tight">
                         Hola, {auth.user.name.split(' ')[0]}
@@ -117,99 +154,49 @@ export default function Dashboard({ pendingInvitations = [] }: Props) {
                     </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <StatCard
-                        icon={MessageCircle}
-                        label="Mensajes sin leer"
-                        value={unreadTotal}
-                    />
-                    <StatCard
-                        icon={MessagesSquare}
-                        label="Conversaciones activas"
-                        value={conversations.length}
-                    />
+                <div className="grid grid-cols-3 gap-3">
+                    {QUICK_ACCESS.map(
+                        ({ key, label, description, icon: Icon }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => switchModule(key)}
+                                className="hover:bg-foreground/5 flex flex-col items-start gap-2 rounded-xl px-3 py-3 text-left transition-colors duration-150"
+                            >
+                                <span className="bg-foreground/5 text-foreground flex size-9 items-center justify-center rounded-lg">
+                                    <Icon
+                                        className="size-4.5"
+                                        strokeWidth={1.8}
+                                    />
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-medium">
+                                        {label}
+                                    </span>
+                                    <span className="text-muted-foreground block truncate text-[11px]">
+                                        {description}
+                                    </span>
+                                </span>
+                            </button>
+                        ),
+                    )}
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col">
-                    <h2 className="mb-3 text-sm font-semibold">
-                        Chats recientes
+                    <h2 className="mb-1 text-sm font-semibold">
+                        En línea ahora
                     </h2>
 
-                    {recentConversations.length === 0 ? (
+                    {onlineMembers.length === 0 ? (
                         <p className="text-muted-foreground text-sm">
-                            Todavía no tienes conversaciones — usa el botón "+"
-                            del sidebar para empezar una.
+                            Nadie más de tu equipo está conectado en este
+                            momento.
                         </p>
                     ) : (
                         <ul className="flex min-h-0 flex-col overflow-y-auto">
-                            {recentConversations.map((conversation) => (
-                                <li key={conversation.id}>
-                                    <Link
-                                        href={
-                                            currentTeam
-                                                ? showMessage([
-                                                      currentTeam.slug,
-                                                      conversation.id,
-                                                  ]).url
-                                                : '#'
-                                        }
-                                        className="hover:bg-foreground/5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-150"
-                                    >
-                                        <span className="relative shrink-0">
-                                            <Avatar className="size-9">
-                                                {conversation.avatar && (
-                                                    <AvatarImage
-                                                        src={
-                                                            conversation.avatar
-                                                        }
-                                                        alt={conversation.name}
-                                                    />
-                                                )}
-                                                <AvatarFallback className="bg-[var(--sidebar-accent)] text-[10px] text-[var(--sidebar-accent-foreground)]">
-                                                    {getInitials(
-                                                        conversation.name,
-                                                    )}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            {conversation.presence && (
-                                                <PresenceDot
-                                                    presence={
-                                                        conversation.presence
-                                                    }
-                                                    surfaceTone="var(--card)"
-                                                />
-                                            )}
-                                        </span>
-                                        <span className="min-w-0 flex-1">
-                                            <span className="block truncate font-medium">
-                                                {conversation.name}
-                                            </span>
-                                            {conversation.lastMessageBody && (
-                                                <span className="text-muted-foreground block truncate text-xs">
-                                                    {
-                                                        conversation.lastMessageBody
-                                                    }
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span className="flex shrink-0 flex-col items-end gap-1">
-                                            {conversation.lastMessageAt && (
-                                                <span className="text-muted-foreground text-[11px]">
-                                                    {formatRelativeTime(
-                                                        conversation.lastMessageAt,
-                                                    )}
-                                                </span>
-                                            )}
-                                            {conversation.unreadCount > 0 && (
-                                                <Badge
-                                                    variant="destructive"
-                                                    className="h-5 min-w-5 justify-center rounded-full bg-[oklch(0.577_0.245_27.325)] px-1 text-[10px] dark:bg-[oklch(0.577_0.245_27.325)]"
-                                                >
-                                                    {conversation.unreadCount}
-                                                </Badge>
-                                            )}
-                                        </span>
-                                    </Link>
+                            {onlineMembers.map((member) => (
+                                <li key={member.id}>
+                                    <TeammateRow member={member} />
                                 </li>
                             ))}
                         </ul>

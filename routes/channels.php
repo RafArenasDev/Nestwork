@@ -17,7 +17,15 @@ Broadcast::channel('conversation.{conversation}', function (User $user, Conversa
 // Presencia en vivo por equipo — quién está conectado ahora mismo. Sólo
 // miembros del equipo pueden unirse; el payload es lo que ven los demás
 // en los eventos here/joining/leaving de Echo.
-Broadcast::channel('presence-team.{team}', function (User $user, Team $team) {
+//
+// OJO: el patrón NUNCA lleva el prefijo "presence-"/"private-" — Laravel
+// lo quita del nombre real del canal antes de compararlo contra estas
+// rutas (ver `UsePusherChannelConventions::normalizeChannelName`), así
+// que registrarlo como "presence-team.{team}" (como estaba antes) hacía
+// que este canal fuera IMPOSIBLE de unirse: ninguna suscripción real
+// (que siempre llega ya normalizada a "team.{id}") podía matchear nunca
+// contra un patrón que todavía tenía el prefijo puesto a mano.
+Broadcast::channel('team.{team}', function (User $user, Team $team) {
     if (! $user->belongsToTeam($team)) {
         return null;
     }

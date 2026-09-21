@@ -57,8 +57,10 @@ import {
     toggleHidden,
     toggleMute,
 } from '@/routes/conversations';
+import { FOCUS_CONVERSATION_SEARCH_EVENT } from '@/components/global-search-bar';
 import { MessageAttachment } from '@/components/message-attachment';
 import { MessageCodeBlock } from '@/components/message-code-block';
+import { CallMockDialog } from '@/components/call-mock-dialog';
 import { MessageComposer } from '@/components/message-composer';
 import { PresenceDot } from '@/components/presence-dot';
 import { ReactionPickerButton } from '@/components/reaction-picker';
@@ -101,6 +103,8 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useInitials } from '@/hooks/use-initials';
+import { useLivePresence } from '@/hooks/use-live-presence';
+import { getPrivacyPreferences } from '@/hooks/use-privacy-preferences';
 import {
     clearOpenConversationUnseen,
     setOpenConversationUnseen,
@@ -647,6 +651,9 @@ function ConversationHeader({
     getInitials: (name: string) => string;
     onClose: () => void;
 }) {
+    const live = useLivePresence(conversation.otherUserId, conversation);
+    const [callType, setCallType] = useState<'audio' | 'video' | null>(null);
+
     const handleToggleArchive = () => {
         if (!currentTeamSlug) {
             return;
@@ -715,8 +722,9 @@ function ConversationHeader({
                   available: 'Disponible',
                   away: 'Ausente',
                   busy: 'Ocupado',
+                  dnd: 'No molestar',
                   offline: 'Desconectado',
-              }[conversation.presence ?? 'offline'];
+              }[live.presence ?? 'offline'];
 
     return (
         <div className="glass-panel-edge-b sticky top-0 z-10 flex shrink-0 items-center gap-4 px-4 py-3">
@@ -735,37 +743,99 @@ function ConversationHeader({
                         {getInitials(conversation.name)}
                     </AvatarFallback>
                 </Avatar>
-                {conversation.presence && (
+                {live.presence && (
                     <PresenceDot
-                        presence={conversation.presence}
+                        presence={live.presence}
                         surfaceTone="var(--bg-elevated)"
                     />
+                )}
+                {live.statusEmoji && (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span
+                                className="absolute -bottom-1 -left-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none"
+                                style={{
+                                    backgroundColor: 'var(--bg-elevated)',
+                                }}
+                            >
+                                {live.statusEmoji}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            {live.statusText}
+                        </TooltipContent>
+                    </Tooltip>
                 )}
             </div>
 
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm leading-tight font-semibold">
+                <p className="flex items-center gap-1.5 truncate text-sm leading-tight font-semibold">
                     {conversation.name}
+                    {live.statusEmoji && (
+                        <span className="text-xs font-normal">
+                            {live.statusEmoji}
+                        </span>
+                    )}
                 </p>
                 <p className="text-muted-foreground truncate text-xs leading-tight">
                     {statusLabel}
+                    {live.statusText && ` · ${live.statusText}`}
                     {conversation.isMuted && ' · Silenciado'}
                 </p>
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
-                <DisabledActionIcon
-                    icon={Search}
-                    label="Buscar en el chat (próximamente)"
-                />
-                <DisabledActionIcon
-                    icon={Phone}
-                    label="Llamada de audio (próximamente)"
-                />
-                <DisabledActionIcon
-                    icon={Video}
-                    label="Videollamada (próximamente)"
-                />
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Buscar en este chat"
+                            onClick={() =>
+                                window.dispatchEvent(
+                                    new CustomEvent(
+                                        FOCUS_CONVERSATION_SEARCH_EVENT,
+                                    ),
+                                )
+                            }
+                        >
+                            <Search className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Buscar en este chat</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Llamada de voz"
+                            onClick={() => setCallType('audio')}
+                        >
+                            <Phone className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Llamada de voz</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 rounded-full transition-transform duration-100 active:scale-90"
+                            aria-label="Videollamada"
+                            onClick={() => setCallType('video')}
+                        >
+                            <Video className="size-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Videollamada</TooltipContent>
+                </Tooltip>
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -886,35 +956,17 @@ function ConversationHeader({
                     <TooltipContent>Cerrar chat</TooltipContent>
                 </Tooltip>
             </div>
-        </div>
-    );
-}
 
-function DisabledActionIcon({
-    icon: Icon,
-    label,
-}: {
-    icon: typeof Search;
-    label: string;
-}) {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <span tabIndex={-1}>
-                    <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-8 rounded-full"
-                        disabled
-                        aria-label={label}
-                    >
-                        <Icon className="size-4" />
-                    </Button>
-                </span>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
+            {callType && (
+                <CallMockDialog
+                    open
+                    onOpenChange={() => setCallType(null)}
+                    type={callType}
+                    contactName={conversation.name}
+                    contactAvatar={conversation.avatar}
+                />
+            )}
+        </div>
     );
 }
 
@@ -967,7 +1019,6 @@ function Thread({
         return new Set(mostRecentKey ? [mostRecentKey] : []);
     });
     const [typingUserName, setTypingUserName] = useState<string | null>(null);
-    const [genieClass, setGenieClass] = useState('genie-panel--opening');
     const [isNearBottom, setIsNearBottom] = useState(true);
     // Marca de agua de "leído" para ESTA apertura del chat: todo mensaje
     // ajeno con id mayor a esto es "no leído" hasta que markAsRead lo
@@ -1078,55 +1129,15 @@ function Thread({
             });
     };
 
-    // Efecto "genio" de macOS: el panel se "traga" hacia el ícono de
-    // Mensajes del rail al cerrar (y emerge desde ahí al abrir) en vez
-    // de sólo encogerse parejo. La distancia real se mide contra el DOM
-    // porque el ícono vive en otro componente (CurvedNavRail) — no hay
-    // otra forma limpia de compartir esa posición sin acoplar ambos
-    // componentes.
-    const applyGenieOffset = () => {
-        const panel = panelRef.current;
-        const icon = document.querySelector<HTMLElement>(
-            '.curved-rail [aria-label="Mensajes"]',
-        );
-
-        if (!panel || !icon) {
-            return;
-        }
-
-        const panelRect = panel.getBoundingClientRect();
-        const iconRect = icon.getBoundingClientRect();
-        const originX = panelRect.left + panelRect.width * 0.08;
-        const originY = panelRect.bottom;
-
-        panel.style.setProperty(
-            '--genie-tx',
-            `${iconRect.left + iconRect.width / 2 - originX}px`,
-        );
-        panel.style.setProperty(
-            '--genie-ty',
-            `${iconRect.top + iconRect.height / 2 - originY}px`,
-        );
-    };
-
-    useEffect(() => {
-        applyGenieOffset();
-        // Pedido explícito: abrir el chat (aunque el scroll arranque al
-        // fondo, ver el useLayoutEffect de liveMessages más abajo) NO
-        // cuenta como "leído" por sí solo — sólo lo hacen la interacción
-        // real, el scroll al fondo o enviar una respuesta (ver
-        // markAsRead más arriba y sus llamadas). Antes se avisaba acá
-        // mismo al backend con el último mensaje del prop inicial, y por
-        // eso la notificación de no-leído se cerraba sola con sólo
-        // abrir.
-        // Sólo al montar (abrir este chat) — dispara la animación de
-        // entrada; se limpia sola en onAnimationEnd más abajo.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
+    // Pedido explícito: abrir el chat (aunque el scroll arranque al
+    // fondo, ver el useLayoutEffect de liveMessages más abajo) NO
+    // cuenta como "leído" por sí solo — sólo lo hacen la interacción
+    // real, el scroll al fondo o enviar una respuesta (ver markAsRead
+    // más arriba y sus llamadas). Antes se avisaba acá mismo al backend
+    // con el último mensaje del prop inicial, y por eso la notificación
+    // de no-leído se cerraba sola con sólo abrir.
     const handleClose = () => {
-        applyGenieOffset();
-        setGenieClass('genie-panel--closing');
+        onClose();
     };
 
     // Los props sólo cambian entre visitas de Inertia (abrir otro chat,
@@ -1407,6 +1418,13 @@ function Thread({
     }, [channel]);
 
     const notifyTyping = () => {
+        // Ajustes > Privacidad > "Mostrar escribiendo…" — si está
+        // apagado, nunca se manda el whisper (no es que se oculte del
+        // lado del que recibe, directamente no sale de acá).
+        if (!getPrivacyPreferences().showTypingIndicator) {
+            return;
+        }
+
         // Throttle: un whisper cada 2s como mucho, no uno por tecla.
         if (typingThrottleRef.current) {
             return;
@@ -1800,6 +1818,15 @@ function Thread({
                                 : existing,
                         ),
                     );
+
+                    // Un error de red/timeout del lado del cliente no
+                    // significa que el servidor no haya guardado el
+                    // mensaje (causa raíz real del bug del adjunto en
+                    // blob: pegado para siempre) — se recarga el estado
+                    // real en vez de confiar ciegamente en "failed". Si
+                    // de verdad no se guardó, esto no trae nada nuevo y
+                    // el mensaje se queda marcado como falló.
+                    router.reload({ only: ['conversation', 'messages'] });
                 },
                 onFinish: () => setSending(false),
             },
@@ -1813,27 +1840,16 @@ function Thread({
     )?.id;
 
     return (
-        <div className="flex h-full min-h-0 flex-1 flex-col p-3">
-            {/* Toda la ventana de chat es UNA sola card (header + mensajes +
-                composer), con un tono apenas más gris que el área de
-                contenido de atrás. Shadow SIN offset (0 0, no "X_Y") —
-                así se reparte pareja en los 4 lados (relieve), no solo
-                abajo. Blur máx. ~10px, todavía bien por debajo de los
-                12px de "colchón" del p-3 de afuera, para que nunca
-                llegue cerca del sidebar y dañe la gotera. Sin ring, sin
-                border: solo shadow + tono + radio. */}
+        <div className="flex h-full min-h-0 flex-1 flex-col">
+            {/* Ventana de chat a todo el ancho/alto del content, sin
+                card ni margen flotante — mismo criterio "chrome de
+                punta a punta" que ya usan el header (glass-panel-edge-b
+                de ConversationHeader) y el composer
+                (glass-panel-edge-t): un solo fondo de contenido
+                (bg-background), sin borde ni sombra propios. */}
             <div
                 ref={panelRef}
-                onAnimationEnd={() => {
-                    if (genieClass === 'genie-panel--closing') {
-                        onClose();
-
-                        return;
-                    }
-
-                    setGenieClass('');
-                }}
-                className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-[color-mix(in_srgb,var(--background)_84%,var(--foreground)_16%)] shadow-[0_0_2px_rgba(0,0,0,0.25),0_0_10px_rgba(0,0,0,0.35)] dark:shadow-[0_0_2px_rgba(0,0,0,0.7),0_0_10px_rgba(0,0,0,0.8)] ${genieClass}`}
+                className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
             >
                 <ConversationHeader
                     conversation={conversation}
@@ -2018,6 +2034,12 @@ function Thread({
                                                                 message.id ===
                                                                 pinnedMessageId
                                                             }
+                                                            showsThreads={
+                                                                conversation.type ===
+                                                                    'group' ||
+                                                                conversation.type ===
+                                                                    'channel'
+                                                            }
                                                             onReply={
                                                                 handleReply
                                                             }
@@ -2095,16 +2117,30 @@ function Thread({
                     )}
                 </div>
 
-                <MessageComposer
-                    placeholder="Escribe un mensaje…"
-                    replyingTo={replyingTo}
-                    onCancelReply={() => setReplyingTo(null)}
-                    editingMessage={editingMessage}
-                    onCancelEdit={() => setEditingMessage(null)}
-                    onSubmit={handleSend}
-                    onSubmitEdit={handleSubmitEdit}
-                    onTyping={notifyTyping}
-                />
+                {conversation.type === 'channel' &&
+                !conversation.isAdmin &&
+                !replyingTo ? (
+                    <div className="glass-panel-edge-t text-muted-foreground px-4 py-3 text-center text-sm">
+                        Sólo quien administra este canal puede publicar acá.
+                        Responde a una publicación para participar en su hilo.
+                    </div>
+                ) : (
+                    <MessageComposer
+                        placeholder={
+                            conversation.type === 'channel' &&
+                            !conversation.isAdmin
+                                ? 'Responder en el hilo…'
+                                : 'Escribe un mensaje…'
+                        }
+                        replyingTo={replyingTo}
+                        onCancelReply={() => setReplyingTo(null)}
+                        editingMessage={editingMessage}
+                        onCancelEdit={() => setEditingMessage(null)}
+                        onSubmit={handleSend}
+                        onSubmitEdit={handleSubmitEdit}
+                        onTyping={notifyTyping}
+                    />
+                )}
             </div>
 
             <ForwardDialog
@@ -2351,6 +2387,7 @@ function MessageBubble({
     onTogglePin,
     onToggleSave,
     onDelete,
+    showsThreads = false,
 }: {
     message: MessageData;
     getInitials: (name: string) => string;
@@ -2359,6 +2396,11 @@ function MessageBubble({
     isFirstInGroup: boolean;
     isLastInGroup: boolean;
     isPinned: boolean;
+    /** Grupo/Canal (`ConversationType::supportsThreads()`) — la acción
+     *  de responder se etiqueta distinto para dejar claro que ahí crea
+     *  un hilo, no sólo una cita en línea (que sigue siendo el mismo
+     *  mecanismo por debajo: `reply_to_message_id`). */
+    showsThreads?: boolean;
     onReply: (message: MessageData) => void;
     onReact: (message: MessageData, emoji: string) => void;
     onEdit: (message: MessageData) => void;
@@ -2937,7 +2979,11 @@ function MessageBubble({
                                 <div className="flex items-center gap-0.5">
                                     <BubbleActionButton
                                         icon={Reply}
-                                        label="Responder"
+                                        label={
+                                            showsThreads
+                                                ? 'Responder en hilo'
+                                                : 'Responder'
+                                        }
                                         onClick={() => onReply(message)}
                                     />
                                     <BubbleReactionPickerButton

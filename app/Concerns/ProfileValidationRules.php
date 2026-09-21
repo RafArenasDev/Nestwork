@@ -18,6 +18,9 @@ trait ProfileValidationRules
     {
         return [
             'name' => $this->nameRules(),
+            'country_id' => ['nullable', 'integer', 'exists:countries,id'],
+            'state_id' => ['nullable', 'integer', 'exists:states,id'],
+            'city_id' => ['nullable', 'integer', 'exists:cities,id'],
         ];
     }
 
