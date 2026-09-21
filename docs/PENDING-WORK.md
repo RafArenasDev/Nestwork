@@ -1,164 +1,288 @@
-# Pendiente — punto de continuación (2026-09-15, sesión 3 — rediseño "liquid glass")
+# Pendiente — punto de continuación (2026-09-20, sesión "auditoría + Chats/Grupos/Canales/Reuniones")
 
 > **Regla de frontend que sigue vigente:** todo diseño/interacción de UI
 > usa el skill `apple-design` — nada de librerías de diseño/animación
-> nuevas. Excepciones concretas: `emoji-picker-react` (utilidad
-> funcional, reskineada), extensiones de Tiptap ya instaladas, y el
-> Combobox de shadcn/ui (ya existía en el proyecto, se empezó a usar
-> también para selects de una sola opción como la duración del estado).
+> nuevas. Excepciones concretas: `emoji-picker-react`, extensiones de
+> Tiptap ya instaladas, Combobox de shadcn/ui.
 >
-> Esta sesión se hizo completa en la rama `feat/liquid-glass-visual-polish`
-> (4 rondas de feedback iterativo), commiteada/pusheada/mergeada a
-> `main` al cierre — ver "Cómo retomar" para el commit real.
+> Esta sesión se hizo completa en la rama `feat/unified-search-redesign`
+> (que ya traía trabajo previo sin mergear: búsqueda unificada, diálogo
+> de estado, diferenciación Home/Mensajes). Todo lo de abajo se agregó
+> encima, en varios commits, y se mergeó a `main` al cierre.
 
-## Qué quedó terminado esta sesión — reconstrucción visual completa
+## 0. Contexto: por qué esta sesión fue distinta
 
-Reemplazo del chrome de toda la app (mini-sidebar, sidebar, header y
-composer del chat, menús, modales, burbujas, Home, Settings/Teams) por
-un sistema de diseño nuevo ("Aurora" / liquid glass), a partir de un
-mockup de referencia del usuario, adaptado con criterio propio (no
-copiado literal — ver decisiones de abajo).
+Arrancó como una auditoría pedida explícitamente ("llevamos meses
+agregando minucias, nunca una revisión completa de qué falta frente a
+Slack/Teams/WhatsApp/Discord"). Esa auditoría encontró:
 
-**Primitivos compartidos con "glass" real** (`ui/dropdown-menu.tsx`,
-`ui/popover.tsx`, `ui/dialog.tsx`, `ui/alert-dialog.tsx`, `ui/sheet.tsx`):
-blur + opacidad correctos en los DOS temas — el bug de fondo era que el
-blur en oscuro se pintaba sobre `--popover` (casi negro) en vez de un
-tinte blanco; con la fórmula `rgba(255,255,255,alpha)` (alpha bajo en
-oscuro, alto en claro) se resuelve para cualquier superficie. Dos
-tiers: `.glass-panel`/`.glass-panel-edge-*` (sutil, para chrome
-ambiental como header/composer) y `.glass-popover` (opacidad fija
-garantizada, para menús/modales con texto denso).
+1. Dos bugs reales y críticos en cosas que se creían terminadas
+   (presencia en tiempo real rota de raíz; adjuntos con preview que se
+   quedaban pegados en `blob:` para siempre por un 503).
+2. Un hueco estructural: Nestwork sólo tenía chats 1:1 — nada de
+   grupos/canales, pese a que el schema ya estaba migrado para eso
+   desde el 13 de septiembre y nunca se usó.
+3. "Actividad" y el sidebar de "Inicio" eran ambos, literalmente, la
+   misma lista de conversaciones reordenada — no mostraban nada
+   específico de su propio nombre.
 
-**Mini-sidebar** (`curved-nav-rail.css`/`.tsx`): la técnica vieja de
-"gotera"/curve-outside (muescas cóncavas, `background-attachment:fixed`
-compartido) se BORRÓ por completo — reemplazada por un dock simple
-(ítems redondeados, barra de acento a la izquierda del activo). Mucho
-menos CSS fràgil que antes.
+A partir de ahí, la sesión se volvió una ronda larga de diseño/
+implementación iterativa con feedback en vivo del usuario (probando
+con `composer run dev` + Chrome mientras se construía). Quedó mucho
+más por hacer de lo que se alcanzó a construir — ver sección 4, que es
+la más importante para la próxima sesión.
 
-**Sidebar expandida** (`sidebar-list.css`/`app-sidebar.tsx`): decisión
-de arquitectura clave (confirmada explícitamente por el usuario tras
-un primer intento equivocado) — la sidebar es chrome, **siempre
-oscura, con el MISMO tono en claro y oscuro** (igual que la mini);
-sólo el CONTENIDO (Home/chat/Settings) sigue el tema. La
-personalización de color (`data-sidebar` reemplazado por variables
-puestas directo desde JS, ver `use-customization.tsx`) es un TINTE
-sobre ese tono fijo, nunca lo reemplaza — "Ninguno" conserva el tono
-base, nunca queda "sin tema". Buscador SIEMPRE visible en el header de
-la sidebar (antes sólo en algunos módulos). Filas de conversación sin
-"card" (sin borde/sombra por fila) — selección = relleno sólido, no
-borde+tinte.
+## 1. Bugs críticos — RESUELTOS
 
-**Header y composer del chat**: dejaron de ser tarjetas flotantes con
-margen — ahora son barras a todo el ancho con blur y un solo borde
-(`.glass-panel-edge-b`/`.glass-panel-edge-t`), mismo criterio "chrome
-a todo el ancho, sin redondear" que el resto.
+**Presencia/estado no se reflejaba en tiempo real (el disparador de
+toda la sesión).** Causa raíz, en dos partes:
 
-**Burbujas de mensaje** (`pages/messages/index.tsx`): recoloreadas al
-sistema nuevo, con color de "burbuja propia" personalizable (antes
-fijo). **Bug real resuelto**: el pico se veía de un color distinto a
-la burbuja — dos elementos pintando el mismo degradé 135deg cada uno
-sobre su propia caja (300px vs 12px) calculan extremos de color
-distintos. Fix: el pico usa un sólido (el stop final del degradé,
-`--bubble-sent-tail`), no el degradé repetido.
+- `routes/channels.php` registraba el canal de presencia como
+  `presence-team.{team}` — con el prefijo "presence-" puesto a mano en
+  el patrón. Laravel quita ese prefijo del nombre real del canal antes
+  de compararlo contra las rutas registradas
+  (`UsePusherChannelConventions::normalizeChannelName`), así que ese
+  canal era **imposible de unirse** para cualquier cliente, siempre.
+  Corregido a `team.{team}`.
+- Ni `UserPresenceController` ni `UserStatusController` hacían
+  `broadcast()` de nada — sólo `return back()`. Un cambio de estado
+  sólo lo veía quien lo hacía. Nuevo evento `UserPresenceUpdated`,
+  disparado desde ambos controllers.
+- `User::presenceStatus()` derivaba "disponible/ausente/desconectado"
+  de `last_seen_at`, que sólo se tocaba al iniciar sesión — nunca
+  durante el uso. Un usuario activo se veía "ausente" a los 5 minutos
+  de login. Nuevo middleware `TouchLastSeen` (throttleado a 1/minuto).
+- **Bug encontrado EN VIVO durante la misma sesión** (probando en
+  Chrome): el canal se unía por `id` numérico de equipo, pero
+  `Team::getRouteKeyName()` es `"slug"` — el binding implícito nunca
+  resolvía el equipo, Reverb devolvía 403 en `/broadcasting/auth`.
+  Corregido: unirse por slug en frontend y backend.
+- Frontend: `resources/js/hooks/use-live-presence.tsx` (nuevo) — se
+  une al canal de presencia del equipo y aplica overrides en vivo
+  sobre las filas/headers que muestran presencia de otro usuario.
+- **Pendiente real, no resuelto esta sesión:** el "online ahora mismo"
+  sigue derivándose de `last_seen_at`/presets manuales, no del
+  `here`/`joining`/`leaving` real del canal de presencia (eso daría
+  desconexión instantánea al cerrar pestaña/perder red, sin depender
+  de ningún timeout). Se evaluó y se dejó fuera a propósito por
+  riesgo/tiempo — ver nota en el commit `a955d5d`.
 
-**Modal de Ajustes** (`components/settings-modal.tsx`, nuevo — dentro
-del dropdown del avatar, ya no un ícono de engranaje aparte ni un
-drawer lateral): layout tipo macOS System Settings (rail de tabs
-Estado/Apariencia + panel ancho, sin scroll). Incluye:
+**Adjuntos con preview atascada en `blob:` (bug heredado, ya
+diagnosticado en una sesión anterior, nunca arreglado).** Causa raíz:
+`GenerateAttachmentPreview` corría SÍNCRONO dentro del propio POST de
+subida — LibreOffice en frío + Poppler podían tardar más que el
+timeout del proxy de Herd, el navegador veía un 503 mientras el
+servidor seguía trabajando, e Inertia nunca recibía el redirect que
+reconcilia el mensaje optimista. Fix: nuevo
+`GenerateAttachmentPreviewJob` (cola — `QUEUE_CONNECTION=database`, ya
+corre con `queue:listen` en `composer run dev`), que al terminar
+dispara el mismo `MessageUpdated` que ya usan reacciones/ediciones. El
+POST responde de inmediato; la miniatura real llega 1-3s después por
+el canal en vivo. **Trade-off marcado a propósito:** el pedido
+original era que la preview fuera síncrona ("no al rato") — se decidió
+que un envío que puede tumbarse en silencio es peor que una demora
+corta con confirmación en vivo.
 
-- **Estado**: texto + emoji personalizado (reusa `ReactionPickerButton`),
-  duración real vía Combobox (15 min / 30 min / 1 h / 2 h / 4 h / hoy /
-  1 día / 1 semana / fecha y hora exacta con `datetime-local`) — el
-  backend ya tenía la columna `status_expires_at` sin usar desde
-  2026-09-11 y `User::activeStatusPreset()` ya sabía leerla; sólo se
-  tocó `UserStatusController::update` para aceptar `duration_minutes`
-  (no fue necesaria una migración nueva).
-- **Apariencia**: selector de tema tipo iOS (3 miniaturas con preview
-  real, no texto), paleta de 12 colores (gradiente+sólido, nombres
-  "tech" — Cobalt/Graphite/Obsidian/Titanium/etc., a propósito nada
-  floral) compartida entre sidebar y burbujas, intensidad de glass con
-  slider propio (`.glass-slider` en `app.css`, ya no el control nativo
-  del navegador) que de verdad cambia blur+opacidad juntos, densidad de
-  mensajes en 3 niveles reales (Minimalista/Cómoda/Compacta — cambian
-  padding/tamaño de avatar/sombra, no sólo el margen), tamaño de
-  interfaz (chico/mediano/grande, escala texto e íconos vía un único
-  `font-size` en `html`).
+## 2. Arquitectura nueva: Chats / Grupos / Canales / Reuniones
 
-**Home y Settings/Teams**: stat tiles con material real (antes
-`rounded-xl border` plano), filas de "chats recientes"/equipos/
-miembros pasadas de tarjetas con sombra a listas planas tipo Apple
-Settings (`divide-y`, hover, sin borde por fila). Toggle de tema
-duplicado (sidebar + settings) eliminado — vive sólo en Ajustes, con
-detección de tema del sistema por defecto ya existente desde antes
-(`use-appearance.tsx`).
+Diferenciación pedida explícitamente, corrigiendo dos rondas de
+malentendido de mi parte hasta llegar a esto (ver historial de commits
+de esta sesión para el razonamiento completo):
 
-**Decisión de arquitectura deliberada**: NO se copió el mockup literal
-(tarjeta centrada de tamaño fijo flotando sobre fondo ambiental) — se
-mantuvo el layout a todo el viewport (como Slack/Discord/Teams) porque
-habrá apps desktop/Android/iOS/tablet, donde una tarjeta de tamaño fijo
-no sirve.
+| Tipo                    | Módulo                 | Quién publica                                | Hilos                                                         | Permisos                        |
+| ----------------------- | ---------------------- | -------------------------------------------- | ------------------------------------------------------------- | ------------------------------- |
+| DM (`dm`)               | Chats                  | los dos, bidireccional                       | no                                                            | ninguno                         |
+| Minichat (`group_chat`) | Chats (junto a los DM) | todos igual                                  | no                                                            | ninguno, nadie administra       |
+| Grupo (`group`)         | Grupos (aparte)        | todos, libre                                 | sí (responder ya existente, reetiquetado "Responder en hilo") | admin/creador configura ajustes |
+| Canal (`channel`)       | Canales (aparte)       | **sólo admin/creador** en la línea principal | sí, obligatorio para el resto                                 | admin/creador                   |
 
-Verificado en verde antes del cierre de sesión: Pint, PHPStan
-(`types:check`), `vp check` (lint+format), `tsc --noEmit`, build de
-producción, suite Pest completa (125 tests / 441 aserciones).
+Todo esto **reusa las columnas migradas desde el 13 de septiembre**
+(`name`, `is_public`, `avatar_path`, `description`, `role` en
+participantes) que llevaban meses sin una sola línea de código
+usándolas — no se creó ninguna tabla nueva.
 
-## ⚠️ Pendiente crítico heredado — bug real, causa raíz encontrada, sin fix
+**Lo que quedó real y funcionando:**
 
-**No se tocó esta sesión** (era explícitamente visual). Resumen: al
-enviar un mensaje con adjunto, el remitente ve para siempre la vista
-previa local (`blob:`) en vez de la real — el POST devuelve 503
-(probable timeout del proxy de Herd/prod durante la conversión síncrona
-de preview), así que Inertia nunca recibe el redirect que reconcilia
-el mensaje optimista. Diagnóstico completo y 3 caminos de fix evaluados
-en el historial de git de este archivo (commit de la sesión 2 de ese
-mismo día, "sesión 2 — 2026-09-15" antes de este rediseño). Sigue
-siendo lo primero a resolver cuando retome trabajo de backend/tiempo
-real.
+- `ConversationType::GroupChat` nuevo + helpers
+  (`isFlatChat()`/`supportsThreads()`/`restrictsTopLevelPostingToAdmin()`).
+- Crear grupo (`GroupsController`/`CreateGroup`), crear canal
+  (`ChannelsController`/`CreateChannel`, con `is_public` y unirse
+  solo), minichat desde "Nuevo chat" eligiendo 2+ personas
+  (`ConversationsController::store` extendido).
+- **Backend enforcement real** en `MessagesController::store`: en un
+  canal, publicar en la raíz (`reply_to_message_id === null`) está
+  bloqueado con 403 para quien no sea admin — probado, no es sólo un
+  candado visual. El frontend refleja esto: composer reemplazado por
+  un aviso para no-admins, con el "Responder" ya existente etiquetado
+  "Responder en hilo" en Grupo/Canal.
+- Favoritos (tabla `favorites`, migrada 2026-09-13, nunca usada hasta
+  ahora) con toggle real + sección propia en Inicio.
+- "Actividad" real (reacciones recibidas en tus mensajes,
+  `ListActivityForUser`) — ya no la lista de conversaciones reordenada.
+- Etiquetas tipo Slack (agrupar chats/grupos/canales bajo un nombre
+  propio) — **sólo localStorage por ahora**
+  (`use-conversation-tags.tsx`), a propósito: una versión compartida en
+  equipo necesita tabla nueva y eso se propone aparte, no se construye
+  sin avisar (ver regla de "modelos nuevos necesitan aprobación").
+- Reuniones y llamadas de audio/video: **100% mockup visual**, sin
+  WebRTC/SFU real (ver sección 4, es la pieza de infraestructura más
+  grande que falta). Todo lo que se ve ahí es intencional para que el
+  usuario apruebe la forma antes de construir el backend.
 
-## Pendientes nuevos de esta sesión (rediseño)
+## 3. Diseño de listas/filas — qué se corrigió esta sesión
 
-1. **Responsive real / navegación tipo bottom-tabs para apps nativas**:
-   pedido explícito del usuario (habrá desktop/Android/iOS/tablet) —
-   discutido pero deliberadamente fuera de alcance de esta ronda (era
-   visual de escritorio). El layout a todo el viewport elegido en vez
-   del mockup centrado ya lo tiene en cuenta, pero falta el trabajo real
-   de breakpoints + navegación alternativa en pantalla angosta.
-2. **Formularios de Perfil/Team name** (`settings/profile.tsx`,
-   `teams/edit.tsx` — el input, no las filas que sí se tocaron):
-   siguen con el Input default de shadcn (radio chico), no se
-   uniformaron al lenguaje más redondeado del resto del rediseño — bajo
-   impacto, pendiente menor.
-3. **`status_expires_at` es de vencimiento "perezoso"**: `User::activeStatusPreset()`
-   ya lo trata como vencido al leerlo, pero no hay job que limpie
-   `status_text`/`status_emoji` de la fila cuando vence sin que el
-   usuario vuelva a tocar nada — cosmético (el badge visual ya no lo
-   muestra), pero la fila queda con datos viejos en la base.
-4. **Paleta de color no se probó con daltonismo/contraste WCAG** —
-   los 12 presets se eligieron a ojo, no se corrió ningún check de
-   contraste automático (texto blanco sobre cada preset, sobre todo
-   los más claros como Titanium/Ocean).
+- El toggle de favorito era un ícono de estrella siempre visible,
+  centrado en TODA la fila (`position:absolute; top:50%`) — colisionaba
+  visualmente con la hora arriba y el badge de no-leídos abajo.
+  Reemplazado por un chevron que ocupa el MISMO cupo que la hora (swap
+  por `visibility`, no una capa encima) y abre un menú con Favorito/
+  Archivar/Silenciar/Marcar no leído/Limpiar/Eliminar.
+- El preview de la fila mezclaba un emoji unicode dentro del nodo de
+  texto para indicar foto/video/audio/documento — quedaba desalineado
+  verticalmente contra el texto (varía por fuente/SO). Reemplazado por
+  íconos lucide reales en un contenedor flex.
+- Un mensaje de código (bloque ` `lang…``` ```` ) se anunciaba con
+  las comillas invertidas crudas en el preview — ahora dice "Código";
+  el código en línea (una sola comilla) se limpia de sus comillas en
+  el preview normal.
+- Ícono de Canales cambiado de bocina (se leía como "volumen") a `#`,
+  igual que Slack/Discord.
+- El header del CONTENIDO repetía el título del módulo activo como
+  breadcrumb sintético — ya se veía en el header de la sidebar
+  expandida. Quitado.
+- Orden de secciones en Inicio: Recientes (chats) → Favoritos → Grupos
+  recientes → Canales recientes → Etiquetas — ninguna sección de
+  "recientes" incluye lo que ya está en Favoritos, tope de 20 filas
+  por sección, toggle de orden (reciente/alfabético) por sección.
 
-## Pendientes menores heredados de sesiones anteriores (sin tocar)
+## 4. Lo más importante para la próxima sesión (pedido explícito, sin construir)
 
-1. Multi-adjunto por mensaje (diferido a propósito).
-2. "Editar" visible sólo mientras corre el tiempo permitido,
-   independiente del estado de envío.
-3. Reacciones y ediciones reflejadas en "Actividad" (pedido dos veces).
-4. Probar el pipeline de preview de documentos con un `.docx`/`.xlsx`
-   real (sólo se verificó con PDF).
+Esta lista es larga a propósito — es exactamente lo que el usuario
+pidió dejar documentado en vez de construido a medias, dado el límite
+de créditos de esta sesión (llegamos a ~68-70% de uso de sesión antes
+de cerrar). Cada punto necesita su propia ronda de diseño/aprobación,
+no se debe empezar a codificar directo.
 
-## Qué NO se tocó a propósito
+### 4.1 Llamadas y Reuniones son DOS conceptos distintos, no uno
 
-- Cifrado E2E/conversación secreta (Épica 6.6, espera brainstorming
-  aparte), separar Canales/Grupos/DMs (Épica 6.2), autenticación
-  alternativa (Épica 6.7), menciones/búsqueda global.
-- La pantalla de login/registro — ya estaba bien, confirmado por el
-  usuario, no se tocó salvo lo que ya tenía el material glass de antes.
+Pedido explícito, todavía no separado: una llamada de audio/video con
+un contacto o dentro de un grupo/canal es una cosa; una "reunión"
+programada (con agenda, invitados, posible grabación) es otra. Hoy
+todo vive mezclado dentro de `meetings-view.tsx`. Falta:
 
-## Cómo retomar
+- Un módulo "Llamadas" separado de "Reuniones", con su **historial
+  bien definido**: entrante/saliente/perdida, de voz o de video, con
+  quién, cuánto duró — como el historial de llamadas de WhatsApp/
+  Teams. Necesita tabla nueva (`calls` o similar) — proponer antes de
+  construir.
+- El flujo de llamada 1:1/grupal (desde el botón del header del chat)
+  es distinto del flujo de "Reunión" (agendada, con invitados fijos).
 
-1. Bug crítico del adjunto/503 (ver sección de arriba) sigue siendo lo
-   más visible para un usuario real — recomendado antes que nada nuevo.
-2. Responsive/bottom-nav para móvil es el siguiente bloque grande de
-   diseño, ya con la base (chrome a todo el viewport) puesta para eso.
-3. Pendientes menores en el orden que priorice el usuario.
+### 4.2 Pantalla de llamada — rediseño real, no sólo "así se vería"
+
+El mock actual (`call-mock-dialog.tsx`) fue explícitamente rechazado
+por quedarse en placeholders de texto ("así se vería") en vez de un
+diseño real. Para la próxima ronda:
+
+- Usar los avatares reales de los participantes (no un ícono
+  genérico), con tooltip en cada control (mute, cámara, compartir
+  pantalla, grabar, colgar, pantalla completa).
+- **Abrir en una pestaña/ventana nueva, no en un `Dialog`** — un modal
+  se cierra solo al hacer click afuera y no hay lógica para evitarlo
+  todavía; una llamada real nunca debe poder cerrarse por accidente.
+  Sólo debe cerrarse con el botón de colgar (o si falla la conexión).
+- Opción de pantalla completa.
+- Compartir pantalla estilo Meet: elegir pestaña, ventana, o
+  monitor completo (monitor 1/monitor 2/etc.) — la Screen Capture API
+  del navegador (`getDisplayMedia`) ya ofrece ese selector nativo, hay
+  que diseñar alrededor de eso, no reinventarlo.
+- Grabar llamadas de **voz** también (no sólo video) — por temas de
+  seguridad/auditoría, según el usuario.
+
+### 4.3 Calendario real para Reuniones
+
+Pedido explícito: vistas de mes/semana/día con las reuniones ubicadas
+en su franja horaria real (como Google Calendar/Outlook), no una lista
+plana. El selector de fecha/hora actual (`datetime-local` nativo) debe
+reemplazarse por separar fecha y hora en controles propios de
+shadcn/ui (Calendar + selector de hora), con estética tipo
+apple-design — nada de inputs nativos del navegador.
+
+Al crear una reunión hace falta además: editar, compartir (link/
+notificar a los invitados), eliminar — hoy sólo existe crear. Y NO se
+debe abrir el modal de llamada automáticamente al crear una reunión
+"para ahora" (como hace hoy) — debe quedar agendada/listada, y el
+usuario decide cuándo entrar.
+
+### 4.4 Sidebar de "Reuniones" — necesita más que una frase
+
+El panel lateral de ese módulo hoy es sólo un párrafo de texto. Falta
+contenido real: accesos rápidos, próximas reuniones, quizás un
+mini-calendario — mismo criterio que el resto de módulos (que si
+tienen datos, los muestran en la lista lateral).
+
+### 4.5 Home: navegar no debe recargar mini-rail ni sidebar expandida
+
+Bug de UX real detectado: al hacer clic en Inicio (o cualquier módulo
+routeado), la mini-sidebar y la sidebar expandida se recargan enteras
+— se ve un parpadeo/"salto" a un diseño más chico un instante antes de
+asentarse, molesto. Debería ser un partial reload que sólo toque el
+`AppContent` (con un esqueleto/skeleton mientras carga si tarda),
+dejando rail y sidebar expandida sin re-renderizarse. Esto es un
+cambio de arquitectura de navegación (cómo `handleModuleChange`/
+`router.visit` deciden qué repintar), no un ajuste chico — amerita su
+propia sesión.
+
+### 4.6 Actividad: saltar a mensajes viejos no precargados
+
+Hoy el salto a un mensaje reaccionado usa `jumpToMessageId`, que sólo
+funciona si ese mensaje cayó dentro de los últimos
+`INITIAL_MESSAGE_LIMIT` (150) cargados — la misma limitación que ya
+tiene el badge de fijado. Si la reacción es sobre un mensaje más viejo,
+hoy no hay forma de traerlo. Falta paginación por cursor real (Fase F
+del roadmap viejo) antes de que esto quede resuelto de verdad. Además,
+al llegar al mensaje reaccionado, debería haber una señal visual clara
+sobre CUÁL mensaje es (no sólo centrarlo/hacer scroll) — hoy no existe
+ese resaltado.
+
+### 4.7 Cosas más chicas pendientes de esta ronda de feedback
+
+- Menú de fila: falta "Bloquear" (contacto/usuario) — necesita tabla
+  nueva (`blocked_users` o similar), proponer antes de construir.
+- "Silenciar" necesita duración real (1h/1 día/1 semana/1 año/
+  siempre/hasta reactivar) — hoy es sólo on/off. Necesita una columna
+  nueva (`muted_until`, distinta de `muted_at`) — proponer antes de
+  construir.
+- Revisar sistemáticamente qué otros diferenciadores tienen Slack/
+  Teams/Discord/WhatsApp que todavía no se evaluaron uno por uno
+  (pedido repetido varias veces esta sesión) — la comparación
+  detallada de la primera auditoría de esta sesión sigue siendo el
+  punto de partida, pero falta profundizar por función concreta antes
+  de decidir qué construir.
+
+## 5. Qué NO se tocó a propósito
+
+- Cifrado E2E/conversación secreta (espera su propia sesión de
+  `superpowers:brainstorming`, confirmado en sesiones anteriores).
+- Épica 6.1 (navegación desde BD, rail/mini-rail hardcodeados) —
+  relacionado con 4.5 de arriba, mismo criterio: no tocar navegación a
+  medias.
+- Contactos como módulo aparte — evaluado y descartado esta sesión: el
+  directorio del equipo ya vive donde se necesita (picker de "nuevo
+  chat/grupo/canal", bloque de compañeros en Inicio); un ícono más en
+  un rail ya cargado con 7 entradas no sumaba.
+
+## 6. Cómo retomar
+
+1. Antes de tocar código nuevo: decidir con el usuario el alcance real
+   de Llamadas vs. Reuniones (4.1) — es la base de todo lo demás en
+   esa área.
+2. El rediseño de la pantalla de llamada (4.2) y el calendario (4.3)
+   son los bloques visuales grandes que el usuario más remarcó — cada
+   uno merece su propia ronda de `apple-design` antes de codificar.
+3. El bug de recarga de rail/sidebar en Home (4.5) es la única pieza
+   de esta lista que es un bug de UX puro (no una función nueva) —
+   podría resolverse independientemente de las demás si se prioriza.
+4. Cualquier tabla nueva mencionada arriba (calls, blocked_users,
+   muted_until, etiquetas compartidas en equipo) se propone como
+   diseño ANTES de migrar — regla ya establecida para este proyecto.
